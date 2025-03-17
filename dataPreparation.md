@@ -72,7 +72,7 @@ In *Layer Properties* you can check detailed information about format, compressi
 
 
 ### Step 5: Validate in COG Explorer
-- [COG Explorer](https://gisat-panther.github.io/app-gisat-cog-explorer/)
+- [COG Explorer](https://gisat.github.io/app-gisat-cog-explorer/)
   - application for verification and style creation for COG files developed by Gisat
   - based on Panther components
   - supports all COG styles available in [Geoimage](./geoimage/src/geoimage/README.md) library from Geolib Visualiser
@@ -130,7 +130,7 @@ To get the final URL data, modify *bucket-name*, *project_folder* based on your 
 - resulting in COG url: `https://bucket-name.eu-central-1.linodeobjects.com/project_folder/test_cog/imagery.tif`
 
 
-Put COG Url into [COGexplorer](https://gisat-panther.github.io/app-gisat-cog-explorer/)
+Put COG Url into [COGexplorer](https://gisat.github.io/app-gisat-cog-explorer/)
 
 
 # 
