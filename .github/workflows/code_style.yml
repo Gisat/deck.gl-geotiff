@@ -24,7 +24,7 @@ jobs:
         run: npm run lintFix
 
       - name: Commit Changes
-        uses: stefanzweifel/git-auto-commit-action@v2.3.0
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Fix code style ${{ github.event.pull_request.head.sha }} [ci skip]
           branch: ${{ github.event.pull_request.head.ref }}
