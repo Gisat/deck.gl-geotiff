@@ -44,7 +44,8 @@ export type GeoImageOptions = {
     clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
     terrainColor?: Array<number> | chroma.Color,
     terrainSkirtHeight?: number,
-    terrainMinValue?: number
+    terrainMinValue?: number,
+    planarConfig?: number,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -75,6 +76,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
   terrainColor: [133, 133, 133, 255],
   terrainSkirtHeight: 100,
   terrainMinValue: 0,
+  planarConfig: undefined,
 };
 
 export default class GeoImage {
