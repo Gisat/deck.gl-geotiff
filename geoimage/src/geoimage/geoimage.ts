@@ -384,8 +384,8 @@ export default class GeoImage {
         optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal);
         // console.log('data min: ' + optionsLocal.rangeMin + ', max: ' + optionsLocal.rangeMax);
       }
-      const numOfChannels = channel.length / (width * height);
-      const colorData = this.getColorValue(channel, optionsLocal, size, numOfChannels);
+      // const numOfChannels = channel.length / (width * height);
+      const colorData = this.getColorValue(channel, optionsLocal, size, optionsLocal.numOfChannels);
       colorData.forEach((value, index) => {
         imageData.data[index] = value;
       });

@@ -410,10 +410,12 @@ class CogTiles {
       // if the valid window is smaller than tile size, it gets the image size width and height, thus validRasterData.width must be used as below
       const validRasterData = await targetImage.readRasters({ window: validWindow });
 
+      // FOR MULTI-BAND - the result is array of arrays, each band is stored in separate array
+      // similar approach should be used if deck.gl-layers, but it is not compatible with the code in geoimage.ts in deck.gl-geotiff
       // let validTileData = Array(validRasterData.length);
       //
       // // Place the valid pixel data into the tile buffer.
-      // for (let channel = 0; channel < validRasterData.length; channel++) {
+      // for (let band = 0; band < validRasterData.length; band++) {
       //   for (let row = 0; row < validHeight; row++) {
       //     for (let col = 0; col < validWidth; col++) {
       //       // Compute the destination position in the tile buffer.
@@ -421,31 +423,58 @@ class CogTiles {
       //       const destRow = Math.floor(missingTop) + row;
       //       const destCol = Math.floor(missingLeft) + col;
       //       if (destRow < tileWidth && destCol < tileWidth) {
-      //         tileBuffer[destRow * tileWidth + destCol] = validRasterData[channel][row * validRasterData.width + col];
+      //         tileBuffer[destRow * tileWidth + destCol] = validRasterData[band][row * validRasterData.width + col];
       //       } else {
       //         console.log('error in assigning data to tile buffer');
       //       }
       //     }
       //   }
-      //   validTileData[channel] = tileBuffer;
+      //   validImageData[band] = tileBuffer;
       // }
-      // We assume single-band data (rasterData[0]).
-      for (let row = 0; row < validHeight; row++) {
-        for (let col = 0; col < validWidth; col++) {
-          // Compute the destination position in the tile buffer.
-          // We shift by the number of missing pixels (if any) at the top/left.
-          const destRow = Math.floor(missingTop) + row;
-          const destCol = Math.floor(missingLeft) + col;
-          if (destRow < tileWidth && destCol < tileWidth) {
-            tileBuffer[destRow * tileWidth + destCol] = validRasterData[0][row * validRasterData.width + col];
-          } else {
-            console.log('error in assigning data to tile buffer');
+      // return validImageData;
+
+      // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
+      // I think this is less practical then the commented solution above, but I do it so it works with the code in geoimage.ts in deck.gl-geoimage in function getColorValue.
+      let validImageData = Array(validRasterData.length * validRasterData[0].length);
+      validImageData.fill(this.options.noDataValue);
+
+      // Place the valid pixel data into the tile buffer.
+      for (let band = 0; band < validRasterData.length; band++) {
+        for (let row = 0; row < validHeight; row++) {
+          for (let col = 0; col < validWidth; col++) {
+            // Compute the destination position in the tile buffer.
+            // We shift by the number of missing pixels (if any) at the top/left.
+            const destRow = Math.floor(missingTop) + row;
+            const destCol = Math.floor(missingLeft) + col;
+            if (destRow < tileWidth && destCol < tileWidth) {
+              tileBuffer[destRow * tileWidth + destCol] = validRasterData[band][row * validRasterData.width + col];
+            } else {
+              console.log('error in assigning data to tile buffer');
+            }
           }
         }
+        tileBuffer.forEach((rasterValue, index) => {
+          validImageData[index * this.options.numOfChannels + band] = rasterValue;
+        });
       }
+      return [validImageData];
 
-      return [tileBuffer];
-      // return validTileData;
+      // FOR SINGLE BAND DATA ONLY
+      // We assume single-band data (rasterData[0]).
+      // for (let row = 0; row < validHeight; row++) {
+      //   for (let col = 0; col < validWidth; col++) {
+      //     // Compute the destination position in the tile buffer.
+      //     // We shift by the number of missing pixels (if any) at the top/left.
+      //     const destRow = Math.floor(missingTop) + row;
+      //     const destCol = Math.floor(missingLeft) + col;
+      //     if (destRow < tileWidth && destCol < tileWidth) {
+      //       tileBuffer[destRow * tileWidth + destCol] = validRasterData[0][row * validRasterData.width + col];
+      //     } else {
+      //       console.log('error in assigning data to tile buffer');
+      //     }
+      //   }
+      // }
+      // return [tileBuffer];
     }
 
     // Read the raster data for the non shifted tile window.
@@ -725,7 +754,6 @@ class CogTiles {
     }
     return planarConfiguration;
   }
-
 
   /**
    * Creates a tile buffer of the specified size using a typed array corresponding to the provided data type.
