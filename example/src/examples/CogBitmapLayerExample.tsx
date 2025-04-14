@@ -34,7 +34,7 @@ const cogLayerDefinition = {
     type: 'image',
     blurredTexture: false,
     clipLow: 1,
-    useChannel: 0,
+    useChannel: 1,
     useSingleColor: true,
   },
 

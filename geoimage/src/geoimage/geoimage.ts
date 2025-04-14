@@ -154,7 +154,7 @@ export default class GeoImage {
 
     let channel = rasters[0];
 
-    optionsLocal.useChannelIndex = optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
+    optionsLocal.useChannelIndex ??= optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
     if (options.useChannelIndex != null) {
       if (rasters[optionsLocal.useChannelIndex]) {
         channel = rasters[optionsLocal.useChannelIndex];
@@ -298,7 +298,7 @@ export default class GeoImage {
     optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor);
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor);
     optionsLocal.color = this.getColorFromChromaType(optionsLocal.color);
-    optionsLocal.useChannelIndex = options.useChannel === null ? null : options.useChannel - 1;
+    optionsLocal.useChannelIndex ??= options.useChannel === null ? null : options.useChannel - 1;
 
     // console.log(rasters[0])
     /* console.log("raster 0 length: " + rasters[0].length)
@@ -394,7 +394,7 @@ export default class GeoImage {
       });
     } else {
       // if user defined channel does not exist
-      console.log(`Defined channel ${options.useChannel} does not exist, choose a different channel or set the useChannel property to null if you want to visualize RGB(A) imagery`);
+      console.log(`Defined channel(${options.useChannel}) or channel index(${options.useChannelIndex}) does not exist, choose a different channel or set the useChannel property to null if you want to visualize RGB(A) imagery`);
       const defaultColorData = this.getDefaultColor(size, optionsLocal.nullColor);
       defaultColorData.forEach((value, index) => {
         imageData.data[index] = value;
