@@ -1,7 +1,5 @@
 /* eslint 'max-len': [1, { code: 100, comments: 999, ignoreStrings: true, ignoreUrls: true }] */
 // COG loading
-import { Tiff } from '@cogeotiff/core';
-import { SourceHttp } from '@chunkd/source-http';
 import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 
 // Image compression support
@@ -22,9 +20,7 @@ const CogTilesGeoImageOptionsDefaults = {
 };
 
 class CogTiles {
-  cog: Tiff;
-
-  cogGT: GeoTIFF;
+  cog: GeoTIFF;
 
   cogZoomLookup = [0];
 
@@ -49,24 +45,16 @@ class CogTiles {
   }
 
   async initializeCog(url: string) {
-    // Set native fetch instead node-fetch to SourceHttp
-    SourceHttp.fetch = async (input, init) => {
-      const res = await fetch(input, init);
-      return res;
-    };
-
-    const source = new SourceHttp(url);
-    this.cog = await Tiff.create(source);
-    this.cogGT = await fromUrl(url);
-    const image = await this.cogGT.getImage(); // by default, the first image is read.
+    this.cog = await fromUrl(url);
+    const image = await this.cog.getImage(); // by default, the first image is read.
     this.cogOrigin = image.getOrigin();
     this.options.noDataValue ??= this.getNoDataValue(image);
     this.options.format ??= this.getDataTypeFromTags(image);
     this.options.numOfChannels = this.getNumberOfChannels(image);
     this.options.planarConfig = this.getPlanarConfiguration(image);
-    [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cogGT);
+    [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
     this.tileSize = image.getTileWidth();
-    this.zoomRange = this.calculateZoomRange(image, await this.cogGT.getImageCount());
+    this.zoomRange = this.calculateZoomRange(image, await this.cog.getImageCount());
     this.bounds = this.calculateBoundsAsLatLon(image)
   }
 
@@ -195,7 +183,7 @@ class CogTiles {
 
   async getTileFromImage(tileX, tileY, zoom) {
     const imageIndex = this.getImageIndexForZoomLevel(zoom);
-    const targetImage = await this.cogGT.getImage(imageIndex);
+    const targetImage = await this.cog.getImage(imageIndex);
 
     // Ensure the image is tiled
     const tileWidth = targetImage.getTileWidth();

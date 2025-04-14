@@ -206,10 +206,10 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
   }
 
   async init(terrainUrl: string) {
-    const cog = await this.state.terrainCogTiles.initializeCog(this.props.elevationData);
+    await this.state.terrainCogTiles.initializeCog(this.props.elevationData);
     // this.tileSize = this.terrainCogTiles.getTileSize(cog);
 
-    const zoomRange = this.state.terrainCogTiles.getZoomRange(cog);
+    const zoomRange = this.state.terrainCogTiles.getZoomRange();
 
     const [minZoom, maxZoom] = zoomRange;
 
