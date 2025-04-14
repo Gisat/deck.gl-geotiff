@@ -289,9 +289,9 @@ export default class GeoImage {
     const size = width * height * 4;
     // const size = width * height;
 
-    if (!options.noDataValue) {
-      console.log('Missing noData value. Raster might be displayed incorrectly.');
-    }
+    // if (!options.noDataValue) {
+    //   console.log('Missing noData value. Raster might be displayed incorrectly.');
+    // }
     optionsLocal.unidentifiedColor = this.getColorFromChromaType(optionsLocal.unidentifiedColor);
     optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor);
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor);

@@ -716,6 +716,7 @@ class CogTiles {
     const noDataRaw = image.getGDALNoData();
 
     if (noDataRaw === undefined || noDataRaw === null) {
+      console.log('noDataValue is undefined or null,raster might be displayed incorrectly.');
       // No noData value is defined
       return undefined;
     }
