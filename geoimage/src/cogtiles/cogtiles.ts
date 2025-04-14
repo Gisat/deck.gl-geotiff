@@ -1,14 +1,11 @@
 /* eslint 'max-len': [1, { code: 100, comments: 999, ignoreStrings: true, ignoreUrls: true }] */
 // COG loading
-import { Tiff, TiffImage } from '@cogeotiff/core';
+import { Tiff } from '@cogeotiff/core';
 import { SourceHttp } from '@chunkd/source-http';
 import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 
 // Image compression support
-import { inflate } from 'pako';
-import jpeg from 'jpeg-js';
 import { worldToLngLat } from '@math.gl/web-mercator';
-import LZWDecoder from './lzw';
 
 // Bitmap styling
 import GeoImage, { GeoImageOptions } from '../geoimage/geoimage.ts';
@@ -39,15 +36,11 @@ class CogTiles {
 
   tileSize: number;
 
-  lowestOriginTileOffset = [0, 0];
-
-  lowestOriginTileSize = 0;
+  bounds: Bounds;
 
   loaded: boolean = false;
 
   geo: GeoImage = new GeoImage();
-
-  lzw: LZWDecoder = new LZWDecoder();
 
   options: GeoImageOptions;
 
@@ -65,155 +58,31 @@ class CogTiles {
     const source = new SourceHttp(url);
     this.cog = await Tiff.create(source);
     this.cogGT = await fromUrl(url);
-    const imageGT = await this.cogGT.getImage(); // by default, the first image is read.
-    this.cogOrigin = imageGT.getOrigin();
-    this.options.noDataValue ??= this.getNoDataValueGT(imageGT);
-    this.options.format ??= this.getDataTypeFromTags(imageGT);
-    this.options.numOfChannels = this.getNumberOfChannels(imageGT);
-    this.options.planarConfig = this.getPlanarConfiguration(imageGT);
+    const image = await this.cogGT.getImage(); // by default, the first image is read.
+    this.cogOrigin = image.getOrigin();
+    this.options.noDataValue ??= this.getNoDataValue(image);
+    this.options.format ??= this.getDataTypeFromTags(image);
+    this.options.numOfChannels = this.getNumberOfChannels(image);
+    this.options.planarConfig = this.getPlanarConfiguration(image);
     [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cogGT);
-
-    // Load our data tile from url, arraybuffer, or blob, so we can work with it:
-    // const tiffGT = await fromUrl(url);
-    // const imageCountGT = await tiffGT.getImageCount();
-    // console.log(`imageCountGT: ${imageCountGT}`);
-    // console.log(imageGT);
-
-    // const lastImageGT = await tiffGT.getImage(imageCountGT - 1);
-    // console.dir(lastImageGT);
-    // console.log(`last tilesX: ${Math.ceil(lastImageGT.getWidth() / lastImageGT.getTileWidth())}`);
-    //
-    // console.log(`image 0: width: ${imageGT.getWidth()}, height: ${imageGT.getHeight()}, tileWidth: ${imageGT.getTileWidth()}, tileHeight: ${imageGT.getTileHeight()}, samplesPerPixel: ${imageGT.getSamplesPerPixel()}`);
-    // console.log(`image 11: width: ${lastImageGT.getWidth()}, height: ${lastImageGT.getHeight()}, tileWidth: ${lastImageGT.getTileWidth()}, tileHeight: ${lastImageGT.getTileHeight()}, samplesPerPixel: ${lastImageGT.getSamplesPerPixel()}`);
-    //
-    // // when we are actually dealing with geo-data the following methods return
-    // // meaningful results:
-    // console.log(`image 0: origin: ${imageGT.getOrigin()}, resolution: ${imageGT.getResolution()}, bbox: ${imageGT.getBoundingBox()}`);
-    // console.log(imageGT.getGeoKeys());
-    // // console.log(`image 11: origin: ${lastImageGT.getOrigin()}, resolution: ${lastImageGT.getResolution()}, bbox: ${lastImageGT.getBoundingBox()}`);
-
-    this.cog.images.forEach((image:TiffImage) => {
-      image.loadGeoTiffTags();
-    });
-
-    // const targetZoomLevel = 2;
-    // const imageCount = await tiffGT.getImageCount();
-    // // Get the expected resolution for the target zoom level from our lookup table:
-    // const expectedResolution = webMercatorResolutions[targetZoomLevel];
-    //
-    // // Use the first image as the base (which should have full metadata)
-    // const baseImage = await tiffGT.getImage();
-    // const baseResolution = baseImage.getResolution()[0]; // m/pixel at full resolution
-    // const baseWidth = baseImage.getWidth();
-    //
-    // let bestImageIndex = 0;
-    // let bestDiff = Infinity;
-    //
-    // for (let idx = 0; idx < imageCount; idx ++) {
-    //   // eslint-disable-next-line no-await-in-loop
-    //   const image = await tiffGT.getImage(idx);
-    //   const width = image.getWidth();
-    //
-    //   // Estimate the image's resolution by comparing its width to the base image.
-    //   const scaleFactor = baseWidth / width;
-    //   const estimatedResolution = baseResolution * scaleFactor;
-    //
-    //   // Difference from the expected resolution
-    //   const diff = Math.abs(estimatedResolution - expectedResolution);
-    //   if (diff < bestDiff) {
-    //     bestDiff = diff;
-    //     bestImageIndex = idx;
-    //   }
-    // }
-    // console.log('for zoom level ', targetZoomLevel, ' we want image index ', bestImageIndex);
-
-    // const getImageIndexForZoomLevel = (zoom) => {
-    //   const minZoom = cogZoomLookup[cogZoomLookup.length - 1];
-    //   const maxZoom = cogZoomLookup[0];
-    //   if (zoom > maxZoom) return 0;
-    //   if (zoom < minZoom) return cogZoomLookup.length - 1;
-    //   return cogZoomLookup.indexOf(zoom);
-    // };
-
-    // console.log('for zoom level ', targetZoomLevel, ' we want image index ', getImageIndexForZoomLevel(targetZoomLevel));
-    //
-    // const targetImage = await tiffGT.getImage(getImageIndexForZoomLevel(targetZoomLevel));
-    // console.log('target image index ', targetImage);
-    //
-    // async function getTileFromImage(image, tileX, tileY) {
-    //   // Ensure the image is tiled
-    //   const tileWidth = image.getTileWidth();
-    //   const tileHeight = image.getTileHeight();
-    //   if (!tileWidth || !tileHeight) {
-    //     throw new Error('The image is not tiled.');
-    //   }
-
-    // Calculate the pixel boundaries for the tile.
-    // For example, if tile indices start at (0,0):
-    // const window = [
-    //   tileX * tileWidth, // startX
-    //   tileY * tileHeight, // startY
-    //   (tileX + 1) * tileWidth, // endX (exclusive)
-    //   (tileY + 1) * tileHeight, // endY (exclusive)
-    // ];
-
-    // Now read the raster data for that tile window.
-    // const tileData = await image.readRasters({ window });
-    // return tileData;
-    // }
-
-    // console.log(await getTileFromImage(targetImage, 1, 1));
-
-    // const tilesX = Math.ceil(imageGT.getWidth() / imageGT.getTileWidth());
-    // console.log(`image GT tilesX: ${tilesX}`);
-    // console.log(`old image tiles X: ${this.cog.images[0].tileCount.x}`);
-
-    this.tileSize = this.getTileSize(this.cog);
-    // console.log('tileSize old: ', this.tileSize);
-    // console.log('tileSize new: ', imageGT.getTileWidth());
-    //
-    // console.log('getResolution new: ', imageGT.getResolution());
-    // console.log('getResolution old: ', this.cog.images[0].resolution);
-
-    this.lowestOriginTileOffset = this.getImageTileIndex(
-      this.cog.images[this.cog.images.length - 1],
-    );
-    // console.log('lowestOriginTileOffset old: ', this.lowestOriginTileOffset);
-
-    this.zoomRange = this.getZoomRange(this.cog);
-    // console.log('zoomRange old: ', this.zoomRange);
-
-    // const zoomRangeGT = this.getZoomRangeGT(imageGT, imageCountGT);
-    // console.log('zoomRangeGT new: ', zoomRangeGT);
-
-    return this.cog;
+    this.tileSize = image.getTileWidth();
+    this.zoomRange = this.calculateZoomRange(image, await this.cogGT.getImageCount());
+    this.bounds = this.calculateBoundsAsLatLon(image)
   }
 
-  getTileSize(cog: Tiff) {
-    return cog.images[cog.images.length - 1].tileSize.width;
+  getZoomRange() {
+    return this.zoomRange;
   }
 
-  getZoomRange(cog: Tiff) {
-    const img = cog.images[cog.images.length - 1];
-
-    const minZoom = this.getZoomLevelFromResolution(
-      cog.images[cog.images.length - 1].tileSize.width,
-      img.resolution[0],
-    );
-    const maxZoom = minZoom + (cog.images.length - 1);
+  calculateZoomRange(img: GeoTIFFImage, imgCount: number) {
+    const maxZoom = this.getZoomLevelFromResolution(img.getTileWidth(), img.getResolution()[0]);
+    const minZoom = maxZoom - (imgCount - 1);
 
     return [minZoom, maxZoom];
   }
 
-  // getZoomRangeGT(img: GeoTIFFImage, imgCount: number) {
-  //   const maxZoom = this.getZoomLevelFromResolution(img.getTileWidth(), img.getResolution()[0]);
-  //   const minZoom = maxZoom - (imgCount - 1);
-  //
-  //   return [minZoom, maxZoom];
-  // }
-
-  getBoundsAsLatLon(cog: Tiff) {
-    const { bbox } = cog.images[cog.images.length - 1];
+  calculateBoundsAsLatLon(image: GeoTIFFImage) {
+    const bbox = image.getBoundingBox();
 
     const minX = Math.min(bbox[0], bbox[2]);
     const maxX = Math.max(bbox[0], bbox[2]);
@@ -226,38 +95,12 @@ class CogTiles {
     return [minXYDeg[0], minXYDeg[1], maxXYDeg[0], maxXYDeg[1]] as [number, number, number, number];
   }
 
-  getOriginAsLatLon(cog: Tiff) {
-    const { origin } = cog.images[cog.images.length - 1];
-    return this.getLatLon(origin);
-  }
-
-  getImageTileIndex(img: TiffImage) {
-    const ax = EARTH_HALF_CIRCUMFERENCE + img.origin[0];
-    const ay = -(EARTH_HALF_CIRCUMFERENCE + (img.origin[1] - EARTH_CIRCUMFERENCE));
-    // let mpt = img.resolution[0] * img.tileSize.width;
-
-    const mpt = img.tileSize.width * this.getResolutionFromZoomLevel(
-      img.tileSize.width,
-      this.getZoomLevelFromResolution(
-        img.tileSize.width,
-        img.resolution[0],
-      ),
-    );
-
-    const ox = Math.round(ax / mpt);
-    const oy = Math.round(ay / mpt);
-
-    const oz = this.getZoomLevelFromResolution(img.tileSize.width, img.resolution[0]);
-
-    return [ox, oy, oz];
-  }
-
-  getResolutionFromZoomLevel(tileSize: number, z: number) {
-    return (EARTH_CIRCUMFERENCE / tileSize) / (2 ** z);
-  }
-
   getZoomLevelFromResolution(tileSize: number, resolution: number) {
     return Math.round(Math.log2(EARTH_CIRCUMFERENCE / (resolution * tileSize)));
+  }
+
+  getBoundsAsLatLon() {
+    return this.bounds;
   }
 
   getLatLon(input: number[]) {
@@ -378,10 +221,6 @@ class CogTiles {
       (tileY + 1) * tileHeight - Math.abs(offsetYPixel), // endY (exclusive)
     ];
 
-    // Get image dimensions.
-    const imageWidth = targetImage.getWidth();
-    const imageHeight = targetImage.getHeight();
-
     const [windowStartX, windowStartY, windowEndX, windowEndY] = window;
 
     // Determine the effective (valid) window inside the image:
@@ -435,7 +274,7 @@ class CogTiles {
 
       // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
       // I think this is less practical then the commented solution above, but I do it so it works with the code in geoimage.ts in deck.gl-geoimage in function getColorValue.
-      let validImageData = Array(validRasterData.length * validRasterData[0].length);
+      const validImageData = Array(validRasterData.length * validRasterData[0].length);
       validImageData.fill(this.options.noDataValue);
 
       // Place the valid pixel data into the tile buffer.
@@ -458,155 +297,22 @@ class CogTiles {
         });
       }
       return [validImageData];
-
-      // FOR SINGLE BAND DATA ONLY
-      // We assume single-band data (rasterData[0]).
-      // for (let row = 0; row < validHeight; row++) {
-      //   for (let col = 0; col < validWidth; col++) {
-      //     // Compute the destination position in the tile buffer.
-      //     // We shift by the number of missing pixels (if any) at the top/left.
-      //     const destRow = Math.floor(missingTop) + row;
-      //     const destCol = Math.floor(missingLeft) + col;
-      //     if (destRow < tileWidth && destCol < tileWidth) {
-      //       tileBuffer[destRow * tileWidth + destCol] = validRasterData[0][row * validRasterData.width + col];
-      //     } else {
-      //       console.log('error in assigning data to tile buffer');
-      //     }
-      //   }
-      // }
-      // return [tileBuffer];
     }
 
     // Read the raster data for the non shifted tile window.
-    const tileData = await targetImage.readRasters({ window, interleave: true});
+    const tileData = await targetImage.readRasters({ window, interleave: true });
     return [tileData];
   }
 
   async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
     const tileData = await this.getTileFromImage(x, y, z);
-    const wantedMpp = this.getResolutionFromZoomLevel(this.tileSize, z);
-    // tile size can be calculated also with the geotiffjs library imageGT.getTileWidth()
-    // const targetMetersPerPixel = this.getResolutionFromZoomLevel(this.tileSize, z);
-    const img = this.cog.getImageByResolution(wantedMpp);
-    // const img = this.cog.getImageByResolution(targetMetersPerPixel);
-    // here should be get image by zoom level / resolution
-    // await img.loadGeoTiffTags(1)
-    // let offset: number[] = [0, 0];
 
-    // if (z === this.zoomRange[0]) {
-    //   offset = this.lowestOriginTileOffset;
-    // } else {
-    //   const power = 2 ** (z - this.zoomRange[0]);
-    //   offset[0] = Math.floor(this.lowestOriginTileOffset[0] * power);
-    //   offset[1] = Math.floor(this.lowestOriginTileOffset[1] * power);
-    // }
-    // const tilesX = img.tileCount.x;
-    // const tilesY = img.tileCount.y;
-    // console.log("------OFFSET IS------  " + offset[0] + " ; " + offset[1])
-
-    // const ox = offset[0];
-    // const oy = offset[1];
-
-    // console.log("Asking for " + Math.floor(x - ox) + " : " + Math.floor(y - oy))
-
-    let decompressed: string;
-    let decoded: any;
-
-    // this.options.numOfChannels = Number(img.tags.get(277).value);
-    // this.options.noDataValue = this.getNoDataValue(img.tags);
-
-    //     if (!this.options.format) {
-    //       // More information about TIFF tags: https://www.awaresystems.be/imaging/tiff/tifftags.html
-    //       this.options.format = this.getFormat(
-    // img.tags.get(339).value as Array<number>,
-    //       img.tags.get(258).value as Array<number>,
-    //       );
-    //     }
-
-    let bitsPerSample = img.tags.get(258)!.value;
-    if (Array.isArray(bitsPerSample)) {
-      if (this.options.type === 'terrain') {
-        let c = 0;
-        bitsPerSample.forEach((sample) => {
-          c += sample;
-        });
-        bitsPerSample = c;
-      } else {
-        [bitsPerSample] = bitsPerSample;
-      }
-    }
-
-    // const samplesPerPixel = img.tags.get(277)!.value
-    // console.log("Samples per pixel:" + samplesPerPixel)
-    // console.log("Bits per sample: " + bitsPerSample)
-    // console.log("Single channel pixel format: " + bitsPerSample/)
-
-    // if (x - ox >= 0 && y - oy >= 0 && x - ox < tilesX && y - oy < tilesY) {
-    //   // console.log(`getting tile: ${[x - ox, y - oy]}`);
-    //   const tile = await img.getTile((x - ox), (y - oy));
-    //   // console.time("Request to data time: ")
-    //
-    //   switch (img.compression) {
-    //     case 'image/jpeg':
-    //       decoded = jpeg.decode(tile!.bytes, { useTArray: true });
-    //       break;
-    //     case 'application/deflate':
-    //       decoded = await inflate(tile!.bytes);
-    //       break;
-    //     case 'application/lzw':
-    //       decoded = this.lzw.decodeBlock(tile!.bytes.buffer);
-    //       break;
-    //     default:
-    //       console.warn(`Unexpected compression method: ${img.compression}`);
-    //   }
-    //
-    //   let decompressedFormatted;
-    //   // bitsPerSample = 8
-    //
-    //   switch (this.options.format) {
-    //     case 'uint8':
-    //       decompressedFormatted = new Uint8Array(decoded.buffer); break;
-    //     case 'uint16':
-    //       decompressedFormatted = new Uint16Array(decoded.buffer); break;
-    //     case 'uint32':
-    //       decompressedFormatted = new Uint32Array(decoded.buffer); break;
-    //     case 'int8':
-    //       decompressedFormatted = new Int8Array(decoded.buffer); break;
-    //     case 'int16':
-    //       decompressedFormatted = new Int16Array(decoded.buffer); break;
-    //     case 'int32':
-    //       decompressedFormatted = new Int32Array(decoded.buffer); break;
-    //     case 'float32':
-    //       decompressedFormatted = new Float32Array(decoded.buffer); break;
-    //     case 'float64':
-    //       decompressedFormatted = new Float64Array(decoded.buffer); break;
-    //     default: decompressedFormatted = null;
-    //   }
-    //
-    //   console.log(decompressedFormatted);
-    //
-    //   // const { meshMaxError, bounds, elevationDecoder } = this.options;
-    //
-    //   decompressed = await this.geo.getMap({
-    //     rasters: [tileData[0]],
-    //     width: this.tileSize,
-    //     height: this.tileSize,
-    //     bounds,
-    //   }, this.options, meshMaxError);
-    //
-    //   // console.log(decompressed.length)
-    //
-    //   return decompressed;
-    // }
-    // return null;
-    decompressed = await this.geo.getMap({
+    return this.geo.getMap({
       rasters: [tileData[0]],
       width: this.tileSize,
       height: this.tileSize,
       bounds,
     }, this.options, meshMaxError);
-
-    return decompressed;
   }
 
   /**
@@ -653,57 +359,6 @@ class CogTiles {
     return `${typePrefix}${bits}`;
   }
 
-  getFormat(sampleFormat: number[]|number, bitsPerSample:number[]|number) {
-    // TODO: what if there are different channels formats
-    let uniqueSampleFormat = sampleFormat;
-    let uniqueBitsPerSample = bitsPerSample;
-    if (Array.isArray(sampleFormat)) { [uniqueSampleFormat] = sampleFormat; }
-    if (Array.isArray(bitsPerSample)) { [uniqueBitsPerSample] = bitsPerSample; }
-
-    let dataType;
-    switch (uniqueSampleFormat) {
-      case 1: // Unsigned integer
-        switch (uniqueBitsPerSample) {
-          case 8: dataType = 'uint8'; break;
-          case 16: dataType = 'uint16'; break;
-          case 32: dataType = 'uint32'; break;
-          default: dataType = null;
-        }
-        break;
-      case 2: // Signed integer
-        switch (uniqueBitsPerSample) {
-          case 8: dataType = 'int8'; break;
-          case 16: dataType = 'int16'; break;
-          case 32: dataType = 'int32'; break;
-          default: dataType = null;
-        }
-        break;
-      case 3: // Floating point
-        switch (uniqueBitsPerSample) {
-          case 32: dataType = 'float32'; break;
-          case 64: dataType = 'float64'; break;
-          default: dataType = null;
-        }
-        break;
-      default:
-        throw new Error('Unknown data format.');
-    }
-    // console.log('Data type is: ', dataType)
-    return dataType;
-  }
-
-  getNoDataValue(tags) {
-    if (tags.has(42113)) {
-      const noDataValue = tags.get(42113).value;
-      if (typeof noDataValue === 'string' || noDataValue instanceof String) {
-        const parsedValue = noDataValue.replace(/[\0\s]/g, '');
-        return Number(parsedValue);
-      }
-      return Number.isNaN(Number(noDataValue)) ? undefined : Number(noDataValue);
-    }
-    return undefined;
-  }
-
   /**
    * Extracts the noData value from a GeoTIFF.js image.
    * Returns the noData value as a number if available, otherwise undefined.
@@ -711,7 +366,7 @@ class CogTiles {
    * @param {GeoTIFFImage} image - The GeoTIFF.js image.
    * @returns {number|undefined} The noData value as a number, or undefined if not available.
    */
-  getNoDataValueGT(image) {
+  getNoDataValue(image) {
     // Attempt to retrieve the noData value via the GDAL method.
     const noDataRaw = image.getGDALNoData();
 
