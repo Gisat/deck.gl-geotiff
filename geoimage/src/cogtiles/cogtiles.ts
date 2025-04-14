@@ -478,8 +478,8 @@ class CogTiles {
     }
 
     // Read the raster data for the non shifted tile window.
-    const tileData = await targetImage.readRasters({ window });
-    return tileData;
+    const tileData = await targetImage.readRasters({ window, interleave: true});
+    return [tileData];
   }
 
   async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
