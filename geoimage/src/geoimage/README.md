@@ -27,7 +27,7 @@
 - `useDataForOpacity : boolean` - visualise data with opacity of each pixel according to its value **(default false)**
 - `alpha : number` - visualise entire image with specified opacity **(if useDataOpacity is false)**, values 0-100 **(default 100)**
 - `useHeatMap : boolean` - generate data as a color heatmap **(default true)**
- `useChannel : number | null` - specify a single channel to use **(default null)**
+- `useChannel : number | null` - specify a single channel to use; first channel is equal to 1, etc... for RGB(A) imagery leave it to `null` **(default null)**
 - `multiplier : number  ` - multiplies each value **(default 1.00)**
 - `clipLow : number | null`- generate only data greater than this **(default null)**
 
