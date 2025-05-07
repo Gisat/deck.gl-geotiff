@@ -181,9 +181,9 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
   }
 
   async init() {
-    const cog = await this.state.bitmapCogTiles.initializeCog(this.props.rasterData);
+    await this.state.bitmapCogTiles.initializeCog(this.props.rasterData);
 
-    const zoomRange = this.state.bitmapCogTiles.getZoomRange(cog);
+    const zoomRange = this.state.bitmapCogTiles.getZoomRange();
 
     const [minZoom, maxZoom] = zoomRange;
 
@@ -307,8 +307,7 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
             clampToTerrain,
           },
         },
-        extent: this.state.bitmapCogTiles.cog
-          ? this.state.bitmapCogTiles.getBoundsAsLatLon(this.state.bitmapCogTiles.cog) : null,
+        extent: this.state.bitmapCogTiles.getBoundsAsLatLon(),
         tileSize,
         minZoom: this.state.minZoom,
         maxZoom: this.state.maxZoom,

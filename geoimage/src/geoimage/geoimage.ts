@@ -45,7 +45,8 @@ export type GeoImageOptions = {
     clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
     terrainColor?: Array<number> | chroma.Color,
     terrainSkirtHeight?: number,
-    terrainMinValue?: number
+    terrainMinValue?: number,
+    planarConfig?: number,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -77,6 +78,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
   terrainColor: [133, 133, 133, 255],
   terrainSkirtHeight: 100,
   terrainMinValue: 0,
+  planarConfig: undefined,
 };
 
 export default class GeoImage {
@@ -291,9 +293,9 @@ export default class GeoImage {
     const size = width * height * 4;
     // const size = width * height;
 
-    if (!options.noDataValue) {
-      console.log('Missing noData value. Raster might be displayed incorrectly.');
-    }
+    // if (!options.noDataValue) {
+    //   console.log('Missing noData value. Raster might be displayed incorrectly.');
+    // }
     optionsLocal.unidentifiedColor = this.getColorFromChromaType(optionsLocal.unidentifiedColor);
     optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor);
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor);
@@ -387,8 +389,8 @@ export default class GeoImage {
         optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal);
         // console.log('data min: ' + optionsLocal.rangeMin + ', max: ' + optionsLocal.rangeMax);
       }
-      const numOfChannels = channel.length / (width * height);
-      const colorData = this.getColorValue(channel, optionsLocal, size, numOfChannels);
+      // const numOfChannels = channel.length / (width * height);
+      const colorData = this.getColorValue(channel, optionsLocal, size, optionsLocal.numOfChannels);
       colorData.forEach((value, index) => {
         imageData.data[index] = value;
       });
