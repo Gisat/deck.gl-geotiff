@@ -24,7 +24,8 @@ export type GeoImageOptions = {
     useColorClasses? : boolean,
     useAutoRange?: boolean,
     useDataForOpacity?: boolean,
-    useChannel?: number | null,
+    useChannel?: Exclude<number, 0> | null,
+    useChannelIndex?: number | null,
     useSingleColor?: boolean,
     blurredTexture? : boolean,
     clipLow?: number | null,
@@ -68,6 +69,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
   colorClasses: null,
   alpha: 100,
   useChannel: null,
+  useChannelIndex: null,
   noDataValue: undefined,
   numOfChannels: undefined,
   nullColor: [0, 0, 0, 0],
@@ -150,12 +152,14 @@ export default class GeoImage {
       width = input.width;
       height = input.height;
     }
+    const optionsLocal = { ...options };
 
     let channel = rasters[0];
 
-    if (options.useChannel != null) {
-      if (rasters[options.useChannel]) {
-        channel = rasters[options.useChannel]; // length = 65536
+    optionsLocal.useChannelIndex ??= optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
+    if (options.useChannelIndex != null) {
+      if (rasters[optionsLocal.useChannelIndex]) {
+        channel = rasters[optionsLocal.useChannelIndex];
       }
     }
 
@@ -163,7 +167,7 @@ export default class GeoImage {
 
     const numOfChannels = channel.length / (width * height);
 
-    let pixel:number = options.useChannel === null ? 0 : options.useChannel;
+    let pixel:number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
 
     for (let i = 0, y = 0; y < height; y++) {
       for (let x = 0; x < width; x++, i++) {
@@ -296,6 +300,7 @@ export default class GeoImage {
     optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor);
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor);
     optionsLocal.color = this.getColorFromChromaType(optionsLocal.color);
+    optionsLocal.useChannelIndex ??= options.useChannel === null ? null : options.useChannel - 1;
 
     // console.log(rasters[0])
     /* console.log("raster 0 length: " + rasters[0].length)
@@ -304,7 +309,7 @@ export default class GeoImage {
     console.log("format: " + rasters[0].length / (width * height))
     */
 
-    if (optionsLocal.useChannel == null) {
+    if (optionsLocal.useChannelIndex == null) {
       if (channels === 1) {
         if (rasters[0].length / (width * height) === 1) {
           const channel = rasters[0];
@@ -374,10 +379,10 @@ export default class GeoImage {
           pixel += 1;
         }
       }
-    } else if (optionsLocal.useChannel <= optionsLocal.numOfChannels) {
+    } else if (optionsLocal.useChannelIndex < optionsLocal.numOfChannels && optionsLocal.useChannelIndex >= 0) {
       let channel = rasters[0];
-      if (rasters[optionsLocal.useChannel]) {
-        channel = rasters[optionsLocal.useChannel];
+      if (rasters[optionsLocal.useChannelIndex]) {
+        channel = rasters[optionsLocal.useChannelIndex];
       }
       // AUTO RANGE
       if (optionsLocal.useAutoRange) {
@@ -390,8 +395,8 @@ export default class GeoImage {
         imageData.data[index] = value;
       });
     } else {
-      // if user defined channel does not exist --> return greyscale image
-      console.log('Defined channel does not exist, displaying only grey values');
+      // if user defined channel does not exist
+      console.log(`Defined channel(${options.useChannel}) or channel index(${options.useChannelIndex}) does not exist, choose a different channel or set the useChannel property to null if you want to visualize RGB(A) imagery`);
       const defaultColorData = this.getDefaultColor(size, optionsLocal.nullColor);
       defaultColorData.forEach((value, index) => {
         imageData.data[index] = value;
@@ -419,7 +424,8 @@ export default class GeoImage {
 
   getColorValue(dataArray:[], options:GeoImageOptions, arrayLength:number, numOfChannels = 1) {
     const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
-    let pixel:number = options.useChannel === null ? 0 : options.useChannel;
+    // channel index is equal to channel number - 1
+    let pixel:number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
     const colorsArray = new Array(arrayLength);
 
     // if useColorsBasedOnValues is true
