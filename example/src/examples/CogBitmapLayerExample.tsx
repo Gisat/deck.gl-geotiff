@@ -34,7 +34,7 @@ const cogLayerDefinition = {
   // deflate
   // rasterData: 'http://gisat-gis.eu-central-1.linodeobjects.com/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_deflate.tif',
   // lzw
-  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_lzw.tif',
+  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Pavel_Luisa/openEO_2000-01-01Z_cog.tif',
   // packbits
   // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_packbits_8.tif',
   // lerc
@@ -54,7 +54,7 @@ const cogLayerDefinition = {
   cogBitmapOptions: {
     type: 'image',
     blurredTexture: false,
-    // clipLow: 0,
+    clipLow: 0,
     useChannel: 1,
     // alpha: 50,
     // useSingleColor: true,
