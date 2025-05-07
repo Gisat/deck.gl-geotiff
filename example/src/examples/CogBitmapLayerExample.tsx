@@ -55,7 +55,7 @@ const cogLayerDefinition = {
     type: 'image',
     blurredTexture: false,
     // clipLow: 0,
-    useChannel: 0,
+    useChannel: 1,
     // alpha: 50,
     // useSingleColor: true,
     useHeatMap: true,
