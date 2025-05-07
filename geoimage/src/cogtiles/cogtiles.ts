@@ -219,65 +219,6 @@ class CogTiles {
     const imageHeight = targetImage.getHeight();
     const imageWidth = targetImage.getWidth();
 
-    // approach by comparing bboxes of tile and cog image
-    const tilePixelBbox = [
-      tileX * tileWidth,
-      tileY * tileHeight,
-      (tileX + 1) * tileWidth,
-      (tileY + 1) * tileHeight,
-    ];
-
-    const cogPixelBBox = [
-      offsetXPixel,
-      offsetYPixel,
-      offsetXPixel + imageWidth,
-      offsetYPixel + imageHeight,
-    ];
-
-    // should be getBoundingBox function - if that null, then calculate like this
-    const cogMeterBbox = [
-      this.cogOrigin[0],
-      this.cogOrigin[1] - imageHeight * this.cogResolutionLookup[this.cogResolutionLookup.length - 1],
-      this.cogOrigin[0] + imageWidth * this.cogResolutionLookup[this.cogResolutionLookup.length - 1],
-      this.cogOrigin[1],
-    ];
-
-    const tileMeterBbox = [
-      tilePixelBbox[0] * tileResolution - EARTH_HALF_CIRCUMFERENCE,
-      EARTH_HALF_CIRCUMFERENCE - tilePixelBbox[3] * tileResolution,
-      tilePixelBbox[2] * tileResolution - EARTH_HALF_CIRCUMFERENCE,
-      EARTH_HALF_CIRCUMFERENCE - tilePixelBbox[1] * tileResolution,
-    ];
-
-    const intersectionPixelBboxMinX = Math.max(tileMeterBbox[0], cogMeterBbox[0]);
-    const intersectionPixelBboxMinY = Math.max(tileMeterBbox[1], cogMeterBbox[1]);
-    const intersectionPixelBboxMaxX = Math.min(tileMeterBbox[2], cogMeterBbox[2]);
-    const intersectionPixelBboxMaxY = Math.min(tileMeterBbox[3], cogMeterBbox[3]);
-
-    if (intersectionPixelBboxMinX > intersectionPixelBboxMaxX || intersectionPixelBboxMinY > intersectionPixelBboxMaxY) {
-      console.log('no overlap');
-    } else {
-      console.log([intersectionPixelBboxMinX, intersectionPixelBboxMinY, intersectionPixelBboxMaxX, intersectionPixelBboxMaxY]);
-    }
-
-    const pixelMinX = (intersectionPixelBboxMinX - this.cogOrigin[0]) / cogResolution;
-    const pixelMaxX = (intersectionPixelBboxMaxX - this.cogOrigin[0]) / cogResolution;
-
-    const pixelMinY = (this.cogOrigin[1] - intersectionPixelBboxMaxY) / cogResolution;
-    const pixelMaxY = (this.cogOrigin[1] - intersectionPixelBboxMinY) / cogResolution;
-
-    const pixelWindow = [
-      Math.floor(pixelMinX),
-      Math.floor(pixelMinY),
-      Math.ceil(pixelMaxX),
-      Math.ceil(pixelMaxY),
-    ];
-
-    const offsetX = Math.floor((intersectionPixelBboxMinX - tileMeterBbox[0]) / tileResolution);
-    const offsetY = Math.floor((tileMeterBbox[3] - intersectionPixelBboxMaxY) / tileResolution);
-
-    const tileOffset = [offsetX, offsetY];
-
     // Determine the effective (valid) window inside the image:
     const effectiveStartX = Math.max(0, windowStartX);
     const effectiveStartY = Math.max(0, windowStartY);
@@ -285,14 +226,11 @@ class CogTiles {
     const effectiveEndY = windowEndY;
 
     // Calculate how many pixels are missing from the left and top due to negative windowStart.
-    const missingLeft = tileOffset[0];
-    // const missingLeft = Math.max(0, 0 - windowStartX);
-    const missingTop = tileOffset[1];
-    // const missingTop = Math.max(0, 0 - windowStartY);
+    const missingLeft = Math.max(0, 0 - windowStartX);
+    const missingTop = Math.max(0, 0 - windowStartY);
 
     // Read only the valid window from the image.
-    const validWindow = pixelWindow;
-    // const validWindow = [effectiveStartX, effectiveStartY, effectiveEndX, effectiveEndY];
+    const validWindow = [effectiveStartX, effectiveStartY, effectiveEndX, effectiveEndY];
 
     // Read the raster data for the tile window with shifted origin.
     if (missingLeft > 0 || missingTop > 0) {
