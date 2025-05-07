@@ -55,7 +55,7 @@ class CogTiles {
     [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
     this.tileSize = image.getTileWidth();
     this.zoomRange = this.calculateZoomRange(image, await this.cog.getImageCount());
-    this.bounds = this.calculateBoundsAsLatLon(image)
+    this.bounds = this.calculateBoundsAsLatLon(image);
   }
 
   getZoomRange() {
@@ -194,22 +194,89 @@ class CogTiles {
 
     // Calculate the map offset between the global Web Mercator origin and the COG's origin.
     // (Difference in map units.)
+    // if X offset is large and positive (COG is far to the right of global origin)
+    // if Y offset is large and positive (COG is far below global origin — expected)
     const offsetXMap = this.cogOrigin[0] - webMercatorOrigin[0];
-    const offsetYMap = this.cogOrigin[1] - webMercatorOrigin[1];
+    const offsetYMap = webMercatorOrigin[1] - this.cogOrigin[1];
+
+    const tileResolution = (EARTH_CIRCUMFERENCE / tileWidth) / 2 ** zoom;
+    const cogResolution = this.cogResolutionLookup[imageIndex];
 
     // Convert map offsets into pixel offsets.
-    const offsetXPixel = Math.floor(offsetXMap / this.cogResolutionLookup[imageIndex]);
-    const offsetYPixel = Math.floor(offsetYMap / this.cogResolutionLookup[imageIndex]);
+    const offsetXPixel = Math.floor(offsetXMap / tileResolution);
+    const offsetYPixel = Math.floor(offsetYMap / tileResolution);
 
     // Calculate the pixel boundaries for the tile.
     const window = [
       tileX * tileWidth - offsetXPixel, // startX
-      tileY * tileHeight - Math.abs(offsetYPixel), // startY
+      tileY * tileHeight - offsetYPixel, // startY
       (tileX + 1) * tileWidth - offsetXPixel, // endX (exclusive)
-      (tileY + 1) * tileHeight - Math.abs(offsetYPixel), // endY (exclusive)
+      (tileY + 1) * tileHeight - offsetYPixel, // endY (exclusive)
     ];
 
     const [windowStartX, windowStartY, windowEndX, windowEndY] = window;
+
+    const imageHeight = targetImage.getHeight();
+    const imageWidth = targetImage.getWidth();
+
+    // approach by comparing bboxes of tile and cog image
+    const tilePixelBbox = [
+      tileX * tileWidth,
+      tileY * tileHeight,
+      (tileX + 1) * tileWidth,
+      (tileY + 1) * tileHeight,
+    ];
+
+    const cogPixelBBox = [
+      offsetXPixel,
+      offsetYPixel,
+      offsetXPixel + imageWidth,
+      offsetYPixel + imageHeight,
+    ];
+
+    // should be getBoundingBox function - if that null, then calculate like this
+    const cogMeterBbox = [
+      this.cogOrigin[0],
+      this.cogOrigin[1] - imageHeight * this.cogResolutionLookup[this.cogResolutionLookup.length - 1],
+      this.cogOrigin[0] + imageWidth * this.cogResolutionLookup[this.cogResolutionLookup.length - 1],
+      this.cogOrigin[1],
+    ];
+
+    const tileMeterBbox = [
+      tilePixelBbox[0] * tileResolution - EARTH_HALF_CIRCUMFERENCE,
+      EARTH_HALF_CIRCUMFERENCE - tilePixelBbox[3] * tileResolution,
+      tilePixelBbox[2] * tileResolution - EARTH_HALF_CIRCUMFERENCE,
+      EARTH_HALF_CIRCUMFERENCE - tilePixelBbox[1] * tileResolution,
+    ];
+
+    const intersectionPixelBboxMinX = Math.max(tileMeterBbox[0], cogMeterBbox[0]);
+    const intersectionPixelBboxMinY = Math.max(tileMeterBbox[1], cogMeterBbox[1]);
+    const intersectionPixelBboxMaxX = Math.min(tileMeterBbox[2], cogMeterBbox[2]);
+    const intersectionPixelBboxMaxY = Math.min(tileMeterBbox[3], cogMeterBbox[3]);
+
+    if (intersectionPixelBboxMinX > intersectionPixelBboxMaxX || intersectionPixelBboxMinY > intersectionPixelBboxMaxY) {
+      console.log('no overlap');
+    } else {
+      console.log([intersectionPixelBboxMinX, intersectionPixelBboxMinY, intersectionPixelBboxMaxX, intersectionPixelBboxMaxY]);
+    }
+
+    const pixelMinX = (intersectionPixelBboxMinX - this.cogOrigin[0]) / cogResolution;
+    const pixelMaxX = (intersectionPixelBboxMaxX - this.cogOrigin[0]) / cogResolution;
+
+    const pixelMinY = (this.cogOrigin[1] - intersectionPixelBboxMaxY) / cogResolution;
+    const pixelMaxY = (this.cogOrigin[1] - intersectionPixelBboxMinY) / cogResolution;
+
+    const pixelWindow = [
+      Math.floor(pixelMinX),
+      Math.floor(pixelMinY),
+      Math.ceil(pixelMaxX),
+      Math.ceil(pixelMaxY),
+    ];
+
+    const offsetX = Math.floor((intersectionPixelBboxMinX - tileMeterBbox[0]) / tileResolution);
+    const offsetY = Math.floor((tileMeterBbox[3] - intersectionPixelBboxMaxY) / tileResolution);
+
+    const tileOffset = [offsetX, offsetY];
 
     // Determine the effective (valid) window inside the image:
     const effectiveStartX = Math.max(0, windowStartX);
@@ -218,11 +285,14 @@ class CogTiles {
     const effectiveEndY = windowEndY;
 
     // Calculate how many pixels are missing from the left and top due to negative windowStart.
-    const missingLeft = Math.max(0, 0 - windowStartX);
-    const missingTop = Math.max(0, 0 - windowStartY);
+    const missingLeft = tileOffset[0];
+    // const missingLeft = Math.max(0, 0 - windowStartX);
+    const missingTop = tileOffset[1];
+    // const missingTop = Math.max(0, 0 - windowStartY);
 
     // Read only the valid window from the image.
-    const validWindow = [effectiveStartX, effectiveStartY, effectiveEndX, effectiveEndY];
+    const validWindow = pixelWindow;
+    // const validWindow = [effectiveStartX, effectiveStartY, effectiveEndX, effectiveEndY];
 
     // Read the raster data for the tile window with shifted origin.
     if (missingLeft > 0 || missingTop > 0) {
@@ -231,34 +301,11 @@ class CogTiles {
       tileBuffer.fill(this.options.noDataValue);
 
       // Calculate the width of the valid window.
-      const validWidth = effectiveEndX - effectiveStartX;
-      const validHeight = effectiveEndY - effectiveStartY;
+      const validWidth = Math.min(imageWidth, effectiveEndX - effectiveStartX);
+      const validHeight = Math.min(imageHeight, effectiveEndY - effectiveStartY);
 
       // if the valid window is smaller than tile size, it gets the image size width and height, thus validRasterData.width must be used as below
       const validRasterData = await targetImage.readRasters({ window: validWindow });
-
-      // FOR MULTI-BAND - the result is array of arrays, each band is stored in separate array
-      // similar approach should be used if deck.gl-layers, but it is not compatible with the code in geoimage.ts in deck.gl-geotiff
-      // let validTileData = Array(validRasterData.length);
-      //
-      // // Place the valid pixel data into the tile buffer.
-      // for (let band = 0; band < validRasterData.length; band++) {
-      //   for (let row = 0; row < validHeight; row++) {
-      //     for (let col = 0; col < validWidth; col++) {
-      //       // Compute the destination position in the tile buffer.
-      //       // We shift by the number of missing pixels (if any) at the top/left.
-      //       const destRow = Math.floor(missingTop) + row;
-      //       const destCol = Math.floor(missingLeft) + col;
-      //       if (destRow < tileWidth && destCol < tileWidth) {
-      //         tileBuffer[destRow * tileWidth + destCol] = validRasterData[band][row * validRasterData.width + col];
-      //       } else {
-      //         console.log('error in assigning data to tile buffer');
-      //       }
-      //     }
-      //   }
-      //   validImageData[band] = tileBuffer;
-      // }
-      // return validImageData;
 
       // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
       // I think this is less practical then the commented solution above, but I do it so it works with the code in geoimage.ts in deck.gl-geoimage in function getColorValue.
@@ -271,9 +318,9 @@ class CogTiles {
           for (let col = 0; col < validWidth; col++) {
             // Compute the destination position in the tile buffer.
             // We shift by the number of missing pixels (if any) at the top/left.
-            const destRow = Math.floor(missingTop) + row;
-            const destCol = Math.floor(missingLeft) + col;
-            if (destRow < tileWidth && destCol < tileWidth) {
+            const destRow = missingTop + row;
+            const destCol = missingLeft + col;
+            if (destRow < tileWidth && destCol < tileHeight) {
               tileBuffer[destRow * tileWidth + destCol] = validRasterData[band][row * validRasterData.width + col];
             } else {
               console.log('error in assigning data to tile buffer');
@@ -289,6 +336,7 @@ class CogTiles {
 
     // Read the raster data for the non shifted tile window.
     const tileData = await targetImage.readRasters({ window, interleave: true });
+    // console.log(`data that starts at the left top corner of the tile ${tileX}, ${tileY}`);
     return [tileData];
   }
 
