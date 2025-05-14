@@ -80,7 +80,7 @@ function CogMultibandExample() {
   };
   
   const setBand = (isBand2: boolean)=> {
-    const cogBitmapOptions = {
+    const cogBitmapOptions: CogBitmapOptions = {
         ...cogLayerDefinition.cogBitmapOptions,
         useChannel: isBand2 ? 2 : 1,
     }
