@@ -328,28 +328,42 @@ class CogTiles {
 
   /**
    * Extracts the noData value from a GeoTIFF.js image.
-   * Returns the noData value as a number if available, otherwise undefined.
+   * Returns the noData value as a number (including NaN) if available, otherwise undefined.
    *
    * @param {GeoTIFFImage} image - The GeoTIFF.js image.
-   * @returns {number|undefined} The noData value as a number, or undefined if not available.
+   * @returns {number|undefined} The noData value, possibly NaN, or undefined if not set or invalid.
    */
   getNoDataValue(image) {
-    // Attempt to retrieve the noData value via the GDAL method.
     const noDataRaw = image.getGDALNoData();
 
     if (noDataRaw === undefined || noDataRaw === null) {
-      console.log('noDataValue is undefined or null,raster might be displayed incorrectly.');
-      // No noData value is defined
+      console.warn('No noData value defined — raster might be rendered incorrectly.');
       return undefined;
     }
 
-    // In geotiff.js, the noData value is typically returned as a string.
-    // Clean up the string by removing any null characters or extra whitespace.
-    const cleanedValue = String(noDataRaw).replace(/\0/g, '').trim();
+    const cleaned = String(noDataRaw).replace(/\0/g, '').trim();
 
-    const parsedValue = Number(cleanedValue);
-    return Number.isNaN(parsedValue) ? undefined : parsedValue;
+    if (cleaned === '') {
+      console.warn('noData value is an empty string after cleanup.');
+      return undefined;
+    }
+
+    const parsed = Number(cleaned);
+
+    // Allow NaN if explicitly declared
+    if (cleaned.toLowerCase() === 'nan') {
+      return NaN;
+    }
+
+    // If not declared as "nan" and still parsed to NaN, it's an error
+    if (Number.isNaN(parsed)) {
+      console.warn(`Failed to parse numeric noData value: '${cleaned}'`);
+      return undefined;
+    }
+
+    return parsed;
   }
+
 
   /**
    * Retrieves the number of channels (samples per pixel) in a GeoTIFF image.
