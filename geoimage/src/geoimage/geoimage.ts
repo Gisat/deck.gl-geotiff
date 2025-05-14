@@ -423,6 +423,8 @@ export default class GeoImage {
   }
 
   getColorValue(dataArray:[], options:GeoImageOptions, arrayLength:number, numOfChannels = 1) {
+    const rgb = chroma.random().rgb(); // [R, G, B]
+    const randomColor = [...rgb, 120];
     const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
     // channel index is equal to channel number - 1
     let pixel:number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
@@ -442,7 +444,8 @@ export default class GeoImage {
     }) : undefined;
 
     for (let i = 0; i < arrayLength; i += 4) {
-      let pixelColor = options.nullColor;
+      // let pixelColor = options.nullColor;
+      let pixelColor = randomColor;
       // FIXME
       // eslint-disable-next-line max-len
       if ((!Number.isNaN(dataArray[pixel])) && (options.noDataValue === undefined || dataArray[pixel] !== options.noDataValue)) {
