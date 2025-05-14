@@ -211,6 +211,11 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
       // const terrain = this.loadTerrain(props as TerrainLoadProps);
       // this.setState({ terrain });
     }
+    
+    // Ugly, but working
+    if (props?.cogBitmapOptions?.useChannel && (props.cogBitmapOptions?.useChannel !== oldProps.cogBitmapOptions?.useChannel)) {
+      this.state.bitmapCogTiles.options.useChannel = props.cogBitmapOptions.useChannel;
+    }
 
     // TODO - remove in v9
     // @ts-ignore
@@ -239,6 +244,7 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
         tile: Tile2DHeader<TextureSource>;
       },
   ) {
+    
     const SubLayerClass = this.getSubLayerClass('image', BitmapLayer);
     const { blurredTexture } = this.state.bitmapCogTiles.options;
 
@@ -275,7 +281,6 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
   }
 
   renderLayers() {
-    // debugger;
     const {
       rasterData,
       blurredTexture,
@@ -300,13 +305,15 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
         getTileData: this.getTiledBitmapData.bind(this),
         renderSubLayers: this.renderSubLayers.bind(this),
         updateTriggers: {
-          getTileData: {
+          getTileData: [
             // rasterData: urlTemplateToUpdateTrigger(rasterData),
             // blurredTexture,
             // opacity,
-            cogBitmapOptions,
+            // cogBitmapOptions,
             clampToTerrain,
-          },
+            cogBitmapOptions,
+          ],
+          // renderSubLayers: [cogBitmapOptions],
         },
         extent: this.state.bitmapCogTiles.getBoundsAsLatLon(),
         tileSize,
