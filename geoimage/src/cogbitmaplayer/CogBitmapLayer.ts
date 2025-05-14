@@ -275,6 +275,7 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
   }
 
   renderLayers() {
+    // debugger;
     const {
       rasterData,
       blurredTexture,
@@ -303,7 +304,7 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
             // rasterData: urlTemplateToUpdateTrigger(rasterData),
             // blurredTexture,
             // opacity,
-            // cogBitmapOptions,
+            cogBitmapOptions,
             clampToTerrain,
           },
         },

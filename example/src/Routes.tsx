@@ -4,8 +4,8 @@ import SideBar from './components/SideBar';
 import App from './App';
 import UploadImage from './components/UploadImage';
 import {
-  CogBitmapLayerExample,
-  CogTerrainLayerExample,
+    CogBitmapLayerExample, CogMultibandExample,
+    CogTerrainLayerExample,
 } from './examples';
 import { TestLayerExample } from './examples/TestLayerExample';
 
@@ -19,6 +19,7 @@ const Routing: React.FC<RoutesProps> = () => (
       <Route path={'/'} element={<App />} />
       <Route path={'/cog-bitmap-layer-example'} element={<CogBitmapLayerExample />} />
       <Route path={'/cog-terrain-layer-example'} element={<CogTerrainLayerExample />} />
+      <Route path={'/cog-multiband-example'} element={<CogMultibandExample />} />
     </Routes>
   </BrowserRouter>
 );
