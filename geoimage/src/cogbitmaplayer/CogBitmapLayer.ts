@@ -315,7 +315,7 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
             // opacity,
             // cogBitmapOptions,
             clampToTerrain,
-            cogBitmapOptions,
+            cogBitmapOptions.useChannel,
           ],
           // renderSubLayers: [cogBitmapOptions],
         },
