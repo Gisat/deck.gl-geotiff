@@ -206,44 +206,37 @@ class CogTiles {
     const offsetXPixel = Math.floor(offsetXMap / tileResolution);
     const offsetYPixel = Math.floor(offsetYMap / tileResolution);
 
-    // Calculate the pixel boundaries for the tile.
-    const window = [
-      tileX * tileWidth - offsetXPixel, // startX
-      tileY * tileHeight - offsetYPixel, // startY
-      (tileX + 1) * tileWidth - offsetXPixel, // endX (exclusive)
-      (tileY + 1) * tileHeight - offsetYPixel, // endY (exclusive)
-    ];
-
-    const [windowStartX, windowStartY, windowEndX, windowEndY] = window;
-
     const imageHeight = targetImage.getHeight();
     const imageWidth = targetImage.getWidth();
 
-    // Determine the effective (valid) window inside the image:
-    const effectiveStartX = Math.max(0, windowStartX);
-    const effectiveStartY = Math.max(0, windowStartY);
-    const effectiveEndX = windowEndX;
-    const effectiveEndY = windowEndY;
+    // approach by comparing bboxes of tile and cog image
+    const tilePixelBbox = [
+      tileX * tileWidth,
+      tileY * tileHeight,
+      (tileX + 1) * tileWidth,
+      (tileY + 1) * tileHeight,
+    ];
 
-    // Calculate how many pixels are missing from the left and top due to negative windowStart.
-    const missingLeft = Math.max(0, 0 - windowStartX);
-    const missingTop = Math.max(0, 0 - windowStartY);
+    const cogPixelBBox = [
+      offsetXPixel,
+      offsetYPixel,
+      offsetXPixel + imageWidth,
+      offsetYPixel + imageHeight,
+    ];
 
-    // Read only the valid window from the image.
-    const validWindow = [effectiveStartX, effectiveStartY, effectiveEndX, effectiveEndY];
+    const intersecion = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
+    const [validWidth, validHeight, window, missingLeft, missingTop] = intersecion;
+
+
 
     // Read the raster data for the tile window with shifted origin.
-    if (missingLeft > 0 || missingTop > 0) {
+    if (missingLeft > 0 || missingTop > 0 || validWidth < tileWidth || validHeight < tileHeight) {
       // Prepare the final tile buffer and fill it with noDataValue.
       const tileBuffer = this.createTileBuffer(this.options.format, tileWidth);
       tileBuffer.fill(this.options.noDataValue);
 
-      // Calculate the width of the valid window.
-      const validWidth = Math.min(imageWidth, effectiveEndX - effectiveStartX);
-      const validHeight = Math.min(imageHeight, effectiveEndY - effectiveStartY);
-
       // if the valid window is smaller than tile size, it gets the image size width and height, thus validRasterData.width must be used as below
-      const validRasterData = await targetImage.readRasters({ window: validWindow });
+      const validRasterData = await targetImage.readRasters({ window });
 
       // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
       // I think this is less practical then the commented solution above, but I do it so it works with the code in geoimage.ts in deck.gl-geoimage in function getColorValue.
@@ -335,28 +328,42 @@ class CogTiles {
 
   /**
    * Extracts the noData value from a GeoTIFF.js image.
-   * Returns the noData value as a number if available, otherwise undefined.
+   * Returns the noData value as a number (including NaN) if available, otherwise undefined.
    *
    * @param {GeoTIFFImage} image - The GeoTIFF.js image.
-   * @returns {number|undefined} The noData value as a number, or undefined if not available.
+   * @returns {number|undefined} The noData value, possibly NaN, or undefined if not set or invalid.
    */
   getNoDataValue(image) {
-    // Attempt to retrieve the noData value via the GDAL method.
     const noDataRaw = image.getGDALNoData();
 
     if (noDataRaw === undefined || noDataRaw === null) {
-      console.log('noDataValue is undefined or null,raster might be displayed incorrectly.');
-      // No noData value is defined
+      console.warn('No noData value defined — raster might be rendered incorrectly.');
       return undefined;
     }
 
-    // In geotiff.js, the noData value is typically returned as a string.
-    // Clean up the string by removing any null characters or extra whitespace.
-    const cleanedValue = String(noDataRaw).replace(/\0/g, '').trim();
+    const cleaned = String(noDataRaw).replace(/\0/g, '').trim();
 
-    const parsedValue = Number(cleanedValue);
-    return Number.isNaN(parsedValue) ? undefined : parsedValue;
+    if (cleaned === '') {
+      console.warn('noData value is an empty string after cleanup.');
+      return undefined;
+    }
+
+    const parsed = Number(cleaned);
+
+    // Allow NaN if explicitly declared
+    if (cleaned.toLowerCase() === 'nan') {
+      return NaN;
+    }
+
+    // If not declared as "nan" and still parsed to NaN, it's an error
+    if (Number.isNaN(parsed)) {
+      console.warn(`Failed to parse numeric noData value: '${cleaned}'`);
+      return undefined;
+    }
+
+    return parsed;
   }
+
 
   /**
    * Retrieves the number of channels (samples per pixel) in a GeoTIFF image.
@@ -367,6 +374,62 @@ class CogTiles {
   getNumberOfChannels(image) {
     return image.getSamplesPerPixel();
   }
+
+
+  /**
+   * Calculates the intersection between a tile bounding box and a COG bounding box,
+   * returning the intersection window in image pixel space (relative to COG offsets),
+   * along with how much blank space (nodata) appears on the left and top of the tile.
+   *
+   * @param {number[]} tileBbox - Tile bounding box: [minX, minY, maxX, maxY]
+   * @param {number[]} cogBbox - COG bounding box: [minX, minY, maxX, maxY]
+   * @param {number} offsetXPixel - X offset of the COG origin in pixel space
+   * @param {number} offsetYPixel - Y offset of the COG origin in pixel space
+   * @param {number} tileSize - Size of the tile in pixels (default: 256)
+   * @returns {[number, number, number[] | null, number, number]}
+   *   An array containing:
+   *   - width of the intersection
+   *   - height of the intersection
+   *   - pixel-space window: [startX, startY, endX, endY] or null if no overlap
+   *   - missingLeft: padding pixels on the left
+   *   - missingTop: padding pixels on the top
+   */
+  getIntersectionBBox(tileBbox, cogBbox, offsetXPixel = 0, offsetYPixel = 0, tileSize = 256) {
+    const interLeft = Math.max(tileBbox[0], cogBbox[0]);
+    const interTop = Math.max(tileBbox[1], cogBbox[1]);
+    const interRight = Math.min(tileBbox[2], cogBbox[2]);
+    const interBottom = Math.min(tileBbox[3], cogBbox[3]);
+
+    const width = Math.max(0, interRight - interLeft);
+    const height = Math.max(0, interBottom - interTop);
+
+    let window = null;
+    let missingLeft = 0;
+    let missingTop = 0;
+
+    if (width > 0 && height > 0) {
+      window = [
+        interLeft - offsetXPixel,
+        interTop - offsetYPixel,
+        interRight - offsetXPixel,
+        interBottom - offsetYPixel,
+      ];
+
+      // Padding from the tile origin to valid data start
+      missingLeft = interLeft - tileBbox[0];
+      missingTop = interTop - tileBbox[1];
+    }
+
+    return [
+      width,
+      height,
+      window,
+      missingLeft,
+      missingTop,
+    ];
+  }
+
+
 
   /**
    * Retrieves the PlanarConfiguration value from a GeoTIFF image.
