@@ -30,18 +30,18 @@ const cogLayerDefinition = {
   // gruzie
   // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/bsadri/test_raster/COG/LC_2021_all_Georgia_WEST3940_ZOOM6_test1_defl_COG256.tif',
   // pavel uganda bez aligned levels
-  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Pavel_Luisa/openEO_2020-01-01Z_npp_act_cog_no_aligned_levels.tif',
+  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/LUISA_GST-66/app-esaLuisa/dev/rasters/continental/npp_act/openEO_2005-01-01Z_cog.tif',
   cogBitmapOptions: {
     type: 'image',
     blurredTexture: false,
+    loadSingleChannel: false,
     // clipLow: 0,
     useChannel: 1,
     // alpha: 50,
     // useSingleColor: true,
     useHeatMap: true,
-    // colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
     colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
-    colorScaleValueRange: [-200, -100, 0, 100, 200],
+    colorScaleValueRange: [1, 100, 200, 300, 400],
     // nullColor: [127, 0, 255, 120],//violet
     // unidentifiedColor: [255, 192, 203, 120],//pink
     // clippedColor: [255, 255, 0, 120],//yellow

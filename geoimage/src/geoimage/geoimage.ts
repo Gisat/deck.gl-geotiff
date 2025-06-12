@@ -47,6 +47,7 @@ export type GeoImageOptions = {
     terrainSkirtHeight?: number,
     terrainMinValue?: number,
     planarConfig?: number,
+    loadSingleChannel?: boolean, // if true, only `useChannel` will be loaded
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -79,6 +80,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
   terrainSkirtHeight: 100,
   terrainMinValue: 0,
   planarConfig: undefined,
+  loadSingleChannel: false
 };
 
 export default class GeoImage {
@@ -301,6 +303,9 @@ export default class GeoImage {
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor);
     optionsLocal.color = this.getColorFromChromaType(optionsLocal.color);
     optionsLocal.useChannelIndex ??= options.useChannel === null ? null : options.useChannel - 1;
+    if (optionsLocal.loadSingleChannel){
+      optionsLocal.useChannelIndex = 0;
+    }
 
     // console.log(rasters[0])
     /* console.log("raster 0 length: " + rasters[0].length)

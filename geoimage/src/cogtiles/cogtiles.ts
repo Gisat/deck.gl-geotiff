@@ -227,6 +227,13 @@ class CogTiles {
     const intersecion = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
     const [validWidth, validHeight, window, missingLeft, missingTop] = intersecion;
 
+    let channelsToLoad = Array.from({ length: this.options.numOfChannels }, (v, i) => i);
+    let numOfLoadedChannels = this.options.numOfChannels;
+    if (this.options.loadSingleChannel){
+      channelsToLoad = [this.options.useChannel-1];
+      numOfLoadedChannels = 1
+    }
+    console.log(channelsToLoad);
 
 
     // Read the raster data for the tile window with shifted origin.
@@ -236,7 +243,7 @@ class CogTiles {
       tileBuffer.fill(this.options.noDataValue);
 
       // if the valid window is smaller than tile size, it gets the image size width and height, thus validRasterData.width must be used as below
-      const validRasterData = await targetImage.readRasters({ window });
+      const validRasterData = await targetImage.readRasters({ window, samples: channelsToLoad });
 
       // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
       // I think this is less practical then the commented solution above, but I do it so it works with the code in geoimage.ts in deck.gl-geoimage in function getColorValue.
@@ -266,7 +273,7 @@ class CogTiles {
     }
 
     // Read the raster data for the non shifted tile window.
-    const tileData = await targetImage.readRasters({ window, interleave: true });
+    const tileData = await targetImage.readRasters({ window, interleave: true, samples: channelsToLoad});
     // console.log(`data that starts at the left top corner of the tile ${tileX}, ${tileY}`);
     return [tileData];
   }

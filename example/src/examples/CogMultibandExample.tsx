@@ -8,10 +8,11 @@ import CogBitmapLayer from '@gisatcz/deckgl-geolib/src/cogbitmaplayer/CogBitmapL
 
 const cogLayerDefinition = {
   id: 'CogBitmapLayer',
-  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/LUISA_GST-66/project/demo_data_20250507/v1/regional/UG/UG-eosd-2018-2023_cog.tif',
+  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/Panther_GST-35/fe-core/dev/luisaDemo/regional/UG/eosd_2018-2023.tif',
   cogBitmapOptions: {
     type: 'image',
     blurredTexture: false,
+    loadSingleChannel: true,
     clipLow: 0,
     useChannel: 1,
     useHeatMap: true,
@@ -78,7 +79,7 @@ function CogMultibandExample() {
     latitude: 1,
     zoom: 10,
   };
-  
+
   const setBand = (isBand2: boolean)=> {
     const cogBitmapOptions: CogBitmapOptions = {
         ...cogLayerDefinition.cogBitmapOptions,
