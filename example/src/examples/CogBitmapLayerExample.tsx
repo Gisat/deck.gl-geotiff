@@ -31,6 +31,8 @@ const cogLayerDefinition = {
   // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/bsadri/test_raster/COG/LC_2021_all_Georgia_WEST3940_ZOOM6_test1_defl_COG256.tif',
   // pavel uganda bez aligned levels
   rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Pavel_Luisa/openEO_2020-01-01Z_npp_act_cog_no_aligned_levels.tif',
+  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/LUISA_GST-66/app-esaLuisa/prod/v1/rasters/continental/npp_act/openEO_2000-01-01Z_cog.tif',
+  // rasterData:'https://eu-central-1.linodeobjects.com/gisat-data/LUISA_GST-66/app-esaLuisa/dev/rasters/continental/npp_act/openEO_2000-01-01Z_cog.tif',
   cogBitmapOptions: {
     type: 'image',
     blurredTexture: false,

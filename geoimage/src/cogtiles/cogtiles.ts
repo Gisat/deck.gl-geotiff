@@ -46,16 +46,49 @@ class CogTiles {
 
   async initializeCog(url: string) {
     this.cog = await fromUrl(url);
-    const image = await this.cog.getImage(); // by default, the first image is read.
-    this.cogOrigin = image.getOrigin();
-    this.options.noDataValue ??= this.getNoDataValue(image);
-    this.options.format ??= this.getDataTypeFromTags(image);
-    this.options.numOfChannels = this.getNumberOfChannels(image);
-    this.options.planarConfig = this.getPlanarConfiguration(image);
-    [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
-    this.tileSize = image.getTileWidth();
-    this.zoomRange = this.calculateZoomRange(image, await this.cog.getImageCount());
-    this.bounds = this.calculateBoundsAsLatLon(image);
+    // const imageCount = await this.cog.getImageCount();
+
+    const allIFDs = [];
+
+    // 1. Start with the offset of the first IFD.
+    let currentOffset = this.cog.firstIFDOffset;
+
+    // 2. Loop as long as the offset is not 0 (which marks the end of the list).
+    while (currentOffset !== 0) {
+      const ifd = await this.cog.parseFileDirectoryAt(currentOffset);
+      allIFDs.push(ifd);
+
+      console.log(`Parsed IFD at offset ${currentOffset}. Image width: ${ifd.fileDirectory.ImageWidth}`);
+      console.log(ifd)
+
+      // 3. Get the offset for the *next* IFD for the next loop iteration.
+      currentOffset = ifd.nextIFDByteOffset;
+    }
+
+    console.log(`Finished parsing. Found a total of ${allIFDs.length} IFDs.`);
+
+    const baseIFD = allIFDs[0].fileDirectory;
+
+    this.cogOrigin = this.getOriginFromIFD(baseIFD);
+    this.options.noDataValue ??= this.getNoDataValueFromIFD(baseIFD);
+    this.options.format ??= this.getDataTypeFromIFD(baseIFD);
+    this.options.numOfChannels = this.getNumberOfChannelsFromIFD(baseIFD);
+    this.options.planarConfig = this.getPlanarConfigurationFromIFD(baseIFD);
+    [this.cogZoomLookup, this.cogResolutionLookup] = this.buildLookupsFromIFDArray(allIFDs);
+    this.tileSize = this.getTileWidthFromIFD(baseIFD);
+    this.zoomRange = this.calculateZoomRangeFromIFDs(allIFDs);
+    this.bounds = this.calculateBoundsAsLatLonFromIFD(baseIFD, this.getLatLon.bind(this));
+
+    // const image = await this.cog.getImage(); // by default, the first image is read.
+    // this.cogOrigin = image.getOrigin();
+    // this.options.noDataValue ??= this.getNoDataValue(image);
+    // this.options.format ??= this.getDataTypeFromTags(image);
+    // this.options.numOfChannels = this.getNumberOfChannels(image);
+    // this.options.planarConfig = this.getPlanarConfiguration(image);
+    // [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
+    // this.tileSize = image.getTileWidth();
+    // this.zoomRange = this.calculateZoomRange(image, await this.cog.getImageCount());
+    // this.bounds = this.calculateBoundsAsLatLon(image);
   }
 
   getZoomRange() {
@@ -106,6 +139,45 @@ class CogTiles {
   }
 
   /**
+   * Builds lookup tables for zoom levels and resolutions from a pre-parsed array of IFDs.
+   * This is a synchronous function as all I/O has already been performed.
+   *
+   * @param {Array} allIFDs - An array of parsed IFD objects from geotiff.js.
+   * @returns {[number[], number[]]} A tuple of two arrays: [zoomLookup, resolutionLookup].
+   */
+  buildLookupsFromIFDArray(allIFDs) {
+    if (!allIFDs || allIFDs.length === 0) {
+      throw new Error("Cannot build lookups from an empty IFD array.");
+    }
+
+    // --- 1. Get base information from the first IFD ---
+    const baseIFD = allIFDs[0].fileDirectory;
+    if (!baseIFD.ImageWidth || !baseIFD.ModelPixelScale) {
+      throw new Error("Base image IFD is missing ImageWidth or ModelPixelScale tags.");
+    }
+    const baseWidth = baseIFD.ImageWidth;
+    const baseResolution = baseIFD.ModelPixelScale[0]; // Resolution in meters/pixel
+
+    // --- 2. Loop through the in-memory IFDs to do the calculations ---
+    const zoomLookup = [];
+    const resolutionLookup = [];
+
+    for (let idx = 0; idx < allIFDs.length; idx++) {
+      const width = allIFDs[idx].fileDirectory.ImageWidth;
+
+      const scaleFactor = baseWidth / width;
+      const estimatedResolution = baseResolution * scaleFactor;
+
+      const zoomLevel = Math.round(Math.log2(webMercatorRes0 / estimatedResolution));
+
+      zoomLookup[idx] = zoomLevel;
+      resolutionLookup[idx] = estimatedResolution;
+    }
+
+    return [zoomLookup, resolutionLookup];
+  }
+
+  /**
    * Builds lookup tables for zoom levels and estimated resolutions from a Cloud Optimized GeoTIFF (COG) object.
    *
    * It is assumed that inn web mapping, COG data is visualized in the Web Mercator coordinate system.
@@ -152,6 +224,29 @@ class CogTiles {
     }
 
     return [zoomLookup, resolutionLookup];
+  }
+
+  /**
+   * Manually gets the image origin (top-left corner) from the raw IFD file directory,
+   * replicating the behavior of the geotiff.js getOrigin() method.
+   * @param {object} fileDirectory The object containing the parsed TIFF tags.
+   * @returns {Array<number>|null} The [x, y] origin coordinates or null if the tag is missing.
+   */
+  getOriginFromIFD(fileDirectory) {
+    // Check if the required ModelTiepoint tag exists.
+    if (fileDirectory.ModelTiepoint) {
+      const tiepoint = fileDirectory.ModelTiepoint;
+
+      // The getOrigin() method simply returns the X (index 3) and Y (index 4)
+      // values directly from the tiepoint array.
+      const originX = tiepoint[3];
+      const originY = tiepoint[4];
+
+      return [originX, originY];
+    }
+
+    console.error("Required tag (ModelTiepoint) is not present.");
+    return null;
   }
 
   /**
@@ -283,6 +378,43 @@ class CogTiles {
   }
 
   /**
+   * Determines the data type (e.g., "Int32", "Float64") of a GeoTIFF
+   * by reading its raw IFD tags.
+   *
+   * @param {object} fileDirectory - The object containing the parsed TIFF tags.
+   * @returns {string} - A string representing the data type (e.g., "Float64").
+   */
+  getDataTypeFromIFD(fileDirectory) {
+    // Read the required tags directly from the fileDirectory object.
+    const sampleFormat = fileDirectory.SampleFormat;
+    const bitsPerSample = fileDirectory.BitsPerSample;
+
+    // If tags are arrays (for multi-band images), we assume all bands share the same type.
+    const format = (sampleFormat && sampleFormat.length > 0)
+        ? sampleFormat[0]
+        : sampleFormat;
+
+    const bits = (bitsPerSample && bitsPerSample.length > 0)
+        ? bitsPerSample[0]
+        : bitsPerSample;
+
+    let typePrefix;
+    if (format === 1) {
+      typePrefix = 'UInt';
+    } else if (format === 2) {
+      typePrefix = 'Int';
+    } else if (format === 3) {
+      typePrefix = 'Float';
+    } else {
+      // Return a default/unknown if the format isn't recognized.
+      return 'Unknown';
+    }
+
+    return `${typePrefix}${bits}`;
+  }
+
+
+  /**
    * Determines the data type (e.g., "Int32", "Float64") of a GeoTIFF image
    * by reading its TIFF tags.
    *
@@ -324,6 +456,47 @@ class CogTiles {
     }
     // console.log(`data type ${typePrefix}${bits}`);
     return `${typePrefix}${bits}`;
+  }
+
+  /**
+   * Extracts the noData value from a raw IFD object, based on robust logic.
+   * Returns the noData value as a number (including NaN) if available, otherwise undefined.
+   *
+   * @param {object} fileDirectory - The object containing the parsed TIFF tags.
+   * @returns {number|undefined} The noData value, possibly NaN, or undefined if not set or invalid.
+   */
+  getNoDataValueFromIFD(fileDirectory) {
+    // The key change: read directly from the IFD tag instead of an image method.
+    const noDataRaw = fileDirectory.GDAL_NODATA;
+
+    // --- The rest of this is your proven, robust logic ---
+
+    if (noDataRaw === undefined || noDataRaw === null) {
+      // A utility function can just return, letting the caller decide whether to warn.
+      return undefined;
+    }
+
+    // Clean up the raw string value.
+    const cleaned = String(noDataRaw).replace(/\0/g, '').trim();
+
+    if (cleaned === '') {
+      return undefined;
+    }
+
+    // Try to parse the cleaned string into a number.
+    const parsed = Number(cleaned);
+
+    // Explicitly allow NaN if the string was 'nan'.
+    if (cleaned.toLowerCase() === 'nan') {
+      return NaN;
+    }
+
+    // If the string was NOT 'nan' but still failed to parse, it's an invalid value.
+    if (Number.isNaN(parsed)) {
+      return undefined;
+    }
+
+    return parsed;
   }
 
   /**
@@ -373,6 +546,136 @@ class CogTiles {
    */
   getNumberOfChannels(image) {
     return image.getSamplesPerPixel();
+  }
+
+  /**
+   * Retrieves the number of channels (samples per pixel) from a raw IFD object.
+   *
+   * @param {object} fileDirectory - The object containing the parsed TIFF tags.
+   * @returns {number | undefined} The number of channels in the image, or undefined if not found.
+   */
+  getNumberOfChannelsFromIFD(fileDirectory) {
+    // The number of channels is the value of the 'SamplesPerPixel' tag (277).
+    // It's typically a single number.
+    return fileDirectory.SamplesPerPixel;
+  }
+
+  /**
+   * Retrieves the tile width from a raw IFD object.
+   *
+   * @param {object} fileDirectory - The object containing the parsed TIFF tags.
+   * @returns {number | undefined} The width of the tiles in pixels, or undefined if not found.
+   */
+  getTileWidthFromIFD(fileDirectory) {
+    // The tile width is the value of the 'TileWidth' tag.
+    return fileDirectory.TileWidth;
+  }
+
+  /**
+   * Manually calculates the bounding box from the raw IFD file directory.
+   * @param {object} fileDirectory The object containing the parsed TIFF tags.
+   * @returns {Array<number>} The bounding box as [minX, minY, maxX, maxY].
+   */
+  calculateBoundingBoxFromIFD(fileDirectory) {
+    if (
+        !fileDirectory.ModelTiepoint ||
+        !fileDirectory.ModelPixelScale ||
+        !fileDirectory.ImageWidth ||
+        !fileDirectory.ImageLength
+    ) {
+      throw new Error("Cannot calculate bounding box: required tags are missing from the IFD.");
+    }
+
+    const width = fileDirectory.ImageWidth;
+    const height = fileDirectory.ImageLength;
+
+    // Top-left corner coordinate from the tiepoint
+    const x_tl = fileDirectory.ModelTiepoint[3];
+    const y_tl = fileDirectory.ModelTiepoint[4];
+
+    // Pixel size from the pixel scale tag
+    const x_res = fileDirectory.ModelPixelScale[0];
+    const y_res = fileDirectory.ModelPixelScale[1];
+
+    // Calculate the coordinates of the lower-right corner
+    const maxX = x_tl + (width * x_res);
+    const minY = y_tl - (height * y_res); // Subtract because pixel rows go down
+
+    return [x_tl, minY, maxX, y_tl]; // [minX, minY, maxX, maxY]
+  }
+
+  /**
+   * Calculates the final bounding box in Latitude/Longitude from a raw IFD object.
+   *
+   * @param {object} baseIFD - The fileDirectory object of the base image.
+   * @param {function} getLatLonHelper - Your helper function that reprojects coordinates.
+   * @returns {[number, number, number, number]|null} The final bounds as [minLon, minLat, maxLon, maxLat], or null on error.
+   */
+  calculateBoundsAsLatLonFromIFD(baseIFD, getLatLonHelper) {
+    // --- Part 1: Manually calculate the bounding box in the native projection ---
+    if (
+        !baseIFD.ModelTiepoint ||
+        !baseIFD.ModelPixelScale ||
+        !baseIFD.ImageWidth ||
+        !baseIFD.ImageLength
+    ) {
+      console.error("Cannot calculate bounding box: required tags are missing from the IFD.");
+      return null;
+    }
+
+    const width = baseIFD.ImageWidth;
+    const height = baseIFD.ImageLength;
+    const x_tl = baseIFD.ModelTiepoint[3]; // Top-left X
+    const y_tl = baseIFD.ModelTiepoint[4]; // Top-left Y
+    const x_res = baseIFD.ModelPixelScale[0]; // Pixel width
+    const y_res = baseIFD.ModelPixelScale[1]; // Pixel height
+
+    // Calculate the four corners in the native projection
+    const minX = x_tl;
+    const maxY = y_tl;
+    const maxX = x_tl + (width * x_res);
+    const minY = y_tl - (height * y_res); // Subtract as pixel Y-axis goes down
+
+    // --- Part 2: Your existing logic to reproject the corners to Lat/Lon ---
+    const minXYDeg = getLatLonHelper([minX, minY]);
+    const maxXYDeg = getLatLonHelper([maxX, maxY]);
+
+    // Return the final bounds in [minLon, minLat, maxLon, maxLat] format
+    return [minXYDeg[0], minXYDeg[1], maxXYDeg[0], maxXYDeg[1]];
+  }
+
+
+
+  /**
+   * Calculates the min and max zoom levels for the COG from a pre-parsed array of IFDs.
+   * @param {Array} allIFDs - An array of parsed IFD objects from geotiff.js.
+   * @returns {[number, number]} A tuple containing [minZoom, maxZoom].
+   */
+  calculateZoomRangeFromIFDs(allIFDs) {
+    if (!allIFDs || allIFDs.length === 0) {
+      throw new Error("Cannot calculate zoom range from an empty IFD array.");
+    }
+
+    const baseIFD = allIFDs[0].fileDirectory;
+    if (!baseIFD.ModelPixelScale) {
+      throw new Error("Base image IFD is missing the ModelPixelScale tag.");
+    }
+
+    // --- 1. Get required values from the IFD data ---
+    const resolution = baseIFD.ModelPixelScale[0];
+    const imgCount = allIFDs.length;
+
+    // --- 2. Calculate the zoom levels ---
+    // Resolution (meters/pixel) at Web Mercator zoom level 0
+    const webMercatorRes0 = 156543.03125;
+
+    // The 'maxZoom' is the native zoom level of the highest-resolution image.
+    const maxZoom = Math.round(Math.log2(webMercatorRes0 / resolution));
+
+    // The 'minZoom' is estimated by stepping back one zoom level for each overview.
+    const minZoom = maxZoom - (imgCount - 1);
+
+    return [minZoom, maxZoom];
   }
 
 
@@ -429,6 +732,27 @@ class CogTiles {
     ];
   }
 
+  /**
+   * Retrieves the PlanarConfiguration value from a raw IFD object.
+   *
+   * @param {object} fileDirectory - The object containing the parsed TIFF tags.
+   * @returns {number} The PlanarConfiguration value (1 for Chunky, 2 for Planar).
+   */
+  getPlanarConfigurationFromIFD(fileDirectory) {
+    const planarConfig = fileDirectory.PlanarConfiguration;
+
+    // The TIFF specification defaults to 1 (chunky) if the tag is not present.
+    if (planarConfig === undefined) {
+      return 1;
+    }
+
+    // If the tag exists but has an invalid value, it's an error.
+    if (planarConfig !== 1 && planarConfig !== 2) {
+      throw new Error(`Invalid PlanarConfiguration value found in IFD: ${planarConfig}`);
+    }
+
+    return planarConfig;
+  }
 
 
   /**
