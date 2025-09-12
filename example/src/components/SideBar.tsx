@@ -11,7 +11,9 @@ const SideBar = () => {
   };
   return (
     <SideNav>
-      <NavLink to="/cog-bitmap-layer-example">COG Bitmap Layer</NavLink>
+      <NavLink to="/single-cog-bitmap-layer-example">Single COG Bitmap Layer</NavLink>
+      <NavLink to="/multiple-cog-bitmap-layer-example">Multiple COG Bitmap Layer</NavLink>
+      <NavLink to="/multiple-cog-bitmap-layer-example-rio">Multiple COG Bitmap Layer (rio)</NavLink>
       <NavLink to="/cog-terrain-layer-example">COG Terrain Layer</NavLink>
       <NavLink to="/cog-multiband-example">COG Multiband</NavLink>
       {

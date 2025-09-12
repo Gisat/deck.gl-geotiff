@@ -1,3 +1,5 @@
-export { CogBitmapLayerExample } from './CogBitmapLayerExample'
+export { MultipleCogBitmapLayerExample } from './MultipleCogBitmapLayerExample'
+export { MultipleRioCogBitmapLayerExample } from './MultipleRioCogBitmapLayerExample'
+export { SingleCogBitmapLayerExample } from './SingleCogBitmapLayerExample'
 export { CogTerrainLayerExample } from './CogTerrainLayerExample'
 export { CogMultibandExample } from './CogMultibandExample'
