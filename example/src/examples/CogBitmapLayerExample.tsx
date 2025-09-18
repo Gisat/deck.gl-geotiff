@@ -29,13 +29,19 @@ const cogLayerDefinition = {
   // cogBitmapOptions: {
   //   type: 'image', useChannel: 30, useHeatMap: true, colorScaleValueRange: [0, 3], clipLow: 1, colorScale: chroma.brewer.Blues,
   // },
-  rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/GHS-POP/GHS_POP_E2015_COGeoN.tif',
+  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/GHS-POP/GHS_POP_E2015_COGeoN.tif',
+  // rio cogeo indie juraj
+  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlusCCN_GST-93/project/data_cog/WorldCereals/Indie_cog.tif',
+  // martin obili
+  // rasterData: 'https://gisat-data.eu-central-1.linodeobjects.com/WorldCereal_GST-10/project/demo/merged_cog.tif',
+  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlusCCN_GST-93/project/data_cog/WorldCereals/3857_17135_tc-maize-main_activecropland_2021-04-20_2021-10-06_classification.tif',
   cogBitmapOptions: {
     type: 'image',
     blurredTexture: false,
     clipLow: 1,
     useChannel: 1,
-    useSingleColor: true,
+    useHeatMap: true,
+    // useSingleColor: true,
   },
 
   isTiled: true,
