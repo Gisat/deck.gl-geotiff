@@ -506,12 +506,12 @@ class CogTiles {
         const defaultTileWindow = [window[0], window[1], window[2], window[3]];
 
         if (window[0] > 0) {
-          missingLeftLocal = tileWidth - window[0];
+          missingLeftLocal = tileWidth - (window[0] % tileWidth);
           defaultTileWindow[0] = 0;
-          defaultTileWindow[2] = tileWidth - missingLeftLocal;
+          defaultTileWindow[2] = window[0] % tileWidth;
         }
         if (window[1] > 0) {
-          missingTopLocal = tileHeight - window[1];
+          missingTopLocal = tileHeight - (window[1] % tileHeight);
           defaultTileWindow[1] = 0;
           defaultTileWindow[3] = intersectionHeight - missingTopLocal;
         }
@@ -525,18 +525,15 @@ class CogTiles {
       }
       // pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0
       if (window[0] > 0 && missingLeft === 0) {
-        // console.log('pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0');
-        // to do neresi kdyby ty tily byly 4, ale to by nemelo byt
         const tileToLeft = [defaultCOGTileIndex[0] - 1, defaultCOGTileIndex[1]];
-        const window0 = defaultCOGTileIndex[0] == 2 ? window[0] % tileWidth : window[0];
-        const window2 = defaultCOGTileIndex[0] == 2 ? window[2] - window[0] + window0 : window[2] - window[0];
 
-        // const tileWindow3 = window[1] > 0 ? window[3]-window[1]-missingTopLocal : window[3];
-        const tileWindow3 = window[1] > 0 ? window[1] - tileWidth % (window[1] - window[3]) : window[3];
-        const missingTopForLeft = window[1] > 0 ? tileHeight - window[1] : missingTop;
+        const windowLeft0 = window[0] % tileWidth;
+        const windowLeft2 = windowLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
+        const windowLeft3 = window[3]%tileHeight;
+        const missingTopForLeft = window[1] > 0 ? tileHeight - (window[1]%tileHeight) : missingTop;
         tilesToRead.push({
           index: tileToLeft,
-          window: [window0, 0, window2, tileWindow3],
+          window: [windowLeft0, 0, windowLeft2, windowLeft3],
           missingLeft: 0,
           missingTop: missingTopForLeft,
         });
@@ -545,11 +542,12 @@ class CogTiles {
       // if we need also top COG tile, because missing top is zero, but image would start from window[1]
       if (window[1] > 0 && missingTop === 0 && defaultCOGTileIndex[0] < targetImageTilesCountX) {
         const tileToTop = [defaultCOGTileIndex[0], defaultCOGTileIndex[1] - 1];
+        const windowTop1 = window[1] % tileHeight;
         if (tileToTop[1] >= 0) {
           tilesToRead.push({
             index: tileToTop,
-            window: [window[0], window[1], window[2], tileHeight],
-            missingLeft,
+            window: [0, windowTop1, window[2]%tileWidth, tileHeight],
+            missingLeft: missingLeftLocal,
             missingTop: 0,
           });
         }
@@ -560,11 +558,11 @@ class CogTiles {
         const tileToTopLeft = [defaultCOGTileIndex[0] - 1, y - originTileIndex.y - 1];
         const windowTopLeft0 = window[0] % tileWidth;
         // eslint-disable-next-line max-len
-        const windowLeftTop2 = windowTopLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
+        const windowTopLeft2 = windowTopLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
         if (tileToTopLeft[1] >= 0 && tileToTopLeft[0] >= 0) {
           tilesToRead.push({
             index: tileToTopLeft,
-            window: [windowTopLeft0, window[1], windowLeftTop2, tileHeight],
+            window: [windowTopLeft0, window[1]%tileHeight, windowTopLeft2, tileHeight],
             missingLeft: 0,
             missingTop: 0,
           });
