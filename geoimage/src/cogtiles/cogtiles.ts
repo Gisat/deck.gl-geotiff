@@ -542,53 +542,66 @@ class CogTiles {
     }
     // for multiple tiles
     else {
+      let tilesToRead = [];
       const intersectionHeight = window[3] - window[1];
-      console.log('intersectionHeight', intersectionHeight);
-      // vzdy tam da dolni pravy obrazek, ale je nutne updatovat window, protoze pravy obrazek se musi nacitat od jeho horniho leveho rohu
-      // takze kdyz window[0] zacina jinak nez 0, musi se to respektovat:
-      const defaultTileWindow = [window[0], window[1], window[2], window[3]];
       let missingLeftLocal = missingLeft;
       let missingTopLocal = missingTop;
-      if (window[0] > 0) {
-        missingLeftLocal = tileWidth - window[0];
-        defaultTileWindow[0] = 0;
-        defaultTileWindow[2] = tileWidth - missingLeftLocal;
-      }
-      if (window[1] > 0) {
-        missingTopLocal = tileHeight - window[1];
-        defaultTileWindow[1] = 0;
-        defaultTileWindow[3] = intersectionHeight - missingTopLocal;
-      }
 
-      const tilesToRead = [{
-        index: [x - originTileIndex.x, y - originTileIndex.y],
-        window: defaultTileWindow,
-        missingLeft: missingLeftLocal,
-        missingTop: missingTopLocal,
-      }];
+      // by default, COG tile index which origin (upper left corner) is within the current web mercator tile.
+      // since the COG does not have to be aligned with web mercator, usually this COG tile occupies lower right part of the web mercator tile
+      // and then it is necessary to check/read also tiles to left and top and top left corner
+      const defaultCOGTileIndex = [x - originTileIndex.x, y - originTileIndex.y];
+      // check if the COG tile with this index exists. It does not have to, meaning that this web mercator tile is covered by left and/or top tile
+      if (defaultCOGTileIndex[0] < targetImageTilesCountX && defaultCOGTileIndex[1] < targetImageTilesCountY) {
+        // vzdy tam da dolni pravy obrazek, ale je nutne updatovat window, protoze pravy obrazek se musi nacitat od jeho horniho leveho rohu
+        // takze kdyz window[0] zacina jinak nez 0, musi se to respektovat:
+        const defaultTileWindow = [window[0], window[1], window[2], window[3]];
+
+        if (window[0] > 0) {
+          missingLeftLocal = tileWidth - window[0];
+          defaultTileWindow[0] = 0;
+          defaultTileWindow[2] = tileWidth - missingLeftLocal;
+        }
+        if (window[1] > 0) {
+          missingTopLocal = tileHeight - window[1];
+          defaultTileWindow[1] = 0;
+          defaultTileWindow[3] = intersectionHeight - missingTopLocal;
+        }
+
+        tilesToRead.push({
+          index: [defaultCOGTileIndex[0], defaultCOGTileIndex[1]],
+          window: defaultTileWindow,
+          missingLeft: missingLeftLocal,
+          missingTop: missingTopLocal,
+        });
+      } else {
+        console.log(`COG tile with index ${defaultCOGTileIndex} does not exist`);
+      }
 
       // pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0
       if (window[0] > 0 && missingLeft === 0) {
         // console.log('pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0');
         // to do neresi kdyby ty tily byly 4, ale to by nemelo byt
-        const tileToLeft = [x - originTileIndex.x - 1, y - originTileIndex.y];
+        const tileToLeft = [defaultCOGTileIndex[0] - 1, defaultCOGTileIndex[1]];
+        const window0 = defaultCOGTileIndex[0]==2? window[0]%tileWidth : window[0];
+        const window2 = defaultCOGTileIndex[0]==2? window[2] - window[0] + window0 : window[2] - window[0];
 
-        if (tileToLeft[0] >= 0);
-        const tileWindow3 = window[1] > 0 ? window[3]-window[1]-missingTopLocal : window[3];
+        // const tileWindow3 = window[1] > 0 ? window[3]-window[1]-missingTopLocal : window[3];
+        const tileWindow3 = window[1] > 0 ? window[1] - tileWidth%(window[1]-window[3]) : window[3];
         const missingTopForLeft = window[1] > 0 ? tileHeight - window[1] : missingTop;
         tilesToRead.push({
           index: tileToLeft,
-          window: [window[0], 0, window[2] - window[0], tileWindow3],
+          window: [window0, 0, window2, tileWindow3],
           missingLeft: 0,
           missingTop:missingTopForLeft,
         });
       }
 
       // pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1
-      if (window[1] > 0 && missingTop === 0) {
+      if (window[1] > 0 && missingTop === 0 && defaultCOGTileIndex[0] < targetImageTilesCountX) {
         // console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
         // to do neresi kdyby ty tily byly 4, ale to by nemelo byt
-        const tileToTop = [x - originTileIndex.x, y - originTileIndex.y - 1];
+        const tileToTop = [defaultCOGTileIndex[0], defaultCOGTileIndex[1] - 1];
 
         if (tileToTop[1] >= 0) {
           tilesToRead.push({
@@ -605,12 +618,13 @@ class CogTiles {
       // pokud potrebujeme jeste snimek v sikmo vlevo nahore, protoze missing top je nula, a missing left taky w[1
       if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
         // console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
-        const tileToTopLeft = [x - originTileIndex.x - 1, y - originTileIndex.y - 1];
-
+        const tileToTopLeft = [defaultCOGTileIndex[0] - 1, y - originTileIndex.y - 1];
+        const window0 = window[0]%tileWidth
+        const window2 = window0+(window[2] - window[0])%tileWidth+missingLeftLocal
         if (tileToTopLeft[1] >= 0 && tileToTopLeft[0] >= 0) {
           tilesToRead.push({
             index: tileToTopLeft,
-            window: [window[0], window[1], window[2] - window[0], tileHeight],
+            window: [window0, window[1], window2, tileHeight],
             // missingLeft: -window[0],
             missingLeft: 0,
             // missingTop: - window[1]
