@@ -58,7 +58,7 @@ class CogTiles {
     // Set native fetch instead node-fetch to SourceHttp
     SourceHttp.fetch = async (input, init) => {
       if (init && init.headers && init.headers.range) {
-        const range = init.headers.range;
+        const { range } = init.headers;
 
         // Use a regular expression to find any range ending in --2
         const match = range.match(/bytes=(\d+)--2/);
@@ -94,8 +94,8 @@ class CogTiles {
         baseImage.tags.get(TiffTag.SampleFormat)?.value as number[],
         baseImage.tags.get(TiffTag.BitsPerSample)?.value as number[],
     );
-    this.options.numOfChannels =  Number(baseImage.tags.get(TiffTag.SamplesPerPixel)?.value);
-    [this.cogZoomLookup, this.cogResolutionLookup] = this.buildCogZoomResolutionLookup(this.cog.images)
+    this.options.numOfChannels = Number(baseImage.tags.get(TiffTag.SamplesPerPixel)?.value);
+    [this.cogZoomLookup, this.cogResolutionLookup] = this.buildCogZoomResolutionLookup(this.cog.images);
     this.tileSize = baseImage.tileSize.width;
     // this.zoomRange = this.getZoomRange(this.cog);
     this.zoomRange = [this.cogZoomLookup[this.cogZoomLookup.length - 1], this.cogZoomLookup[0]];
@@ -106,7 +106,7 @@ class CogTiles {
     this.lowestOriginTileOffset = this.getImageTileIndex(
       this.cog.images[this.cog.images.length - 1],
     );
-    console.log("lowest origin tile offset", this.lowestOriginTileOffset)
+    // console.log('lowest origin tile offset', this.lowestOriginTileOffset);
 
     return this.cog;
   }
@@ -115,7 +115,7 @@ class CogTiles {
     return cog.images[cog.images.length - 1].tileSize.width;
   }
 
-  buildCogZoomResolutionLookup(images){
+  buildCogZoomResolutionLookup(images) {
     // Retrieve the total number of images (overviews) in the COG.
     const imageCount = images.length;
 
@@ -130,7 +130,7 @@ class CogTiles {
     // Iterate over each image (overview) in the COG.
     for (let idx = 0; idx < imageCount; idx++) {
       const image = images[idx];
-      const width = image.size.width;
+      const { width } = image.size;
 
       // Calculate the scale factor relative to the base image.
       const scaleFactor = baseWidth / width;
@@ -149,7 +149,7 @@ class CogTiles {
 
   calculateBoundsAsLatLon(image) {
     // Use the .bbox property instead of the .getBoundingBox() method
-    const bbox = image.bbox;
+    const { bbox } = image;
 
     const minX = Math.min(bbox[0], bbox[2]);
     const maxX = Math.max(bbox[0], bbox[2]);
@@ -381,7 +381,7 @@ class CogTiles {
 
   mercatorToTile(mercator, zoom) {
     const C = 40075016.68557849; // Earth's circumference in Mercator meters
-    const n = Math.pow(2, zoom);
+    const n = 2 ** zoom;
 
     const tileX = Math.floor(n * ((mercator[0] + C / 2) / C));
     const tileY = Math.floor(n * ((C / 2 - mercator[1]) / C));
@@ -401,8 +401,8 @@ class CogTiles {
       throw new Error('The image is not tiled.');
     }
 
-    const originTileIndex = this.mercatorToTile(targetImage.origin, z)
-    console.log("origin tile index", originTileIndex);
+    const originTileIndex = this.mercatorToTile(targetImage.origin, z);
+    // console.log('origin tile index', originTileIndex);
 
     // Calculate the map offset between the global Web Mercator origin and the COG's origin.
     // (Difference in map units.)
@@ -410,7 +410,6 @@ class CogTiles {
     // if Y offset is large and positive (COG is far below global origin — expected)
     const offsetXMap = this.cogOrigin[0] - webMercatorOrigin[0];
     const offsetYMap = webMercatorOrigin[1] - this.cogOrigin[1];
-
 
     const tileResolution = (EARTH_CIRCUMFERENCE / tileWidth) / 2 ** z;
     const cogResolution = this.cogResolutionLookup[imageIndex];
@@ -440,21 +439,15 @@ class CogTiles {
     const intersecion = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
     const [validWidth, validHeight, window, missingLeft, missingTop] = intersecion;
 
-    console.log('tileCount x', targetImage.tileCount.x);
-    console.log('tileCount y', targetImage.tileCount.y);
-
-    console.log('x', x);
-    console.log('y', y);
-
-    // const tile = await targetImage.getTile(x, y);
-
-    if(x==22 && y==14){
-      console.log('');
-    }
+    // console.log('tileCount x', targetImage.tileCount.x);
+    // console.log('tileCount y', targetImage.tileCount.y);
+    //
+    // console.log('x', x);
+    // console.log('y', y);
 
     // 2. FIND GEOGRAPHIC INTERSECTION (same as before)
     const tileGeoBBox = this.tileToWebMercatorBBox(x, y, z);
-    const cogGeoBBox = targetImage.bbox ;
+    const cogGeoBBox = targetImage.bbox;
     const intersectionGeoBBox = this.getIntersection(tileGeoBBox, cogGeoBBox);
     if (!intersectionGeoBBox) {
       return null; // No data to render
@@ -478,10 +471,10 @@ class CogTiles {
       return null;
     }
 
-    console.log('pixelWindow', pixelWindow);
-    console.log('window', window)
-    console.log('missingLeft', missingLeft)
-    console.log('missingTop', missingTop)
+    // console.log('pixelWindow', pixelWindow);
+    // console.log('window', window);
+    // console.log('missingLeft', missingLeft);
+    // console.log('missingTop', missingTop);
 
     // 4. IDENTIFY WHICH INTERNAL TILES COVER THE PIXEL WINDOW
     const { tileSize } = targetImage;
@@ -496,7 +489,7 @@ class CogTiles {
     // console.log('tileYMax', tileYMax);
 
     if (tileXMin !== tileXMax || tileYMin !== tileYMax) {
-      console.log('multiple tiles needed to cover the pixel window');
+      // console.log('multiple tiles needed to cover the pixel window');
     }
 
     // 5. FETCH ALL REQUIRED TILES
@@ -505,123 +498,134 @@ class CogTiles {
     const targetImageTilesCountY = targetImage.tileCount.y;
 
     if (targetImageTilesCountX === 1 && targetImageTilesCountY === 1) {
-      if ( x-originTileIndex.x === 0 && y - originTileIndex.y == 0) {
+      if (x - originTileIndex.x === 0 && y - originTileIndex.y == 0) {
         // console.log('reading tile 0,0 for tiles: ', x, y, z);
         tilePromises.push(
-            targetImage.getTile(0, 0).then(data => ({data, index: [0, 0], window, missingLeft, missingTop}))
+          targetImage.getTile(0, 0).then((data) => ({
+            data, index: [0, 0], window, missingLeft, missingTop,
+          })),
         );
-      }
-      else if (window[1] > 0 && missingTop === 0 ){
+      } else if (window[1] > 0 && missingTop === 0) {
         // console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
         tilePromises.push(
-            targetImage.getTile(0, 0).then(data => ({
-              data,
-              index: [0, 0],
-              window,
-              missingLeft,
-              missingTop}))
+          targetImage.getTile(0, 0).then((data) => ({
+            data,
+            index: [0, 0],
+            window,
+            missingLeft,
+            missingTop,
+          })),
         );
-      }
-      else if(window[0] > 0 && missingLeft === 0 ){
+      } else if (window[0] > 0 && missingLeft === 0) {
         // console.log("pokud potrebujeme jeste snimek v pravo, protoze missing left je nula, ale obrazek by zacal az od window[0")
         tilePromises.push(
-            targetImage.getTile(0, 0).then(data => ({
-              data,
-              index: [0, 0],
-              window,
-              missingLeft,
-              missingTop}))
+          targetImage.getTile(0, 0).then((data) => ({
+            data,
+            index: [0, 0],
+            window,
+            missingLeft,
+            missingTop,
+          })),
         );
-      }
-      else if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0){
+      } else if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
         // console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
         tilePromises.push(
-            targetImage.getTile(0, 0).then(data => ({
-              data,
-              index: [0, 0],
-              window,
-              missingLeft,
-              missingTop}))
+          targetImage.getTile(0, 0).then((data) => ({
+            data,
+            index: [0, 0],
+            window,
+            missingLeft,
+            missingTop,
+          })),
         );
       }
-
     }
+    // for multiple tiles
     else {
+      const intersectionHeight = window[3] - window[1];
+      console.log('intersectionHeight', intersectionHeight);
       // vzdy tam da dolni pravy obrazek, ale je nutne updatovat window, protoze pravy obrazek se musi nacitat od jeho horniho leveho rohu
       // takze kdyz window[0] zacina jinak nez 0, musi se to respektovat:
-      let defaultTileWindow = [window[0], window[1], window[2], window[3]]
-      let missingLeftLocal = missingLeft
-        let missingTopLocal = missingTop
-      if (window[0] > 0){
-        missingLeftLocal = tileWidth - window[0]
-        defaultTileWindow[0] = 0
-        defaultTileWindow[2] = tileWidth - missingLeftLocal
+      const defaultTileWindow = [window[0], window[1], window[2], window[3]];
+      let missingLeftLocal = missingLeft;
+      let missingTopLocal = missingTop;
+      if (window[0] > 0) {
+        missingLeftLocal = tileWidth - window[0];
+        defaultTileWindow[0] = 0;
+        defaultTileWindow[2] = tileWidth - missingLeftLocal;
+      }
+      if (window[1] > 0) {
+        missingTopLocal = tileHeight - window[1];
+        defaultTileWindow[1] = 0;
+        defaultTileWindow[3] = intersectionHeight - missingTopLocal;
+      }
 
-      }
-      if (window[1] > 0){
-        missingTopLocal = tileHeight - window[1]
-        defaultTileWindow[1] = 0
-        defaultTileWindow[3] = missingTopLocal
-      }
-      let tilesToRead = [{
+      const tilesToRead = [{
         index: [x - originTileIndex.x, y - originTileIndex.y],
         window: defaultTileWindow,
         missingLeft: missingLeftLocal,
         missingTop: missingTopLocal,
       }];
 
-      //pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0
-      if (window[0] > 0 && missingLeft === 0 ){
-        console.log("pokud potrebujeme jeste snimek v pravo, protoze missing left je nula, ale obrazek by zacal az od window[0")
+      // pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0
+      if (window[0] > 0 && missingLeft === 0) {
+        // console.log('pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0');
         // to do neresi kdyby ty tily byly 4, ale to by nemelo byt
-        const tileToLeft = [x - originTileIndex.x - 1, y - originTileIndex.y]
+        const tileToLeft = [x - originTileIndex.x - 1, y - originTileIndex.y];
 
-        if (tileToLeft[0] >= 0)
-          console.log("tileToLeft", tileToLeft)
+        if (tileToLeft[0] >= 0);
+        const tileWindow3 = window[1] > 0 ? window[3]-window[1]-missingTopLocal : window[3];
+        const missingTopForLeft = window[1] > 0 ? tileHeight - window[1] : missingTop;
         tilesToRead.push({
-          index:tileToLeft,
-          window:[window[0],window[1],tileWidth-window[0],window[3]],
-          missingLeft: -window[0],
-          missingTop
-        })
+          index: tileToLeft,
+          window: [window[0], 0, window[2] - window[0], tileWindow3],
+          missingLeft: 0,
+          missingTop:missingTopForLeft,
+        });
       }
 
-      //pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1
-      if (window[1] > 0 && missingTop === 0 ){
-        console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
+      // pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1
+      if (window[1] > 0 && missingTop === 0) {
+        // console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
         // to do neresi kdyby ty tily byly 4, ale to by nemelo byt
-        const tileToTop = [x - originTileIndex.x, y - originTileIndex.y-1]
+        const tileToTop = [x - originTileIndex.x, y - originTileIndex.y - 1];
 
-        if (tileToTop[1] >= 0)
-          console.log("tileToTop", tileToTop)
-        tilesToRead.push({
-          index:tileToTop,
-          window:[window[0], window[1], window[2], tileHeight - window[1]],
-          missingLeft,
-          missingTop: - window[1]
-        })
+        if (tileToTop[1] >= 0) {
+          tilesToRead.push({
+            index: tileToTop,
+            // tileHeight by melo jit nahradit missingTopLocal+window[1]
+            window: [window[0], window[1], window[2], tileHeight],
+            missingLeft,
+            // missingTop: - window[1]
+            missingTop: 0,
+          });
+        }
       }
 
-      //pokud potrebujeme jeste snimek v sikmo vlevo nahore, protoze missing top je nula, a missing left taky w[1
-      if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0){
-        console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
-        const tileToTopLeft = [x - originTileIndex.x-1, y - originTileIndex.y-1]
+      // pokud potrebujeme jeste snimek v sikmo vlevo nahore, protoze missing top je nula, a missing left taky w[1
+      if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
+        // console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
+        const tileToTopLeft = [x - originTileIndex.x - 1, y - originTileIndex.y - 1];
 
-        if (tileToTopLeft[1] >= 0 && tileToTopLeft[0] >= 0)
-          console.log("tileToTopLeft", tileToTopLeft)
-        tilesToRead.push({
-          index:tileToTopLeft,
-          window:[window[0], window[1], tileWidth-window[0], tileHeight - window[1]],
-          missingLeft: -window[0],
-          missingTop: - window[1]
-        })
+        if (tileToTopLeft[1] >= 0 && tileToTopLeft[0] >= 0) {
+          tilesToRead.push({
+            index: tileToTopLeft,
+            window: [window[0], window[1], window[2] - window[0], tileHeight],
+            // missingLeft: -window[0],
+            missingLeft: 0,
+            // missingTop: - window[1]
+            missingTop: 0,
+          });
+        }
       }
 
-      tilesToRead.forEach(tileToRead => {
+      tilesToRead.forEach((tileToRead) => {
         tilePromises.push(
-            targetImage.getTile(tileToRead.index[0], tileToRead.index[1]).then(data => ({ data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop }))
+          targetImage.getTile(tileToRead.index[0], tileToRead.index[1]).then((data) => ({
+            data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
+          })),
         );
-      })
+      });
       // for (let tileY = tileYMin; tileY <= tileYMax; tileY++) {
       //   for (let tileX = tileXMin; tileX <= tileXMax; tileX++) {
       //     // Store the promise and the tile's index for later processing
@@ -633,8 +637,6 @@ class CogTiles {
       // }
     }
 
-
-
     const fetchedTiles = await Promise.all(tilePromises);
 
     // 6. DECOMPRESS, CROP, AND STITCH (CLIENT-SIDE LOGIC)
@@ -643,7 +645,6 @@ class CogTiles {
 
     // console.log(`Fetched ${fetchedTiles.length} tile(s) to construct the final image. With zoom index ${imageIndex}, zoom level ${z}.`);
     // console.log(fetchedTiles[0].data)
-
 
     // const wantedMpp = this.getResolutionFromZoomLevel(this.tileSize, z);
     // const img = this.cog.getImageByResolution(wantedMpp);
@@ -668,19 +669,19 @@ class CogTiles {
 
     let decompressed: string;
     let decoded: any;
-    let decodedNew = [];
-    let decompressedFormattedNew = []
+    const decodedNew = [];
+    const decompressedFormattedNew = [];
 
     // this.options.numOfChannels = Number(img.tags.get(277).value);
     // this.options.noDataValue = this.getNoDataValue(img.tags);
 
-//     if (!this.options.format) {
-//       // More information about TIFF tags: https://www.awaresystems.be/imaging/tiff/tifftags.html
-//       this.options.format = this.getFormat(
-// img.tags.get(339).value as Array<number>,
-//       img.tags.get(258).value as Array<number>,
-//       );
-//     }
+    //     if (!this.options.format) {
+    //       // More information about TIFF tags: https://www.awaresystems.be/imaging/tiff/tifftags.html
+    //       this.options.format = this.getFormat(
+    // img.tags.get(339).value as Array<number>,
+    //       img.tags.get(258).value as Array<number>,
+    //       );
+    //     }
 
     // let bitsPerSample = img.tags.get(258)!.value;
     // if (Array.isArray(bitsPerSample)) {
@@ -706,7 +707,7 @@ class CogTiles {
       // console.time("Request to data time: ")
       // const tileNew = await targetImage.getTile(tileXMin, tileYMin);
 
-      fetchedTiles.forEach(fetchedTile => {
+      fetchedTiles.forEach((fetchedTile) => {
         switch (targetImage.compression) {
           case 'image/jpeg':
             // decodedNew.push(jpeg.decode(fetchedTile.data!.bytes, { useTArray: true }));
@@ -723,10 +724,7 @@ class CogTiles {
           default:
             console.warn(`Unexpected compression method: ${targetImage.compression}`);
         }
-      })
-      console.log(decodedNew)
-
-
+      });
 
       // switch (img.compression) {
       //   case 'image/jpeg':
@@ -766,7 +764,7 @@ class CogTiles {
       //   default: decompressedFormatted = null;
       // }
 
-      fetchedTiles.forEach(fetchedTile => {
+      fetchedTiles.forEach((fetchedTile) => {
         switch (this.options.format) {
           case 'uint8':
             // decompressedFormattedNew.push(new Uint8Array(decodedTile.buffer)); break;
@@ -794,31 +792,29 @@ class CogTiles {
             fetchedTile.decompressed = new Float64Array(fetchedTile.decoded.buffer); break;
           default: decompressedFormattedNew.push(null);
         }
-      })
-
-
-
+      });
 
       const tileBuffer = this.createTileBuffer(this.options.format, tileWidth, this.options.numOfChannels);
       // tileBuffer.fill(this.options.noDataValue);
-      const randomColor = Math.floor(Math.random() * (254 - 1 + 1) + 1)
+      // const randomColor = Math.floor(Math.random() * (254 - 1 + 1) + 1)
       tileBuffer.fill(Math.floor(Math.random() * (254 - 1 + 1) + 1));
 
-      fetchedTiles.forEach(fetchedTile => {
-        const validImageHeight = fetchedTile.window[3]-fetchedTile.window[1];
-        const validImageWidth =fetchedTile.window[2]-fetchedTile.window[0] ;
+      fetchedTiles.forEach((fetchedTile) => {
+        const validImageHeight = fetchedTile.window[3] - fetchedTile.window[1];
+        const validImageWidth = fetchedTile.window[2] - fetchedTile.window[0];
+        const randomColor = Math.floor(Math.random() * (254 - 1 + 1) + 1);
 
         for (let row = 0; row < validImageHeight; row++) {
           for (let col = 0; col < validImageWidth; col++) {
+            // here I need to add check if the row/col value plus the missing top/left value is bigger or equal zero and smaller or equal tile width/height
             const destRow = row + fetchedTile.missingTop;
             const destCol = col + fetchedTile.missingLeft;
             // tileBuffer[destRow*tileWidth + destCol] = (row+window[0]+col+window[1])/2;
-            tileBuffer[destRow*tileWidth + destCol] = fetchedTile.decompressed[(row+fetchedTile.window[1])*tileWidth + (col+fetchedTile.window[0])];
-            // tileBuffer[destRow*tileWidth + destCol] = randomColor;
+            tileBuffer[destRow * tileWidth + destCol] = fetchedTile.decompressed[(row+fetchedTile.window[1])*tileWidth + (col+fetchedTile.window[0])];
+            // tileBuffer[destRow * tileWidth + destCol] = randomColor;
           }
         }
-
-      })
+      });
 
       // console.log(validWidth, validHeight, window, missingLeft, missingTop)
       // for (let row = window[0]; row <= window[2]; row++) {
