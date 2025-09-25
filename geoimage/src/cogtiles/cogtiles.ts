@@ -441,143 +441,156 @@ class CogTiles {
 
     // 5. FETCH ALL REQUIRED TILES
     const tilePromises = [];
-    const targetImageTilesCountX = targetImage.tileCount.x;
-    const targetImageTilesCountY = targetImage.tileCount.y;
 
-    if (targetImageTilesCountX === 1 && targetImageTilesCountY === 1) {
-      if (x - originTileIndex.x === 0 && y - originTileIndex.y === 0) {
+    // for perfectly aligned COGs
+    const isHorizontallyAligned = window[0] % tileWidth === 0 && window[2] % tileWidth === 0;
+    const isVerticallyAligned = window[1] % tileHeight === 0 && window[3] % tileHeight === 0;
+
+    if (missingLeft === 0 && missingTop === 0 && isHorizontallyAligned && isVerticallyAligned) {
+      tilePromises.push(
+        targetImage.getTile(x - originTileIndex.x, y - originTileIndex.y).then((data) => ({
+          data, index: [x - originTileIndex.x, y - originTileIndex.y], window: [0, 0, tileWidth, tileHeight], missingLeft, missingTop,
+        })),
+      );
+    } else {
+      const targetImageTilesCountX = targetImage.tileCount.x;
+      const targetImageTilesCountY = targetImage.tileCount.y;
+
+      if (targetImageTilesCountX === 1 && targetImageTilesCountY === 1) {
+        if (x - originTileIndex.x === 0 && y - originTileIndex.y === 0) {
         // console.log('reading tile 0,0 for tiles: ', x, y, z);
-        tilePromises.push(
-          targetImage.getTile(0, 0).then((data) => ({
-            data, index: [0, 0], window, missingLeft, missingTop,
-          })),
-        );
-      } else if (window[1] > 0 && missingTop === 0) {
+          tilePromises.push(
+            targetImage.getTile(0, 0).then((data) => ({
+              data, index: [0, 0], window, missingLeft, missingTop,
+            })),
+          );
+        } else if (window[1] > 0 && missingTop === 0) {
         // console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
-        tilePromises.push(
-          targetImage.getTile(0, 0).then((data) => ({
-            data,
-            index: [0, 0],
-            window,
-            missingLeft,
-            missingTop,
-          })),
-        );
-      } else if (window[0] > 0 && missingLeft === 0) {
+          tilePromises.push(
+            targetImage.getTile(0, 0).then((data) => ({
+              data,
+              index: [0, 0],
+              window,
+              missingLeft,
+              missingTop,
+            })),
+          );
+        } else if (window[0] > 0 && missingLeft === 0) {
         // console.log("pokud potrebujeme jeste snimek v pravo, protoze missing left je nula, ale obrazek by zacal az od window[0")
-        tilePromises.push(
-          targetImage.getTile(0, 0).then((data) => ({
-            data,
-            index: [0, 0],
-            window,
-            missingLeft,
-            missingTop,
-          })),
-        );
-      } else if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
+          tilePromises.push(
+            targetImage.getTile(0, 0).then((data) => ({
+              data,
+              index: [0, 0],
+              window,
+              missingLeft,
+              missingTop,
+            })),
+          );
+        } else if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
         // console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
-        tilePromises.push(
-          targetImage.getTile(0, 0).then((data) => ({
-            data,
-            index: [0, 0],
-            window,
-            missingLeft,
-            missingTop,
-          })),
-        );
+          tilePromises.push(
+            targetImage.getTile(0, 0).then((data) => ({
+              data,
+              index: [0, 0],
+              window,
+              missingLeft,
+              missingTop,
+            })),
+          );
+        }
       }
-    }
-    // for multiple tiles
-    else {
-      const tilesToRead = [];
-      const intersectionHeight = window[3] - window[1];
-      let missingLeftLocal = missingLeft;
-      let missingTopLocal = missingTop;
+      // for multiple tiles
+      else {
+        const tilesToRead = [];
+        const intersectionHeight = window[3] - window[1];
+        let missingLeftLocal = missingLeft;
+        let missingTopLocal = missingTop;
 
-      // by default, COG tile index which origin (upper left corner) is within the current web mercator tile.
-      // since the COG does not have to be aligned with web mercator, usually this COG tile occupies lower right part of the web mercator tile
-      // and then it is necessary to check/read also tiles to left and top and top left corner
-      const defaultCOGTileIndex = [x - originTileIndex.x, y - originTileIndex.y];
-      // check if the COG tile with this index exists. It does not have to, meaning that this web mercator tile is covered by left and/or top tile
+        // by default, COG tile index which origin (upper left corner) is within the current web mercator tile.
+        // since the COG does not have to be aligned with web mercator, usually this COG tile occupies lower right part of the web mercator tile
+        // and then it is necessary to check/read also tiles to left and top and top left corner
+        const defaultCOGTileIndex = [x - originTileIndex.x, y - originTileIndex.y];
+        // check if the COG tile with this index exists. It does not have to, meaning that this web mercator tile is covered by left and/or top tile
 
-      if (defaultCOGTileIndex[0] < targetImageTilesCountX && defaultCOGTileIndex[1] < targetImageTilesCountY) {
+        if (defaultCOGTileIndex[0] < targetImageTilesCountX && defaultCOGTileIndex[1] < targetImageTilesCountY) {
         // vzdy tam da dolni pravy obrazek, ale je nutne updatovat window, protoze pravy obrazek se musi nacitat od jeho horniho leveho rohu
         // takze kdyz window[0] zacina jinak nez 0, musi se to respektovat:
-        const defaultTileWindow = [window[0], window[1], window[2], window[3]];
+          const defaultTileWindow = [window[0], window[1], window[2], window[3]];
 
-        if (window[0] > 0) {
-          missingLeftLocal = tileWidth - (window[0] % tileWidth);
-          defaultTileWindow[0] = 0;
-          defaultTileWindow[2] = window[2] % tileWidth;
-        }
-        if (window[1] > 0) {
-          missingTopLocal = tileHeight - (window[1] % tileHeight);
-          defaultTileWindow[1] = 0;
-          defaultTileWindow[3] = intersectionHeight - missingTopLocal;
-        }
+          if (window[0] > 0) {
+            missingLeftLocal = tileWidth - (window[0] % tileWidth);
+            defaultTileWindow[0] = 0;
+            defaultTileWindow[2] = window[2] % tileWidth;
+          }
+          if (window[1] > 0) {
+            missingTopLocal = tileHeight - (window[1] % tileHeight);
+            defaultTileWindow[1] = 0;
+            defaultTileWindow[3] = intersectionHeight - missingTopLocal;
+          }
 
-        tilesToRead.push({
-          index: [defaultCOGTileIndex[0], defaultCOGTileIndex[1]],
-          window: defaultTileWindow,
-          missingLeft: missingLeftLocal,
-          missingTop: missingTopLocal,
-        });
-      }
-      // pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0
-      if (window[0] > 0 && missingLeft === 0 && defaultCOGTileIndex[1] < targetImageTilesCountY) {
-        const tileToLeft = [defaultCOGTileIndex[0] - 1, defaultCOGTileIndex[1]];
-
-        const windowLeft0 = window[0] % tileWidth;
-        // const windowLeft2 = windowLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
-        const windowLeft2 = tileWidth;
-        const windowLeft3 = window[3] % tileHeight;
-        const missingTopForLeft = window[1] > 0 ? tileHeight - (window[1] % tileHeight) : missingTop;
-        tilesToRead.push({
-          index: tileToLeft,
-          window: [windowLeft0, 0, windowLeft2, windowLeft3],
-          missingLeft: 0,
-          missingTop: missingTopForLeft,
-        });
-      }
-
-      // if we need also top COG tile, because missing top is zero, but image would start from window[1]
-      if (window[1] > 0 && missingTop === 0 && defaultCOGTileIndex[0] < targetImageTilesCountX) {
-        const tileToTop = [defaultCOGTileIndex[0], defaultCOGTileIndex[1] - 1];
-        const windowTop1 = window[1] % tileHeight;
-        const missingLeftForLeft = window[0] > 0 ? tileWidth - (window[0] % tileWidth) : missingLeftLocal;
-        if (tileToTop[1] >= 0) {
           tilesToRead.push({
-            index: tileToTop,
-            window: [0, windowTop1, window[2] % tileWidth, tileHeight],
-            missingLeft: missingLeftForLeft,
-            missingTop: 0,
+            index: [defaultCOGTileIndex[0], defaultCOGTileIndex[1]],
+            window: defaultTileWindow,
+            missingLeft: missingLeftLocal,
+            missingTop: missingTopLocal,
           });
         }
-      }
+        // pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0
+        if (window[0] > 0 && missingLeft === 0 && defaultCOGTileIndex[1] < targetImageTilesCountY) {
+          const tileToLeft = [defaultCOGTileIndex[0] - 1, defaultCOGTileIndex[1]];
 
-      // if we need also top left COG tile, because missing top is zero, and missing left is zero
-      if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
-        const tileToTopLeft = [defaultCOGTileIndex[0] - 1, y - originTileIndex.y - 1];
-        const windowTopLeft0 = window[0] % tileWidth;
-        // eslint-disable-next-line max-len
-        const windowTopLeft2 = windowTopLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
-        if (tileToTopLeft[1] >= 0 && tileToTopLeft[0] >= 0) {
+          const windowLeft0 = window[0] % tileWidth;
+          // const windowLeft2 = windowLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
+          const windowLeft2 = tileWidth;
+          const windowLeft3 = window[3] % tileHeight;
+          const missingTopForLeft = window[1] > 0 ? tileHeight - (window[1] % tileHeight) : missingTop;
           tilesToRead.push({
-            index: tileToTopLeft,
-            window: [windowTopLeft0, window[1] % tileHeight, tileWidth, tileHeight],
+            index: tileToLeft,
+            window: [windowLeft0, 0, windowLeft2, windowLeft3],
             missingLeft: 0,
-            missingTop: 0,
+            missingTop: missingTopForLeft,
           });
         }
-      }
 
-      tilesToRead.forEach((tileToRead) => {
-        tilePromises.push(
-          targetImage.getTile(tileToRead.index[0], tileToRead.index[1]).then((data) => ({
-            data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
-          })),
-        );
-      });
+        // if we need also top COG tile, because missing top is zero, but image would start from window[1]
+        if (window[1] > 0 && missingTop === 0 && defaultCOGTileIndex[0] < targetImageTilesCountX) {
+          const tileToTop = [defaultCOGTileIndex[0], defaultCOGTileIndex[1] - 1];
+          const windowTop1 = window[1] % tileHeight;
+          const missingLeftForLeft = window[0] > 0 ? tileWidth - (window[0] % tileWidth) : missingLeftLocal;
+          if (tileToTop[1] >= 0) {
+            tilesToRead.push({
+              index: tileToTop,
+              window: [0, windowTop1, window[2] % tileWidth, tileHeight],
+              missingLeft: missingLeftForLeft,
+              missingTop: 0,
+            });
+          }
+        }
+
+        // if we need also top left COG tile, because missing top is zero, and missing left is zero
+        if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
+          const tileToTopLeft = [defaultCOGTileIndex[0] - 1, y - originTileIndex.y - 1];
+          const windowTopLeft0 = window[0] % tileWidth;
+          // eslint-disable-next-line max-len
+          const windowTopLeft2 = windowTopLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
+          if (tileToTopLeft[1] >= 0 && tileToTopLeft[0] >= 0) {
+            tilesToRead.push({
+              index: tileToTopLeft,
+              window: [windowTopLeft0, window[1] % tileHeight, tileWidth, tileHeight],
+              missingLeft: 0,
+              missingTop: 0,
+            });
+          }
+        }
+
+        tilesToRead.forEach((tileToRead) => {
+          tilePromises.push(
+            targetImage.getTile(tileToRead.index[0], tileToRead.index[1]).then((data) => ({
+              data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
+            })),
+          );
+        });
+      }
     }
 
     const fetchedTiles = await Promise.all(tilePromises);
