@@ -439,7 +439,6 @@ class CogTiles {
     const intersecion = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
     const [validWidth, validHeight, window, missingLeft, missingTop] = intersecion;
 
-
     // 5. FETCH ALL REQUIRED TILES
     const tilePromises = [];
     const targetImageTilesCountX = targetImage.tileCount.x;
@@ -500,6 +499,7 @@ class CogTiles {
       // and then it is necessary to check/read also tiles to left and top and top left corner
       const defaultCOGTileIndex = [x - originTileIndex.x, y - originTileIndex.y];
       // check if the COG tile with this index exists. It does not have to, meaning that this web mercator tile is covered by left and/or top tile
+
       if (defaultCOGTileIndex[0] < targetImageTilesCountX && defaultCOGTileIndex[1] < targetImageTilesCountY) {
         // vzdy tam da dolni pravy obrazek, ale je nutne updatovat window, protoze pravy obrazek se musi nacitat od jeho horniho leveho rohu
         // takze kdyz window[0] zacina jinak nez 0, musi se to respektovat:
@@ -508,7 +508,7 @@ class CogTiles {
         if (window[0] > 0) {
           missingLeftLocal = tileWidth - (window[0] % tileWidth);
           defaultTileWindow[0] = 0;
-          defaultTileWindow[2] = window[0] % tileWidth;
+          defaultTileWindow[2] = window[2] % tileWidth;
         }
         if (window[1] > 0) {
           missingTopLocal = tileHeight - (window[1] % tileHeight);
@@ -524,13 +524,14 @@ class CogTiles {
         });
       }
       // pokud potrebujeme jeste snimek vlevo, protoze missing left je nula, ale obrazek by zacal az od window[0
-      if (window[0] > 0 && missingLeft === 0) {
+      if (window[0] > 0 && missingLeft === 0 && defaultCOGTileIndex[1] < targetImageTilesCountY) {
         const tileToLeft = [defaultCOGTileIndex[0] - 1, defaultCOGTileIndex[1]];
 
         const windowLeft0 = window[0] % tileWidth;
-        const windowLeft2 = windowLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
-        const windowLeft3 = window[3]%tileHeight;
-        const missingTopForLeft = window[1] > 0 ? tileHeight - (window[1]%tileHeight) : missingTop;
+        // const windowLeft2 = windowLeft0 + ((window[2] - window[0]) % tileWidth) + missingLeftLocal;
+        const windowLeft2 = tileWidth;
+        const windowLeft3 = window[3] % tileHeight;
+        const missingTopForLeft = window[1] > 0 ? tileHeight - (window[1] % tileHeight) : missingTop;
         tilesToRead.push({
           index: tileToLeft,
           window: [windowLeft0, 0, windowLeft2, windowLeft3],
@@ -543,11 +544,12 @@ class CogTiles {
       if (window[1] > 0 && missingTop === 0 && defaultCOGTileIndex[0] < targetImageTilesCountX) {
         const tileToTop = [defaultCOGTileIndex[0], defaultCOGTileIndex[1] - 1];
         const windowTop1 = window[1] % tileHeight;
+        const missingLeftForLeft = window[0] > 0 ? tileWidth - (window[0] % tileWidth) : missingLeftLocal;
         if (tileToTop[1] >= 0) {
           tilesToRead.push({
             index: tileToTop,
-            window: [0, windowTop1, window[2]%tileWidth, tileHeight],
-            missingLeft: missingLeftLocal,
+            window: [0, windowTop1, window[2] % tileWidth, tileHeight],
+            missingLeft: missingLeftForLeft,
             missingTop: 0,
           });
         }
@@ -562,7 +564,7 @@ class CogTiles {
         if (tileToTopLeft[1] >= 0 && tileToTopLeft[0] >= 0) {
           tilesToRead.push({
             index: tileToTopLeft,
-            window: [windowTopLeft0, window[1]%tileHeight, windowTopLeft2, tileHeight],
+            window: [windowTopLeft0, window[1] % tileHeight, tileWidth, tileHeight],
             missingLeft: 0,
             missingTop: 0,
           });
@@ -580,12 +582,10 @@ class CogTiles {
 
     const fetchedTiles = await Promise.all(tilePromises);
 
-
     let decompressed: string;
     const decompressedFormattedNew = [];
 
     if (fetchedTiles.length > 0) {
-
       fetchedTiles.forEach((fetchedTile) => {
         switch (targetImage.compression) {
           case 'image/jpeg':
@@ -638,7 +638,6 @@ class CogTiles {
       // eslint-disable-next-line max-len
       const tileBuffer = this.createTileBuffer(this.options.format, tileWidth, this.options.numOfChannels);
       // tileBuffer.fill(this.options.noDataValue);
-      // const randomColor = Math.floor(Math.random() * (254 - 1 + 1) + 1)
       tileBuffer.fill(Math.floor(Math.random() * (254 - 1 + 1) + 1));
 
       fetchedTiles.forEach((fetchedTile) => {
@@ -667,7 +666,6 @@ class CogTiles {
         height: this.tileSize,
         bounds,
       }, this.options, meshMaxError);
-
 
       return decompressed;
     }
