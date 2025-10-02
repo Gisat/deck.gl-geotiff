@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@chunkd/source-http": "^11.1.0",
-    "@cogeotiff/core": "^9.0.3",
+    "@cogeotiff/core": "^9.1.0",
     "@deck.gl/core": "^9.0.33",
     "@deck.gl/extensions": "^9.0.33",
     "@deck.gl/geo-layers": "^9.0.33",

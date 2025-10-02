@@ -95,6 +95,7 @@ class CogTiles {
         baseImage.tags.get(TiffTag.BitsPerSample)?.value as number[],
     );
     this.options.numOfChannels = Number(baseImage.tags.get(TiffTag.SamplesPerPixel)?.value);
+    this.options.planarConfig = Number(baseImage.tags.get(TiffTag.PlanarConfiguration)?.value);
     [this.cogZoomLookup, this.cogResolutionLookup] = this.buildCogZoomResolutionLookup(this.cog.images);
     this.tileSize = baseImage.tileSize.width;
     // this.zoomRange = this.getZoomRange(this.cog);
@@ -389,6 +390,27 @@ class CogTiles {
     return { x: tileX, y: tileY };
   }
 
+  async fetchSingleBandData(targetImage, tileToReadIndex, bandIndex){
+    try {
+      // These variables need to be available inside the function
+
+      const tilesPerBand = targetImage.tileCount.x * targetImage.tileCount.y;
+      const linearIndex = (bandIndex * tilesPerBand) + (tileToReadIndex[1] * targetImage.tileCount.x + tileToReadIndex[0]);
+
+      // "await" pauses here until the promise from getTileSize resolves
+      const { offset, imageSize } =  await targetImage.getTileSize(linearIndex);
+
+      // "await" pauses here until the promise from getBytes resolves
+      const tileData = await targetImage.getBytes(offset, imageSize);
+
+      return tileData;
+
+    } catch (error) {
+      console.error("Failed to fetch tile data:", error);
+      return null; // Or handle the error as needed
+    }
+  }
+
   async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
     const imageIndex = this.getImageIndexForZoomLevel(z);
     const targetImage = this.cog.images[imageIndex];
@@ -436,72 +458,69 @@ class CogTiles {
       offsetYPixel + imageHeight,
     ];
 
-    const intersecion = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
-    const [validWidth, validHeight, window, missingLeft, missingTop] = intersecion;
+    const intersection = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
+    const [validWidth, validHeight, window, missingLeft, missingTop] = intersection;
 
     // 5. FETCH ALL REQUIRED TILES
-    const tilePromises = [];
+
+    const targetImageTilesCountX = targetImage.tileCount.x;
+    const targetImageTilesCountY = targetImage.tileCount.y;
+    let tilePromises = [];
+    let tilesToRead = [];
+
+    // multi band
+    const tilesPerBand = targetImageTilesCountX * targetImageTilesCountY;
 
     // for perfectly aligned COGs
     const isHorizontallyAligned = window[0] % tileWidth === 0 && window[2] % tileWidth === 0;
     const isVerticallyAligned = window[1] % tileHeight === 0 && window[3] % tileHeight === 0;
 
     if (missingLeft === 0 && missingTop === 0 && isHorizontallyAligned && isVerticallyAligned) {
-      tilePromises.push(
-        targetImage.getTile(x - originTileIndex.x, y - originTileIndex.y).then((data) => ({
-          data, index: [x - originTileIndex.x, y - originTileIndex.y], window: [0, 0, tileWidth, tileHeight], missingLeft, missingTop,
-        })),
-      );
+      tilesToRead.push({
+        index: [x - originTileIndex.x, y - originTileIndex.y],
+        window: [0, 0, tileWidth, tileHeight],
+        missingLeft,
+        missingTop,
+      });
     } else {
-      const targetImageTilesCountX = targetImage.tileCount.x;
-      const targetImageTilesCountY = targetImage.tileCount.y;
 
       if (targetImageTilesCountX === 1 && targetImageTilesCountY === 1) {
         if (x - originTileIndex.x === 0 && y - originTileIndex.y === 0) {
         // console.log('reading tile 0,0 for tiles: ', x, y, z);
-          tilePromises.push(
-            targetImage.getTile(0, 0).then((data) => ({
-              data, index: [0, 0], window, missingLeft, missingTop,
-            })),
-          );
+          tilesToRead.push({
+            index: [0,0],
+            window,
+            missingLeft,
+            missingTop,
+          });
         } else if (window[1] > 0 && missingTop === 0) {
         // console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
-          tilePromises.push(
-            targetImage.getTile(0, 0).then((data) => ({
-              data,
-              index: [0, 0],
-              window,
-              missingLeft,
-              missingTop,
-            })),
-          );
+          tilesToRead.push({
+            index: [0,0],
+            window,
+            missingLeft,
+            missingTop,
+          });
         } else if (window[0] > 0 && missingLeft === 0) {
         // console.log("pokud potrebujeme jeste snimek v pravo, protoze missing left je nula, ale obrazek by zacal az od window[0")
-          tilePromises.push(
-            targetImage.getTile(0, 0).then((data) => ({
-              data,
-              index: [0, 0],
-              window,
-              missingLeft,
-              missingTop,
-            })),
-          );
+          tilesToRead.push({
+            index: [0,0],
+            window,
+            missingLeft,
+            missingTop,
+          });
         } else if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
         // console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
-          tilePromises.push(
-            targetImage.getTile(0, 0).then((data) => ({
-              data,
-              index: [0, 0],
-              window,
-              missingLeft,
-              missingTop,
-            })),
-          );
+          tilesToRead.push({
+            index: [0,0],
+            window,
+            missingLeft,
+            missingTop,
+          });
         }
       }
       // for multiple tiles
       else {
-        const tilesToRead = [];
         const intersectionHeight = window[3] - window[1];
         let missingLeftLocal = missingLeft;
         let missingTopLocal = missingTop;
@@ -582,15 +601,26 @@ class CogTiles {
             });
           }
         }
-
-        tilesToRead.forEach((tileToRead) => {
-          tilePromises.push(
-            targetImage.getTile(tileToRead.index[0], tileToRead.index[1]).then((data) => ({
-              data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
-            })),
-          );
-        });
       }
+      tilesToRead.forEach((tileToRead) => {
+        // for multi band with BAND interleave
+        if (this.options.planarConfig === 2 && this.options.numOfChannels > 1) {
+          const bandIndex = 20
+          tilePromises.push(
+              this.fetchSingleBandData(targetImage, tileToRead.index, bandIndex).then((data) => ({
+                data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
+              })),
+          )
+        }
+        else {
+          // for PIXEL interleave and single band data
+          tilePromises.push(
+              targetImage.getTile(tileToRead.index[0], tileToRead.index[1]).then((data) => ({
+                data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
+              })),
+          );
+        }
+      });
     }
 
     const fetchedTiles = await Promise.all(tilePromises);
@@ -649,7 +679,9 @@ class CogTiles {
       });
 
       // eslint-disable-next-line max-len
-      const tileBuffer = this.createTileBuffer(this.options.format, tileWidth, this.options.numOfChannels);
+      // this will be valid for multiband data
+      // const tileBuffer = this.createTileBuffer(this.options.format, tileWidth, this.options.numOfChannels);
+      const tileBuffer = this.createTileBuffer(this.options.format, tileWidth, 1);
       // tileBuffer.fill(this.options.noDataValue);
       tileBuffer.fill(Math.floor(Math.random() * (254 - 1 + 1) + 1));
 
