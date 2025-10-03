@@ -32,6 +32,8 @@ class CogTiles {
 
   cogZoomLookup = [0];
 
+  cogTileCache = new Map();
+
   cogResolutionLookup = [0];
 
   tileSize: number;
@@ -411,6 +413,109 @@ class CogTiles {
     }
   }
 
+  /**
+   * A cached method to fetch, decompress, and format a single COG tile.
+   * It checks a cache to avoid re-processing the same tile. If the tile is not
+   * in the cache, it fetches, decompresses, formats it, and stores the promise
+   * in the cache for future requests.
+   * * @param {CogTiffImage} targetImage - The COG image object for the correct zoom level.
+   * @param {number} cogX - The internal X index of the COG tile.
+   * @param {number} cogY - The internal Y index of the COG tile.
+   * @param {number | null} bandIndex - The 0-based index of the band to fetch, or null for pixel-interleaved.
+   * @returns {Promise<{decompressed: TypedArray, width: number, height: number}>} A promise that resolves with the processed tile data and its dimensions.
+   */
+  async getCachedCogTile(targetImage, cogX, cogY, bandIndex = null) {
+    // 1. CREATE A UNIQUE KEY
+    // The key uniquely identifies the tile by its image (zoom), coordinates, and band.
+    const cacheKey = `${targetImage.id}-${cogX}-${cogY}-${bandIndex}`;
+    // console.log("cache key", cacheKey);
+
+    // 2. CHECK THE CACHE (THE FAST PATH)
+    // If we have already requested this tile, return the existing promise immediately.
+    if (this.cogTileCache.has(cacheKey)) {
+      console.log(`Cache hit`);
+      // console.log(`Cache hit for tile: ${cacheKey}`);
+      return this.cogTileCache.get(cacheKey);
+    }
+    // console.log("Cache miss for tile:", cacheKey);
+    console.log("Cache miss")
+
+    // 3. IF NOT IN CACHE, CREATE A PROMISE (THE WORK PATH)
+    // This promise represents the entire process of getting the processed tile data.
+    const tilePromise = new Promise(async (resolve, reject) => {
+      try {
+        // === STEP A: FETCH RAW DATA ===
+        let rawTile;
+        if (bandIndex !== null) {
+          // Use your dedicated function for band-interleaved data
+          rawTile = await this.fetchSingleBandData(targetImage, [cogX, cogY], bandIndex);
+        } else {
+          // Use the standard getTile for pixel-interleaved or single-band data
+          rawTile = await targetImage.getTile(cogX, cogY);
+        }
+
+        if (!rawTile || !rawTile.bytes) {
+          // Handle cases where a tile is sparse (no data)
+          throw new Error(`Tile data is null for key: ${cacheKey}`);
+        }
+
+        // === STEP B: DECOMPRESS DATA ===
+        let decoded;
+        switch (targetImage.compression) {
+          case 'image/jpeg':
+            decoded = jpeg.decode(rawTile.bytes, { useTArray: true });
+            break;
+          case 'application/deflate':
+            decoded = inflate(rawTile.bytes);
+            break;
+          case 'application/lzw':
+            decoded = this.lzw.decodeBlock(rawTile.bytes.buffer);
+            break;
+          default:
+            throw new Error(`Unexpected compression method: ${targetImage.compression}`);
+        }
+
+        if (!decoded || !decoded.buffer) throw new Error('Decoding failed');
+
+        // === STEP C: FORMAT DATA INTO TYPEDARRAY ===
+        let decompressedData;
+        switch (this.options.format) {
+          case 'uint8': decompressedData = new Uint8Array(decoded.buffer); break;
+          case 'uint16': decompressedData = new Uint16Array(decoded.buffer); break;
+          case 'uint32': decompressedData = new Uint32Array(decoded.buffer); break;
+          case 'int8': decompressedData = new Int8Array(decoded.buffer); break;
+          case 'int16': decompressedData = new Int16Array(decoded.buffer); break;
+          case 'int32': decompressedData = new Int32Array(decoded.buffer); break;
+          case 'float32': decompressedData = new Float32Array(decoded.buffer); break;
+          case 'float64': decompressedData = new Float64Array(decoded.buffer); break;
+          default:
+            throw new Error(`Unsupported data format: ${this.options.format}`);
+        }
+
+        // === STEP D: GET TRUE TILE DIMENSIONS ===
+        // This is important for stitching partial tiles at the edges correctly.
+        const tileBounds = targetImage.getTileBounds(cogX, cogY);
+
+        // === STEP E: RESOLVE WITH THE FINAL PAYLOAD ===
+        resolve({
+          decompressed: decompressedData,
+          width: tileBounds.width,
+          height: tileBounds.height
+        });
+
+      } catch (error) {
+        // If any step fails, reject the promise.
+        reject(error);
+      }
+    });
+
+    // 4. STORE THE PROMISE IMMEDIATELY
+    // This is the key to handling multiple, simultaneous requests for the same tile.
+    this.cogTileCache.set(cacheKey, tilePromise);
+
+    return tilePromise;
+  }
+
   async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
     const imageIndex = this.getImageIndexForZoomLevel(z);
     const targetImage = this.cog.images[imageIndex];
@@ -486,33 +591,33 @@ class CogTiles {
 
       if (targetImageTilesCountX === 1 && targetImageTilesCountY === 1) {
         if (x - originTileIndex.x === 0 && y - originTileIndex.y === 0) {
-        // console.log('reading tile 0,0 for tiles: ', x, y, z);
+          // console.log('reading tile 0,0 for tiles: ', x, y, z);
           tilesToRead.push({
-            index: [0,0],
+            index: [0, 0],
             window,
             missingLeft,
             missingTop,
           });
         } else if (window[1] > 0 && missingTop === 0) {
-        // console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
+          // console.log("pokud potrebujeme jeste snimek v nahore, protoze missing top je nula, ale obrazek by zacal az od window[1")
           tilesToRead.push({
-            index: [0,0],
+            index: [0, 0],
             window,
             missingLeft,
             missingTop,
           });
         } else if (window[0] > 0 && missingLeft === 0) {
-        // console.log("pokud potrebujeme jeste snimek v pravo, protoze missing left je nula, ale obrazek by zacal az od window[0")
+          // console.log("pokud potrebujeme jeste snimek v pravo, protoze missing left je nula, ale obrazek by zacal az od window[0")
           tilesToRead.push({
-            index: [0,0],
+            index: [0, 0],
             window,
             missingLeft,
             missingTop,
           });
         } else if (window[1] > 0 && missingTop === 0 && missingLeft === 0 && window[0] > 0) {
-        // console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
+          // console.log("pokud potrebujeme jeste snimek sikmo vlevo nahore")
           tilesToRead.push({
-            index: [0,0],
+            index: [0, 0],
             window,
             missingLeft,
             missingTop,
@@ -532,8 +637,8 @@ class CogTiles {
         // check if the COG tile with this index exists. It does not have to, meaning that this web mercator tile is covered by left and/or top tile
 
         if (defaultCOGTileIndex[0] < targetImageTilesCountX && defaultCOGTileIndex[1] < targetImageTilesCountY) {
-        // vzdy tam da dolni pravy obrazek, ale je nutne updatovat window, protoze pravy obrazek se musi nacitat od jeho horniho leveho rohu
-        // takze kdyz window[0] zacina jinak nez 0, musi se to respektovat:
+          // vzdy tam da dolni pravy obrazek, ale je nutne updatovat window, protoze pravy obrazek se musi nacitat od jeho horniho leveho rohu
+          // takze kdyz window[0] zacina jinak nez 0, musi se to respektovat:
           const defaultTileWindow = [window[0], window[1], window[2], window[3]];
 
           if (window[0] > 0) {
@@ -602,81 +707,43 @@ class CogTiles {
           }
         }
       }
-      tilesToRead.forEach((tileToRead) => {
-        // for multi band with BAND interleave
-        if (this.options.planarConfig === 2 && this.options.numOfChannels > 1) {
-          const bandIndex = 20
-          tilePromises.push(
-              this.fetchSingleBandData(targetImage, tileToRead.index, bandIndex).then((data) => ({
-                data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
-              })),
-          )
-        }
-        else {
-          // for PIXEL interleave and single band data
-          tilePromises.push(
-              targetImage.getTile(tileToRead.index[0], tileToRead.index[1]).then((data) => ({
-                data, index: tileToRead.index, window: tileToRead.window, missingLeft: tileToRead.missingLeft, missingTop: tileToRead.missingTop,
-              })),
-          );
-        }
-      });
     }
 
+    tilesToRead.forEach((tileToRead) => {
+      const bandIndex = 0; // The specific band you want to render
+
+      // Determine if we're in band-interleaved mode
+      const requestedBand = (this.options.planarConfig === 2 && this.options.numOfChannels > 1)
+          ? bandIndex
+          : null;
+
+      // Call our new "gatekeeper" function using the coordinates from tileToRead
+      const promise = this.getCachedCogTile(
+          targetImage,
+          tileToRead.index[0], // cogX
+          tileToRead.index[1], // cogY
+          requestedBand
+      )
+          .then(processedTile => {
+            // Attach the metadata that your CURRENT stitching logic needs.
+            // The `processedTile` object already contains { decompressed, width, height }.
+            return {
+              ...processedTile,
+              index: tileToRead.index,
+              window: tileToRead.window,
+              missingLeft: tileToRead.missingLeft,
+              missingTop: tileToRead.missingTop,
+            };
+          })
+          .catch(error => {
+            console.warn(`Failed to process COG tile ${tileToRead.index.join(',')}:`, error);
+            return null; // Prevent one failed tile from breaking everything
+          });
+
+      tilePromises.push(promise);
+    });
+
     const fetchedTiles = await Promise.all(tilePromises);
-
-    let decompressed: string;
-    const decompressedFormattedNew = [];
-
-    if (fetchedTiles.length > 0) {
-      fetchedTiles.forEach((fetchedTile) => {
-        switch (targetImage.compression) {
-          case 'image/jpeg':
-            // decodedNew.push(jpeg.decode(fetchedTile.data!.bytes, { useTArray: true }));
-            fetchedTile.decoded = jpeg.decode(fetchedTile.data!.bytes, { useTArray: true });
-            break;
-          case 'application/deflate':
-            // decodedNew.push(inflate(fetchedTile.data!.bytes));
-            fetchedTile.decoded = inflate(fetchedTile.data!.bytes);
-            break;
-          case 'application/lzw':
-            // decodedNew.push(this.lzw.decodeBlock(fetchedTile.data!.bytes.buffer));
-            fetchedTile.decoded = this.lzw.decodeBlock(fetchedTile.data!.bytes.buffer);
-            break;
-          default:
-            console.warn(`Unexpected compression method: ${targetImage.compression}`);
-        }
-      });
-
-      fetchedTiles.forEach((fetchedTile) => {
-        switch (this.options.format) {
-          case 'uint8':
-            // decompressedFormattedNew.push(new Uint8Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Uint8Array(fetchedTile.decoded.buffer); break;
-          case 'uint16':
-            // decompressedFormattedNew.push(new Uint16Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Uint16Array(fetchedTile.decoded.buffer); break;
-          case 'uint32':
-            // decompressedFormattedNew.push(new Uint32Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Uint32Array(fetchedTile.decoded.buffer); break;
-          case 'int8':
-            // decompressedFormattedNew.push(new Int8Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Int8Array(fetchedTile.decoded.buffer); break;
-          case 'int16':
-            // decompressedFormattedNew.push(new Int16Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Int16Array(fetchedTile.decoded.buffer); break;
-          case 'int32':
-            // decompressedFormattedNew.push(new Int32Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Int32Array(fetchedTile.decoded.buffer); break;
-          case 'float32':
-            // decompressedFormattedNew.push(new Float32Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Float32Array(fetchedTile.decoded.buffer); break;
-          case 'float64':
-            // decompressedFormattedNew.push(new Float64Array(decodedTile.buffer)); break;
-            fetchedTile.decompressed = new Float64Array(fetchedTile.decoded.buffer); break;
-          default: decompressedFormattedNew.push(null);
-        }
-      });
 
       // eslint-disable-next-line max-len
       // this will be valid for multiband data
@@ -704,18 +771,13 @@ class CogTiles {
 
       // const { meshMaxError, bounds, elevationDecoder } = this.options;
 
-      decompressed = await this.geo.getMap({
-        // rasters: [decompressedFormatted],
+      return await this.geo.getMap({
         rasters: [tileBuffer],
         width: this.tileSize,
         height: this.tileSize,
         bounds,
       }, this.options, meshMaxError);
-
-      return decompressed;
     }
-    return null;
-  }
 
   getFormat(sampleFormat: number[]|number, bitsPerSample:number[]|number) {
     // TO DO: what if there are different channels formats
