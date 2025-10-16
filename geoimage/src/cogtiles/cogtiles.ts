@@ -516,39 +516,54 @@ class CogTiles {
     return tilePromise;
   }
 
+  /**
+   * This is the main function called by deck.gl's TileLayer. Its goal is to fetch,
+   * process, and stitch together COG data to create a single raster tile that
+   * corresponds to a given Web Mercator tile coordinate (x, y, z).
+   */
   async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
+    // Select the best COG overview/pyramid for the requested zoom level.
     const imageIndex = this.getImageIndexForZoomLevel(z);
     const targetImage = this.cog.images[imageIndex];
 
     // Ensure the image is tiled
-    // TO DO is it necessary if we are using COG?
+    // TO DO is it necessary if we are using COG? -> Yes, this is a good sanity check.
     const tileWidth = targetImage.tileSize.width;
     const tileHeight = targetImage.tileSize.height;
     if (!tileWidth || !tileHeight) {
       throw new Error('The image is not tiled.');
     }
 
-    const originTileIndex = this.mercatorToTile(targetImage.origin, z);
-    // console.log('origin tile index', originTileIndex);
+    // --- START: Complex Geometry Calculation ---
+    // This entire block determines which parts of the COG are needed to render the
+    // requested Web Mercator tile by placing both on a "global pixel grid".
 
-    // Calculate the map offset between the global Web Mercator origin and the COG's origin.
-    // (Difference in map units.)
-    // if X offset is large and positive (COG is far to the right of global origin)
-    // if Y offset is large and positive (COG is far below global origin — expected)
+    // AI improvement idea: This entire geometry section is very complex and can be
+    // fragile. A more robust approach is to work in the geographic coordinate system
+    // (Web Mercator meters) first to find the precise intersection, and then convert
+    // that intersection into the COG's local pixel space. This avoids creating a
+    // "global pixel grid" and simplifies all subsequent logic.
+
+    // Find which Web Mercator tile the COG's own origin point falls into.
+    const originTileIndex = this.mercatorToTile(targetImage.origin, z);
+
+    // Calculate the distance (in meters) between the global map origin and the COG's origin.
     const offsetXMap = this.cogOrigin[0] - webMercatorOrigin[0];
     const offsetYMap = webMercatorOrigin[1] - this.cogOrigin[1];
 
+    // Get the resolution (meters per pixel) for the Web Mercator grid at this zoom.
     const tileResolution = (EARTH_CIRCUMFERENCE / tileWidth) / 2 ** z;
+    // Get the resolution of the source COG image.
     const cogResolution = this.cogResolutionLookup[imageIndex];
 
-    // Convert map offsets into pixel offsets.
+    // Convert the meter offset into a pixel offset on the "global pixel grid".
     const offsetXPixel = Math.floor(offsetXMap / tileResolution);
     const offsetYPixel = Math.floor(offsetYMap / tileResolution);
 
     const imageHeight = targetImage.size.height;
     const imageWidth = targetImage.size.width;
 
-    // approach by comparing bboxes of tile and cog image
+    // Define the bounding box of the requested Web Mercator tile in global pixel coordinates.
     const tilePixelBbox = [
       x * tileWidth,
       y * tileHeight,
@@ -556,6 +571,7 @@ class CogTiles {
       (y + 1) * tileHeight,
     ];
 
+    // Define the bounding box of the entire COG image in global pixel coordinates.
     const cogPixelBBox = [
       offsetXPixel,
       offsetYPixel,
@@ -563,20 +579,36 @@ class CogTiles {
       offsetYPixel + imageHeight,
     ];
 
+    // Find the exact intersection of the two bounding boxes in the global pixel grid.
+    // This function returns the dimensions of the overlap (`validWidth`, `validHeight`),
+    // the position of the overlap relative to the COG (`window`), and how much empty
+    // space there is on the top/left of the final tile (`missingLeft`, `missingTop`).
     const intersection = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
     const [validWidth, validHeight, window, missingLeft, missingTop] = intersection;
 
-    // 5. FETCH ALL REQUIRED TILES
+    // --- END: Complex Geometry Calculation ---
 
     const targetImageTilesCountX = targetImage.tileCount.x;
     const targetImageTilesCountY = targetImage.tileCount.y;
     let tilePromises = [];
+
+    // This array will hold a "recipe" for each COG tile we need to fetch.
     let tilesToRead = [];
+
+    // --- START: Complex Tile Discovery Logic ---
+    // The goal of this large block is to figure out which of the 1, 2, or 4
+    // possible COG tiles are needed to cover the calculated intersection area.
+
+    // AI improvement idea: This entire if/else block can be replaced by a simpler
+    // mathematical calculation. The refactored geometry logic (using a 'pixelWindow')
+    // allows you to directly calculate the range of tiles needed (tileXMin, tileXMax, etc.)
+    // and then use a simple nested `for` loop, eliminating all these conditional checks.
+
 
     // multi band
     const tilesPerBand = targetImageTilesCountX * targetImageTilesCountY;
 
-    // for perfectly aligned COGs
+    // Fast path for the simple case where the COG and Web Mercator grids are perfectly aligned.
     const isHorizontallyAligned = window[0] % tileWidth === 0 && window[2] % tileWidth === 0;
     const isVerticallyAligned = window[1] % tileHeight === 0 && window[3] % tileHeight === 0;
 
@@ -588,7 +620,7 @@ class CogTiles {
         missingTop,
       });
     } else {
-
+      // Special handling for COGs that only contain a single tile.
       if (targetImageTilesCountX === 1 && targetImageTilesCountY === 1) {
         if (x - originTileIndex.x === 0 && y - originTileIndex.y === 0) {
           // console.log('reading tile 0,0 for tiles: ', x, y, z);
@@ -624,8 +656,10 @@ class CogTiles {
           });
         }
       }
-      // for multiple tiles
+      // Main logic for multi-tile, non-aligned COGs.
       else {
+        // It calculates a "default" COG tile and then procedurally checks if it also
+        // needs the neighbors to the left, top, and top-left.
         const intersectionHeight = window[3] - window[1];
         let missingLeftLocal = missingLeft;
         let missingTopLocal = missingTop;
@@ -708,7 +742,9 @@ class CogTiles {
         }
       }
     }
+    // --- END: Complex Tile Discovery Logic ---
 
+    // This loop iterates through the "recipe list" (`tilesToRead`) and starts the fetching process.
     tilesToRead.forEach((tileToRead) => {
       const bandIndex = 0; // The specific band you want to render
 
@@ -717,7 +753,8 @@ class CogTiles {
           ? bandIndex
           : null;
 
-      // Call our new "gatekeeper" function using the coordinates from tileToRead
+      // This is the "gatekeeper" function that uses a cache to prevent re-fetching
+      // and re-processing the same COG tile multiple times.
       const promise = this.getCachedCogTile(
           targetImage,
           tileToRead.index[0], // cogX
@@ -725,8 +762,7 @@ class CogTiles {
           requestedBand
       )
           .then(processedTile => {
-            // Attach the metadata that your CURRENT stitching logic needs.
-            // The `processedTile` object already contains { decompressed, width, height }.
+            // Attaches the necessary metadata from the "recipe" for the stitching step.
             return {
               ...processedTile,
               index: tileToRead.index,
@@ -742,36 +778,45 @@ class CogTiles {
 
       tilePromises.push(promise);
     });
-
+    // Wait for all the required COG tiles to be fetched and processed in parallel.
     const fetchedTiles = await Promise.all(tilePromises);
 
-      // eslint-disable-next-line max-len
-      // this will be valid for multiband data
-      // const tileBuffer = this.createTileBuffer(this.options.format, tileWidth, this.options.numOfChannels);
+    // --- START: Stitching Logic ---
+    // This section composes the final 256x256 Web Mercator tile from the
+    // various COG tile pieces that were fetched.
+
+    // AI improvement idea: This stitching logic is complex because it relies on the
+    // `missingLeft`, `missingTop`, and `window` variables. The simplified geometry
+    // approach would lead to a simpler stitching loop that calculates its source and
+    // destination rectangles based on the master 'pixelWindow' and each tile's `cogX`/`cogY`.
+
+    // Create a blank canvas for the final tile.
       const tileBuffer = this.createTileBuffer(this.options.format, tileWidth, 1);
       // tileBuffer.fill(this.options.noDataValue);
       tileBuffer.fill(Math.floor(Math.random() * (254 - 1 + 1) + 1));
 
-      fetchedTiles.forEach((fetchedTile) => {
+    // For each fetched piece, copy its pixels into the correct place on the canvas.
+    fetchedTiles.forEach((fetchedTile) => {
         const validImageHeight = fetchedTile.window[3] - fetchedTile.window[1];
         const validImageWidth = fetchedTile.window[2] - fetchedTile.window[0];
         const randomColor = Math.floor(Math.random() * (254 - 1 + 1) + 1);
 
+      // This is the core pixel-copying logic.
         for (let row = 0; row < validImageHeight; row++) {
           for (let col = 0; col < validImageWidth; col++) {
-            // here I need to add check if the row/col value plus the missing top/left value is bigger or equal zero and smaller or equal tile width/height
+            // `missingTop` and `missingLeft` are used to position the data correctly.
             const destRow = row + fetchedTile.missingTop;
             const destCol = col + fetchedTile.missingLeft;
-            // tileBuffer[destRow*tileWidth + destCol] = (row+window[0]+col+window[1])/2;
             tileBuffer[destRow * tileWidth + destCol] = fetchedTile.decompressed[(row + fetchedTile.window[1]) * tileWidth + (col + fetchedTile.window[0])];
             // tileBuffer[destRow * tileWidth + destCol] = randomColor;
           }
         }
       });
 
-      // const { meshMaxError, bounds, elevationDecoder } = this.options;
+    // --- END: Stitching Logic ---
 
-      return await this.geo.getMap({
+    // Pass the final, stitched tile buffer to the next step in the rendering pipeline.
+    return await this.geo.getMap({
         rasters: [tileBuffer],
         width: this.tileSize,
         height: this.tileSize,
