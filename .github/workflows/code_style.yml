@@ -8,13 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, 'ci skip') && !contains(github.event.head_commit.message, 'skip ci')"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           # Ensure that git uses your token with write access to the repo
           token: ${{ secrets.GH_TOKEN }}
-
-      - name: Prepare repository
-        run: git fetch --unshallow --tags
+          fetch-depth: 0
 
       - name: Set the correct Node version using nvm
         shell: bash -l {0}
