@@ -8,20 +8,25 @@ jobs:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, 'ci skip') && !contains(github.event.head_commit.message, 'skip ci')"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
-          # Ensure that git uses your token with write access to the repo
           token: ${{ secrets.GH_TOKEN }}
+          fetch-depth: 0
 
-      - name: Prepare repository
-        run: git fetch --unshallow --tags
+      # 1. Setup Node with Yarn Caching
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
 
-      - name: Set the correct Node version using nvm
-        shell: bash -l {0}
-        run: npm i
+      # 2. Install using Yarn
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
 
+      # 3. Lint Fix
       - name: Fix Code Style
-        run: npm run lintFix
+        run: yarn lintFix
 
       - name: Commit Changes
         uses: stefanzweifel/git-auto-commit-action@v5
