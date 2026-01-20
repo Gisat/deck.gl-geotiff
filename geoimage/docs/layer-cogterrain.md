@@ -14,10 +14,10 @@ A Deck.gl-compatible layer for loading and displaying tiled COG height data
 
 ## Usage
 ### Initialize the layer
-To create CogTerrainLayer, you need an URL of your COG and also an object containing [geoimage](../geoimage/README.md) options for data processing.
+To create CogTerrainLayer, you need an URL of your COG and also an object containing [geoimage](architecture-geoimage.md) options for data processing.
 For this layer, only needed terrain options are `type`, and optionally `multiplier`, `terrainSkirtHeight`, `terrainMinValue`.
 
-You can also specify another COG as an overlay, and it's corresponding options, or just supply a tile service template url. Overlay options use all of [geoimage](../geoimage/README.md) options and work only with COG
+You can also specify another COG as an overlay, and it's corresponding options, or just supply a tile service template url. Overlay options use all of [geoimage](architecture-geoimage.md) options and work only with COG
 
 ### Example
 Import package into project and create terrain layer
@@ -41,7 +41,7 @@ const cogLayer = new CogTerrainLayer(
 );
 ```
 
-<img src = "/images/cogTerrainLayer.jpg" width = "50%" alt="COG terrain visualization.">
+<img src = "/geoimage/docs/images/cogTerrainLayer.jpg" width = "50%" alt="COG terrain visualization.">
 
 Display multiplied terrain with custom skirt height 
 (height of individual tiles edges, so there are no white spaces between individual 3D tiles) and defined minimal terrain value.
@@ -105,7 +105,7 @@ const cogLayer = new CogTerrainLayer(
 )
 ```
 
-<img src = "/images/cogTerrainLayer_overlay.jpg" width = "50%"  alt="COG terrain visualization with satellite imagery overlay.">
+<img src = "/geoimage/docs/images/cogTerrainLayer_overlay.jpg" width = "50%"  alt="COG terrain visualization with satellite imagery overlay.">
 
 Display terrain with stylized COG overlay
 ```typescript
