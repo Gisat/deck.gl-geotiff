@@ -1,6 +1,6 @@
 # @gisatcz/deckgl-geolib
 
-<p align="right">
+<p style="text-align: right;">
   <a href="https://www.npmjs.com/package/@gisatcz/deckgl-geolib">
     <img src="https://img.shields.io/npm/v/@gisatcz/deckgl-geolib.svg?style=flat-square" alt="version" />
   </a>
@@ -10,8 +10,7 @@
 
 This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery/heatmaps and the `CogTerrainLayer` for 3D terrain meshes.
 
-<img src="docs/images/ManillaCogHeatmap.png" width="100%" alt="Heatmap Example">
-
+![Heatmap Example](docs/images/ManillaCogHeatmap.png)
 
 ## Features
 
@@ -53,8 +52,8 @@ const cogLayer = new CogBitmapLayer({
 ```
 
 > **Detailed Documentation:**
-> * [👉 API Reference & Examples](docs/layer-cogbitmap.md)
-> * [👉 Visualization Options (GeoImage Core)](docs/architecture-geoimage.md)
+> * [API Reference & Examples](docs/layer-cogbitmap.md)
+> * [Visualization Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ### 2. CogTerrainLayer
 
@@ -77,9 +76,9 @@ const cogLayer = new CogTerrainLayer({
 });
 ```
 
-> **📘 Detailed Documentation:**
-> * [👉 API Reference & Examples](docs/layer-cogterrain.md)
-> * [👉 Terrain Processing Options (GeoImage Core)](docs/architecture-geoimage.md)
+> **Detailed Documentation:**
+> * [API Reference & Examples](docs/layer-cogterrain.md)
+> * [Terrain Processing Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ## Data Preparation
 
@@ -90,7 +89,7 @@ For this library to work efficiently, your COG must be Web-Optimized and project
 2.  **Tiling:** 256x256 tiles
 3.  **Compression:** DEFLATE is recommended
 
-[👉 Read the full Data Preparation Guide](docs/dataPreparation.md)
+[Read the full Data Preparation Guide](docs/dataPreparation.md)
 *(Includes standard commands for `rio-cogeo`)*
 
 
@@ -116,10 +115,10 @@ yarn start
 
 ### Technical Documentation
 For developers contributing to the core logic:
-* [GeoImage Internal Logic](docs/architecture-geoimage.md) - How the image processing and configuration works.
-* [CogTiles Architecture](docs/architecture-cogtiles.md) - How the tiling grid is calculated.
+* [GeoImage Internal Logic](docs/architecture-geoimage.md) – How the image processing and configuration work.
+* [CogTiles Architecture](docs/architecture-cogtiles.md) – How the tiling grid is calculated.
 
 
-<p align="center">
-  <sub>Maintained by <a href="http://gisat.cz">Gisat</a></sub>
+<p style="text-align: center;">
+  <sub>Maintained by <a href="https://gisat.cz">Gisat</a></sub>
 </p>
