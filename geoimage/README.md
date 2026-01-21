@@ -51,9 +51,9 @@ const cogLayer = new CogBitmapLayer({
 });
 ```
 
-> **Detailed Documentation:**
-> * [API Reference & Examples](docs/layer-cogbitmap.md)
-> * [Visualization Options (GeoImage Core)](docs/architecture-geoimage.md)
+Detailed Documentation:
+* [API Reference & Examples](docs/layer-cogbitmap.md)
+* [Visualization Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ### 2. CogTerrainLayer
 
@@ -76,15 +76,15 @@ const cogLayer = new CogTerrainLayer({
 });
 ```
 
-> **Detailed Documentation:**
-> * [API Reference & Examples](docs/layer-cogterrain.md)
-> * [Terrain Processing Options (GeoImage Core)](docs/architecture-geoimage.md)
+Detailed Documentation:
+* [API Reference & Examples](docs/layer-cogterrain.md)
+* [Terrain Processing Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ## Data Preparation
 
 For this library to work efficiently, your COG must be Web-Optimized and projected in Web Mercator (EPSG:3857).
 
-**Quick Checklist:**
+Quick Checklist:
 1.  **Projection:** Web Mercator EPSG:3857
 2.  **Tiling:** 256x256 tiles
 3.  **Compression:** DEFLATE is recommended
@@ -97,8 +97,8 @@ For this library to work efficiently, your COG must be Web-Optimized and project
 
 This repository is a monorepo containing the core library and example applications.
 
-* **`geoimage/`**: The core library source code.
-* **`example/`**: A React application for testing the layers.
+* `geoimage/`: The core library source code.
+* `example/`: A React application for testing the layers.
 
 ### Building Locally
 
