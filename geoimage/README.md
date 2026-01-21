@@ -10,17 +10,15 @@
 
 This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery/heatmaps and the `CogTerrainLayer` for 3D terrain meshes.
 
-<img src="geoimage/docs/images/ManillaCogHeatmap.png" width="100%" alt="Heatmap Example">
+<img src="docs/images/ManillaCogHeatmap.png" width="100%" alt="Heatmap Example">
 
----
 
 ## Features
 
-- **COG Rendering**: Efficiently loads and displays Cloud-Optimized GeoTIFF files directly without a backend server.
-- **Bitmap and Terrain Layers**: Supports visualizing both bitmap and elevation data.
-- **Customizable Rendering**: Allows custom color scales, multichannel support, opacity control, and flexible geographic bounds.
+- **COG Rendering**: Efficiently loads and displays COG files directly without a backend server.
+- **Bitmap and Terrain Layers**: Supports visualizing both raster and elevation data.
+- **Customizable Rendering**: Allows custom color scales, multichannel support, and opacity control.
 
----
 
 ## Installation
 
@@ -36,17 +34,14 @@ For more information, visit the [npm package page](https://www.npmjs.com/package
 
 ## Usage
 
-Import package into project:
-
-```typescript
-import { CogBitmapLayer, CogTerrainLayer } from '@gisatcz/deckgl-geolib';
-```
 
 ### 1. CogBitmapLayer
 
 Used for displaying 2D rasters (satellite imagery, analysis results, heatmaps).
 
 ```typescript
+import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
+
 const cogLayer = new CogBitmapLayer({
   id: 'cog_bitmap_name',
   rasterData:  'cog_bitmap_data_url.tif',
@@ -57,12 +52,9 @@ const cogLayer = new CogBitmapLayer({
 });
 ```
 
-
-> 👉 for more information and examples refer to the [CogBitmapLayer](geoimage/docs/layer-cogbitmap.md).
->
-> **💡 Important Configuration:** `cogBitmapOptions` supports powerful processing features like **clipping ranges**, **custom color scales**, and **channel selection**.
->
-> **[👉 See the Full List of Options in the GeoImage Architecture Guide](geoimage/docs/architecture-geoimage.md)**
+> **Detailed Documentation:**
+> * [👉 API Reference & Examples](docs/layer-cogbitmap.md)
+> * [👉 Visualization Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ### 2. CogTerrainLayer
 
@@ -70,6 +62,8 @@ Used for displaying 3D terrain from elevation data.
 
 
 ```typescript
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+
 const cogLayer = new CogTerrainLayer({
   id: 'cog_terrain_name',
   elevationData:  'cog_terrain_data_url.tif',
@@ -82,24 +76,23 @@ const cogLayer = new CogTerrainLayer({
   }
 });
 ```
-> 👉 for more information and examples refer to the [CogTerrainLayer](geoimage/docs/layer-cogterrain.md).
----
+
+> **📘 Detailed Documentation:**
+> * [👉 API Reference & Examples](docs/layer-cogterrain.md)
+> * [👉 Terrain Processing Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ## Data Preparation
 
-For this library to work efficiently, your GeoTIFFs must be Cloud-Optimized (COG) and projected in **Web Mercator (EPSG:3857)**.
+For this library to work efficiently, your COG must be Web-Optimized and projected in Web Mercator (EPSG:3857).
 
 **Quick Checklist:**
-1.  **Projection:** EPSG:3857 (Spherical Mercator).
-2.  **Tiling:** 256x256 internal tiles.
-3.  **Compression:** DEFLATE is recommended.
+1.  **Projection:** Web Mercator EPSG:3857
+2.  **Tiling:** 256x256 tiles
+3.  **Compression:** DEFLATE is recommended
 
-**[👉 Read the full Data Preparation Guide](geoimage/docs/dataPreparation.md)**
+[👉 Read the full Data Preparation Guide](docs/dataPreparation.md)
 *(Includes standard commands for `rio-cogeo`)*
 
-**[👉 Guide for Hosting on S3](geoimage/docs/guideForS3.md)**
-
----
 
 ## Architecture & Development
 
@@ -123,10 +116,9 @@ yarn start
 
 ### Technical Documentation
 For developers contributing to the core logic:
-* [GeoImage Internal Logic](geoimage/docs/architecture-geoimage.md) - How the image processing and configuration works.
-* [CogTiles Architecture](geoimage/docs/architecture-cogtiles.md) - How the tiling grid is calculated.
+* [GeoImage Internal Logic](docs/architecture-geoimage.md) - How the image processing and configuration works.
+* [CogTiles Architecture](docs/architecture-cogtiles.md) - How the tiling grid is calculated.
 
----
 
 <p align="center">
   <sub>Maintained by <a href="http://gisat.cz">Gisat</a></sub>
