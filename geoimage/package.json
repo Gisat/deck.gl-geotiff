@@ -32,8 +32,8 @@
   "scripts": {
     "rollup": "rollup -c",
     "start": "yarn && yarn rollup",
-    "lint": "eslint 'src/**/*.{js, ts,tsx}' -c ./.eslintrc.cjs",
-    "lintFix": "eslint 'src/**/*.{js, ts,tsx}' -c ./.eslintrc.cjs --fix"
+    "lint": "eslint 'src/**/*.{js,ts,tsx}' -c ./.eslintrc.cjs",
+    "lintFix": "eslint 'src/**/*.{js,ts,tsx}' -c ./.eslintrc.cjs --fix"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.1",

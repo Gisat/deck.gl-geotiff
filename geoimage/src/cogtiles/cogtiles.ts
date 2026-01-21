@@ -227,8 +227,6 @@ class CogTiles {
     const intersecion = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
     const [validWidth, validHeight, window, missingLeft, missingTop] = intersecion;
 
-
-
     // Read the raster data for the tile window with shifted origin.
     if (missingLeft > 0 || missingTop > 0 || validWidth < tileWidth || validHeight < tileHeight) {
       // Prepare the final tile buffer and fill it with noDataValue.
@@ -364,7 +362,6 @@ class CogTiles {
     return parsed;
   }
 
-
   /**
    * Retrieves the number of channels (samples per pixel) in a GeoTIFF image.
    *
@@ -374,7 +371,6 @@ class CogTiles {
   getNumberOfChannels(image) {
     return image.getSamplesPerPixel();
   }
-
 
   /**
    * Calculates the intersection between a tile bounding box and a COG bounding box,
@@ -428,8 +424,6 @@ class CogTiles {
       missingTop,
     ];
   }
-
-
 
   /**
    * Retrieves the PlanarConfiguration value from a GeoTIFF image.
