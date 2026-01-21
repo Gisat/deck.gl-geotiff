@@ -38,7 +38,7 @@ import {
   _Tile2DHeader as Tile2DHeader, _getURLFromTemplate as getURLFromTemplate, NonGeoBoundingBox,
 } from '@deck.gl/geo-layers';
 
-import CogTiles from '../cogtiles/cogtiles.ts';
+import CogTiles from '../core/CogTiles.ts';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 

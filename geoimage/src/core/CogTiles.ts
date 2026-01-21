@@ -6,7 +6,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 import { worldToLngLat } from '@math.gl/web-mercator';
 
 // Bitmap styling
-import GeoImage, { GeoImageOptions } from '../geoimage/geoimage.ts';
+import GeoImage, { GeoImageOptions } from './GeoImage.ts';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -237,7 +237,7 @@ class CogTiles {
       const validRasterData = await targetImage.readRasters({ window });
 
       // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
-      // I think this is less practical then the commented solution above, but I do it so it works with the code in geoimage.ts in deck.gl-geoimage in function getColorValue.
+      // I think this is less practical then the commented solution above, but I do it so it works with the code in GeoImage.ts in deck.gl-geoimage in function getColorValue.
       const validImageData = Array(validRasterData.length * validRasterData[0].length);
       validImageData.fill(this.options.noDataValue);
 

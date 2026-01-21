@@ -6,7 +6,7 @@ import chroma from 'chroma-js';
 import Martini from '@mapbox/martini';
 import { getMeshBoundingBox } from '@loaders.gl/schema';
 import { addSkirt } from './helpers/skirt.ts';
-import Delatin from './delatin/index.ts';
+import Delatin from './delatin';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 

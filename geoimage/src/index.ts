@@ -1,12 +1,10 @@
-// noinspection JSUnusedGlobalSymbols
+// src/index.ts
 
-// Export specific named layers directly
+// 1. Export from the Layers Barrel
 // eslint-disable-next-line import/extensions
 export { CogBitmapLayer, CogTerrainLayer } from './layers/index';
 
-// Re-export default exports from sub-modules as named exports
+// 2. Export from the Core Barrel
+// This tells the linter: "See? I AM using those exports from /core/index.ts!"
 // eslint-disable-next-line import/extensions
-export { default as cogtiles } from './cogtiles/cogtiles';
-
-// eslint-disable-next-line import/extensions
-export { default as GeoImage } from './geoimage/geoimage';
+export { CogTiles, GeoImage } from './core/index';
