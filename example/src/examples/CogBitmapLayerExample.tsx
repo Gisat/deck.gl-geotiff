@@ -5,7 +5,7 @@ import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { MapView } from '@deck.gl/core';
 import chroma from 'chroma-js';
-import CogBitmapLayer from '@gisatcz/deckgl-geolib/src/cogbitmaplayer/CogBitmapLayer';
+import { CogBitmapLayer } from '@gisatcz/deckgl-geolib/src';
 
 const cogLayerDefinition = {
   id: 'CogBitmapLayer',
