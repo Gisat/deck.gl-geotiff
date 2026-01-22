@@ -9,7 +9,7 @@
   "homepage": "https://github.com/gisat/deck.gl-geotiff/tree/master/geoimage#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gisat/deck.gl-geotiff.git",
+    "url": "git+https://github.com/gisat/deck.gl-geotiff.git",
     "directory": "geoimage"
   },
   "bugs": {
