@@ -211,7 +211,7 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
       // const terrain = this.loadTerrain(props as TerrainLoadProps);
       // this.setState({ terrain });
     }
-    
+
     // Update the useChannel option for bitmapCogTiles when cogBitmapOptions.useChannel changes.
     // This ensures that the correct channel is used for rendering, but directly modifying the state
     // object in this way is not ideal and may need refactoring in the future to follow a more
@@ -248,7 +248,6 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
         tile: Tile2DHeader<TextureSource>;
       },
   ) {
-    
     const SubLayerClass = this.getSubLayerClass('image', BitmapLayer);
     const { blurredTexture } = this.state.bitmapCogTiles.options;
 

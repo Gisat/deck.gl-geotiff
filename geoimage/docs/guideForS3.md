@@ -19,11 +19,11 @@ Navigate to *Tabs -> New Tab* and create *New Site*.
 - access key ID is the obtained *key*
 - secret access key is the obtained *secret*
 
-    <img src = "/images/winscp_new_site_1.jpg" width = "50%">
+    <img src = "/geoimage/docs/images/winscp_new_site_1.jpg" width = "50%">
 
 - Go to *Advanced -> Directories* and set Remote directory to `gisat-gis`
 
-    <img src = "/images/winscp_new_site_2.jpg" width = "50%">
+    <img src = "/geoimage/docs/images/winscp_new_site_2.jpg" width = "50%">
 
 ## Step 2: Upload data
 Now, you should see window with two menus; on the left menu you can see your local directories, 
@@ -32,7 +32,7 @@ drag and drop it to the desired folder on the S3 server.
 
 :exclamation: You must update visibility in file *Properties* (right click on the uploaded file) that it is readable for everyone:
 
-  <img src = "/images/winscp_new_site_3.jpg" width = "30%">
+  <img src = "/geoimage/docs/images/winscp_new_site_3.jpg" width = "30%">
 
 ## Step 3: Get link
 To get the final URL data, modify *project_folder* based on your directory structure and *cog_file_name* based on your COG file:
