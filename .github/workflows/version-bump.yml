@@ -1,5 +1,4 @@
 name: Automatic version bump
-description: Automatically bumps the version in package.json and creates a new tag.
 on:
   push:
     branches:
@@ -12,7 +11,6 @@ jobs:
   create-version-tag:
     if: ${{ !contains(github.event.head_commit.message, '#skip_next_version') }}
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
@@ -40,29 +38,22 @@ jobs:
           PRERELEASE: ${{ env.PRERELEASE }}
           PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
           DEFAULT_BUMP: patch
-          DRY_RUN: true
+          DRY_RUN: true # This stays DRY to just calculate the number
 
       - name: Update version in package.json
         run: |
           cd geoimage
           git config --local user.email "panterobot@gisat.cz"
           git config --local user.name "github-actions[bot]"
-          # Use --legacy-peer-deps to ignore the rollup conflict 
-          # Use --no-git-tag-version to let the next step handle the actual tag
-          npm version ${{ steps.next-version.outputs.new_tag }} -m "Set package.json version to ${{ steps.next-version.outputs.new_tag }} #skip_next_version" --legacy-peer-deps --no-git-tag-version
+          # This command updates the file AND creates the git tag locally
+          npm version ${{ steps.next-version.outputs.new_tag }} -m "Set package.json version to ${{ steps.next-version.outputs.new_tag }} #skip_next_version" --legacy-peer-deps
 
       - name: Push changes
         uses: ad-m/github-push-action@v0.8.0
         with:
           github_token: ${{ secrets.GH_TOKEN }}
           branch: ${{ github.ref }}
+          tags: true # This pushes the local tag created by npm version to GitHub
 
-      - name: Create version tag
-        uses: anothrNick/github-tag-action@1.71.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          WITH_V: true
-          PRERELEASE: ${{ env.PRERELEASE }}
-          PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
-          DEFAULT_BUMP: patch
-          DRY_RUN: false
+      # DELETE THE "Create version tag" STEP THAT WAS HERE.
+      # npm version + push tags: true already did the job.
