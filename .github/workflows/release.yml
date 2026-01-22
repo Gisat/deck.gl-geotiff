@@ -40,4 +40,4 @@ jobs:
           cd geoimage
           # We call auto shipit normally. 
           # The underlying NPM client will detect the OIDC token automatically.
-          npx auto shipit --dry-run
+          npx auto shipit
