@@ -47,7 +47,9 @@ jobs:
           cd geoimage
           git config --local user.email "panterobot@gisat.cz"
           git config --local user.name "github-actions[bot]"
-          npm version ${{ steps.next-version.outputs.new_tag }} -m "Set package.json version to ${{ steps.next-version.outputs.new_tag }} #skip_next_version"
+          # Use --legacy-peer-deps to ignore the rollup conflict 
+          # Use --no-git-tag-version to let the next step handle the actual tag
+          npm version ${{ steps.next-version.outputs.new_tag }} -m "Set package.json version to ${{ steps.next-version.outputs.new_tag }} #skip_next_version" --legacy-peer-deps --no-git-tag-version
 
       - name: Push changes
         uses: ad-m/github-push-action@v0.8.0
