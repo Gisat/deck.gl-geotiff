@@ -1,0 +1,66 @@
+name: Automatic version bump
+description: Automatically bumps the version in package.json and creates a new tag.
+on:
+  push:
+    branches:
+      - master
+      - main
+      - rc
+      - dev
+
+jobs:
+  create-version-tag:
+    if: ${{ !contains(github.event.head_commit.message, '#skip_next_version') }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          ref: ${{ github.head_ref }}
+
+      - name: Set ENVs
+        run: |
+          echo "PRERELEASE_SUFFIX=${{ github.head_ref || github.ref_name }}" >> "$GITHUB_ENV"
+          if [[ "${{ github.head_ref || github.ref_name }}" == "dev" ]]; then echo "PRERELEASE=true" >> "$GITHUB_ENV"; fi
+          if [[ "${{ github.head_ref || github.ref_name }}" == "rc" ]]; then echo "PRERELEASE=true" >> "$GITHUB_ENV"; fi
+          if [[ "${{ github.head_ref || github.ref_name }}" == "master" ]]; then echo "PRERELEASE=false" >> "$GITHUB_ENV"; fi
+          if [[ "${{ github.head_ref || github.ref_name }}" == "main" ]]; then echo "PRERELEASE=false" >> "$GITHUB_ENV"; fi
+
+      - name: Get next version
+        id: next-version
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          WITH_V: true
+          PRERELEASE: ${{ env.PRERELEASE }}
+          PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
+          DEFAULT_BUMP: patch
+          DRY_RUN: true
+
+      - name: Update version in package.json
+        run: |
+          cd geoimage
+          git config --local user.email "panterobot@gisat.cz"
+          git config --local user.name "github-actions[bot]"
+          npm version ${{ steps.next-version.outputs.new_tag }} -m "Set package.json version to ${{ steps.next-version.outputs.new_tag }} #skip_next_version"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.8.0
+        with:
+          github_token: ${{ secrets.GH_TOKEN }}
+          branch: ${{ github.ref }}
+
+      - name: Create version tag
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          WITH_V: true
+          PRERELEASE: ${{ env.PRERELEASE }}
+          PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
+          DEFAULT_BUMP: patch
+          DRY_RUN: false
