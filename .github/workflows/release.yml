@@ -2,41 +2,41 @@ name: Release
 
 on:
   push:
-    branches:
-      - master
-      - dev
+    tags:
+      - 'v*.*.*'          # prod releases, e.g. v1.2.3
+      - 'v*.*.*-dev.*'    # dev releases, e.g. v1.2.3-dev.4
 
 jobs:
-  release:
+  build-and-publish:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, 'ci skip') && !contains(github.event.head_commit.message, 'skip ci')"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Ensure that git uses your token with write access to the repo
-          token: ${{ secrets.GH_TOKEN }}
+    permissions:
+      contents: read
+      id-token: write    # Required for npm Trusted Publishers (OIDC)
 
-      - name: Prepare repository
-        run: git fetch --unshallow --tags
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 'lts/*'
           cache: 'yarn'
-          registry-url: 'https://registry.npmjs.org'
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # UPDATED: Now uses yarn for consistency
-      - name: Build
+      - name: Build package
         run: yarn build
 
-      - name: Create Release / Publish
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish dev tag to npm (Trusted Publishers)
+        if: contains(github.ref_name, '-dev.')
         run: |
           cd geoimage
-          npx auto shipit
+          npm publish --provenance --access public --tag dev
+
+      - name: Publish latest to npm (Trusted Publishers)
+        if: ${{ !contains(github.ref_name, '-dev.') }}
+        run: |
+          cd geoimage
+          npm publish --provenance --access public
