@@ -15,9 +15,9 @@ import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 // import GL from '@luma.gl/constants';
 // GL.GL.CLIP_DISTANCE0_WEBGL
 import type { MeshAttributes } from '@loaders.gl/schema';
-import CogTiles from '../cogtiles/cogtiles.ts';
+import CogTiles from '../core/CogTiles.ts';
 
-import { GeoImageOptions } from '../geoimage/geoimage.ts';
+import { GeoImageOptions } from '../core/GeoImage.ts';
 // import { TileBoundingBox, ZRange } from '../cogterrainlayer/CogTerrainLayer.js';
 export type TileBoundingBox = NonGeoBoundingBox | GeoBoundingBox;
 

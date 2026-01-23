@@ -1,11 +1,10 @@
-import CogBitmapLayer from './cogbitmaplayer/CogBitmapLayer.ts';
-import CogTerrainLayer from './cogterrainlayer/CogTerrainLayer.ts';
-import cogtiles from './cogtiles/cogtiles.ts';
-import GeoImage from './geoimage/geoimage.ts';
+// src/index.ts
 
-export default {
-  CogBitmapLayer,
-  CogTerrainLayer,
-  cogtiles,
-  GeoImage,
-};
+// 1. Export from the Layers Barrel
+// eslint-disable-next-line import/extensions
+export { CogBitmapLayer, CogTerrainLayer } from './layers/index';
+
+// 2. Export from the Core Barrel
+// This tells the linter: "See? I AM using those exports from /core/index.ts!"
+// eslint-disable-next-line import/extensions
+export { CogTiles, GeoImage } from './core/index';

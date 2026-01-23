@@ -4,7 +4,7 @@ import { InitialViewStateProps } from '@deck.gl/core/lib/deck';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { MapView } from '@deck.gl/core';
-import CogBitmapLayer from '@gisatcz/deckgl-geolib/src/cogbitmaplayer/CogBitmapLayer';
+import { CogBitmapLayer } from '@gisatcz/deckgl-geolib/src';
 
 const cogLayerDefinition = {
   id: 'CogBitmapLayer',
@@ -78,7 +78,7 @@ function CogMultibandExample() {
     latitude: 1,
     zoom: 10,
   };
-  
+
   const setBand = (isBand2: boolean)=> {
     const cogBitmapOptions: CogBitmapOptions = {
         ...cogLayerDefinition.cogBitmapOptions,
