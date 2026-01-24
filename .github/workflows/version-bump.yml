@@ -38,7 +38,7 @@ jobs:
           PRERELEASE: ${{ env.PRERELEASE }}
           PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
           DEFAULT_BUMP: patch
-          DRY_RUN: true # This stays DRY to just calculate the number
+          DRY_RUN: false
 
       - name: Update version in package.json
         run: |
