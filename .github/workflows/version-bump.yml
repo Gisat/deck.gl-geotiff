@@ -33,7 +33,6 @@ jobs:
         id: next-version
         uses: anothrNick/github-tag-action@1.71.0
         env:
-          INITIAL_VERSION: 1.12.0-dev.11
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           WITH_V: true
           PRERELEASE: ${{ env.PRERELEASE }}
