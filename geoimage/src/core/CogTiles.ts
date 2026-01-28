@@ -277,13 +277,13 @@ class CogTiles {
       validImageData.fill(this.options.noDataValue);
 
       // Place the valid pixel data into the tile buffer.
-      for (let band = 0; band < validRasterData.length; band++) {
-        for (let row = 0; row < readHeight; row++) {
+      for (let band = 0; band < validRasterData.length; band += 1) {
+        for (let row = 0; row < readHeight; row += 1) {
           const destRow = missingTop + row;
           const destRowOffset = destRow * TILE_SIZE;
           const srcRowOffset = row * validRasterData.width;
 
-          for (let col = 0; col < readWidth; col++) {
+          for (let col = 0; col < readWidth; col += 1) {
             // Compute the destination position in the tile buffer.
             // We shift by the number of missing pixels (if any) at the top/left.
             const destCol = missingLeft + col;
@@ -433,59 +433,6 @@ class CogTiles {
    */
   getNumberOfChannels(image) {
     return image.getSamplesPerPixel();
-  }
-
-  /**
-   * Calculates the intersection between a tile bounding box and a COG bounding box,
-   * returning the intersection window in image pixel space (relative to COG offsets),
-   * along with how much blank space (nodata) appears on the left and top of the tile.
-   *
-   * @param {number[]} tileBbox - Tile bounding box: [minX, minY, maxX, maxY]
-   * @param {number[]} cogBbox - COG bounding box: [minX, minY, maxX, maxY]
-   * @param {number} offsetXPixel - X offset of the COG origin in pixel space
-   * @param {number} offsetYPixel - Y offset of the COG origin in pixel space
-   * @param {number} tileSize - Size of the tile in pixels (default: 256)
-   * @returns {[number, number, number[] | null, number, number]}
-   *   An array containing:
-   *   - width of the intersection
-   *   - height of the intersection
-   *   - pixel-space window: [startX, startY, endX, endY] or null if no overlap
-   *   - missingLeft: padding pixels on the left
-   *   - missingTop: padding pixels on the top
-   */
-  getIntersectionBBox(tileBbox, cogBbox, offsetXPixel = 0, offsetYPixel = 0, tileSize = 256) {
-    const interLeft = Math.max(tileBbox[0], cogBbox[0]);
-    const interTop = Math.max(tileBbox[1], cogBbox[1]);
-    const interRight = Math.min(tileBbox[2], cogBbox[2]);
-    const interBottom = Math.min(tileBbox[3], cogBbox[3]);
-
-    const width = Math.max(0, interRight - interLeft);
-    const height = Math.max(0, interBottom - interTop);
-
-    let window = null;
-    let missingLeft = 0;
-    let missingTop = 0;
-
-    if (width > 0 && height > 0) {
-      window = [
-        interLeft - offsetXPixel,
-        interTop - offsetYPixel,
-        interRight - offsetXPixel,
-        interBottom - offsetYPixel,
-      ];
-
-      // Padding from the tile origin to valid data start
-      missingLeft = interLeft - tileBbox[0];
-      missingTop = interTop - tileBbox[1];
-    }
-
-    return [
-      width,
-      height,
-      window,
-      missingLeft,
-      missingTop,
-    ];
   }
 
   /**
