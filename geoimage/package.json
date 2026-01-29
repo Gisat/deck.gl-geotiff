@@ -1,6 +1,6 @@
 {
   "name": "@gisatcz/deckgl-geolib",
-  "version": "1.12.0-dev.12",
+  "version": "1.12.0-dev.13",
   "description": "Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data",
   "keywords": ["deck.gl", "geotiff", "webgl", "gis", "visualization", "cog"],
   "private": false,
@@ -18,7 +18,14 @@
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "type": "module",
-  "types": "dist/index.d.ts",
+  "types": "dist/esm/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
   "sideEffects": false,
   "files": [
     "dist"
