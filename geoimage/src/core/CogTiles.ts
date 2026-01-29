@@ -185,55 +185,90 @@ class CogTiles {
     const imageIndex = this.getImageIndexForZoomLevel(zoom);
     const targetImage = await this.cog.getImage(imageIndex);
 
-    // Ensure the image is tiled
+    // 1. Validation: Ensure the image is tiled
     const tileWidth = targetImage.getTileWidth();
     const tileHeight = targetImage.getTileHeight();
     if (!tileWidth || !tileHeight) {
-      throw new Error('The image is not tiled.');
+      throw new Error(
+        'GeoTIFF Error: The provided image is not tiled. '
+        + 'Please use "rio cogeo create --web-optimized" to fix this.',
+      );
     }
 
-    // Calculate the map offset between the global Web Mercator origin and the COG's origin.
-    // (Difference in map units.)
-    // if X offset is large and positive (COG is far to the right of global origin)
-    // if Y offset is large and positive (COG is far below global origin — expected)
-    const offsetXMap = this.cogOrigin[0] - webMercatorOrigin[0];
-    const offsetYMap = webMercatorOrigin[1] - this.cogOrigin[1];
+    // --- STEP 1: CALCULATE BOUNDS IN METERS ---
 
-    const tileResolution = (EARTH_CIRCUMFERENCE / tileWidth) / 2 ** zoom;
-    const cogResolution = this.cogResolutionLookup[imageIndex];
-
-    // Convert map offsets into pixel offsets.
-    const offsetXPixel = Math.floor(offsetXMap / tileResolution);
-    const offsetYPixel = Math.floor(offsetYMap / tileResolution);
-
+    // 2. Get COG Metadata (image = COG)
+    const imageResolution = this.cogResolutionLookup[imageIndex];
     const imageHeight = targetImage.getHeight();
     const imageWidth = targetImage.getWidth();
+    const [imgOriginX, imgOriginY] = this.cogOrigin;
 
-    // approach by comparing bboxes of tile and cog image
-    const tilePixelBbox = [
-      tileX * tileWidth,
-      tileY * tileHeight,
-      (tileX + 1) * tileWidth,
-      (tileY + 1) * tileHeight,
-    ];
+    // 3. Define Web Mercator Constants
+    // We use the class property tileSize (usually 256) as the ground truth for grid calculations
+    const TILE_SIZE = this.tileSize;
+    const ORIGIN_X = webMercatorOrigin[0];
+    const ORIGIN_Y = webMercatorOrigin[1];
 
-    const cogPixelBBox = [
-      offsetXPixel,
-      offsetYPixel,
-      offsetXPixel + imageWidth,
-      offsetYPixel + imageHeight,
-    ];
+    // 4. Calculate Tile BBox in World Meters
+    // This defines where the map expects the tile to be physically located
+    const tileGridResolution = (EARTH_CIRCUMFERENCE / TILE_SIZE) / (2 ** zoom);
 
-    const intersecion = this.getIntersectionBBox(tilePixelBbox, cogPixelBBox, offsetXPixel, offsetYPixel, tileWidth);
-    const [validWidth, validHeight, window, missingLeft, missingTop] = intersecion;
+    const tileMinXMeters = ORIGIN_X + (tileX * TILE_SIZE * tileGridResolution);
+    const tileMaxYMeters = ORIGIN_Y - (tileY * TILE_SIZE * tileGridResolution);
+    // Note: We don't strictly need MaxX/MinY meters for the start calculation,
+    // but they are useful if debugging the full meter footprint.
 
-    // Read the raster data for the tile window with shifted origin.
-    if (missingLeft > 0 || missingTop > 0 || validWidth < tileWidth || validHeight < tileHeight) {
-      // Prepare the final tile buffer and fill it with noDataValue.
+    // --- STEP 2: CONVERT TO PIXEL COORDINATES ---
+
+    // 5. Calculate precise floating-point start position relative to the image
+    const windowMinX = (tileMinXMeters - imgOriginX) / imageResolution;
+    const windowMinY = (imgOriginY - tileMaxYMeters) / imageResolution;
+
+    // 6. Snap to Integer Grid (The "Force 256" Fix)
+    // We round the start position to align with the nearest pixel.
+    // Crucially, we calculate endX/endY by adding tileSize to startX/startY.
+    // This guarantees the window is exactly 256x256, preventing "off-by-one" (257px) errors.
+    const startX = Math.round(windowMinX);
+    const startY = Math.round(windowMinY);
+    const endX = startX + TILE_SIZE;
+    const endY = startY + TILE_SIZE;
+
+    // --- STEP 3: CALCULATE INTERSECTION ---
+
+    // 7. Clamp the read window to the actual image dimensions
+    // This defines the "Safe" area we can actually read from the file.
+    const validReadX = Math.max(0, startX);
+    const validReadY = Math.max(0, startY);
+    const validReadMaxX = Math.min(imageWidth, endX);
+    const validReadMaxY = Math.min(imageHeight, endY);
+
+    const readWidth = validReadMaxX - validReadX;
+    const readHeight = validReadMaxY - validReadY;
+
+    // CHECK: If no overlap, return empty
+    if (readWidth <= 0 || readHeight <= 0) {
+      return [this.createEmptyTile()];
+    }
+
+    // 8. Calculate Offsets (Padding)
+    // "missingLeft" is how many blank pixels we need to insert before the image data starts.
+    // Logic: If we wanted to read from -50 (startX), but clamped to 0 (validReadX),
+    // we are missing the first 50 pixels.
+    const missingLeft = validReadX - startX;
+    const missingTop = validReadY - startY;
+    const window = [validReadX, validReadY, validReadMaxX, validReadMaxY];
+
+    // --- STEP 4: READ AND COMPOSITE ---
+
+    // Case A: Partial Overlap (Padding or Cropping required)
+    // If the tile is hanging off the edge, we need to manually reconstruct it.
+    if (missingLeft > 0 || missingTop > 0 || readWidth < tileWidth || readHeight < tileHeight) {
+      /// Initialize a temporary buffer for a single band (filled with NoData)
+      // We will reuse this buffer for each band to save memory allocations.
       const tileBuffer = this.createTileBuffer(this.options.format, tileWidth);
       tileBuffer.fill(this.options.noDataValue);
 
-      // if the valid window is smaller than tile size, it gets the image size width and height, thus validRasterData.width must be used as below
+      // if the valid window is smaller than the tile size, it gets the image size width and height, thus validRasterData.width must be used as below
       const validRasterData = await targetImage.readRasters({ window });
 
       // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
@@ -242,15 +277,19 @@ class CogTiles {
       validImageData.fill(this.options.noDataValue);
 
       // Place the valid pixel data into the tile buffer.
-      for (let band = 0; band < validRasterData.length; band++) {
-        for (let row = 0; row < validHeight; row++) {
-          for (let col = 0; col < validWidth; col++) {
+      for (let band = 0; band < validRasterData.length; band += 1) {
+        for (let row = 0; row < readHeight; row += 1) {
+          const destRow = missingTop + row;
+          const destRowOffset = destRow * TILE_SIZE;
+          const srcRowOffset = row * validRasterData.width;
+
+          for (let col = 0; col < readWidth; col += 1) {
             // Compute the destination position in the tile buffer.
             // We shift by the number of missing pixels (if any) at the top/left.
-            const destRow = missingTop + row;
             const destCol = missingLeft + col;
+            // Bounds Check: Ensure we don't write outside the 256x256 buffer
             if (destRow < tileWidth && destCol < tileHeight) {
-              tileBuffer[destRow * tileWidth + destCol] = validRasterData[band][row * validRasterData.width + col];
+              tileBuffer[destRowOffset + destCol] = validRasterData[band][srcRowOffset + col];
             } else {
               console.log('error in assigning data to tile buffer');
             }
@@ -263,10 +302,34 @@ class CogTiles {
       return [validImageData];
     }
 
-    // Read the raster data for the non shifted tile window.
+    // Case B: Perfect Match (Optimization)
+    // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
+    // console.log("Perfect aligned read");
     const tileData = await targetImage.readRasters({ window, interleave: true });
     // console.log(`data that starts at the left top corner of the tile ${tileX}, ${tileY}`);
     return [tileData];
+  }
+
+  /**
+   * Creates a blank tile buffer filled with the "No Data" value.
+   */
+  createEmptyTile() {
+    // 1. Determine the size
+    // Default to 1 channel (grayscale) if not specified
+    const channels = this.options.numOfChannels || 1;
+    const size = this.tileSize * this.tileSize * channels;
+
+    // 2. Create the array
+    // Float32 is standard for GeoTIFF data handling in browsers
+    const tileData = new Float32Array(size);
+
+    // 3. Fill with "No Data" value
+    // If noDataValue is undefined, it defaults to 0
+    if (this.options.noDataValue !== undefined) {
+      tileData.fill(this.options.noDataValue);
+    }
+
+    return tileData;
   }
 
   async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
@@ -370,59 +433,6 @@ class CogTiles {
    */
   getNumberOfChannels(image) {
     return image.getSamplesPerPixel();
-  }
-
-  /**
-   * Calculates the intersection between a tile bounding box and a COG bounding box,
-   * returning the intersection window in image pixel space (relative to COG offsets),
-   * along with how much blank space (nodata) appears on the left and top of the tile.
-   *
-   * @param {number[]} tileBbox - Tile bounding box: [minX, minY, maxX, maxY]
-   * @param {number[]} cogBbox - COG bounding box: [minX, minY, maxX, maxY]
-   * @param {number} offsetXPixel - X offset of the COG origin in pixel space
-   * @param {number} offsetYPixel - Y offset of the COG origin in pixel space
-   * @param {number} tileSize - Size of the tile in pixels (default: 256)
-   * @returns {[number, number, number[] | null, number, number]}
-   *   An array containing:
-   *   - width of the intersection
-   *   - height of the intersection
-   *   - pixel-space window: [startX, startY, endX, endY] or null if no overlap
-   *   - missingLeft: padding pixels on the left
-   *   - missingTop: padding pixels on the top
-   */
-  getIntersectionBBox(tileBbox, cogBbox, offsetXPixel = 0, offsetYPixel = 0, tileSize = 256) {
-    const interLeft = Math.max(tileBbox[0], cogBbox[0]);
-    const interTop = Math.max(tileBbox[1], cogBbox[1]);
-    const interRight = Math.min(tileBbox[2], cogBbox[2]);
-    const interBottom = Math.min(tileBbox[3], cogBbox[3]);
-
-    const width = Math.max(0, interRight - interLeft);
-    const height = Math.max(0, interBottom - interTop);
-
-    let window = null;
-    let missingLeft = 0;
-    let missingTop = 0;
-
-    if (width > 0 && height > 0) {
-      window = [
-        interLeft - offsetXPixel,
-        interTop - offsetYPixel,
-        interRight - offsetXPixel,
-        interBottom - offsetYPixel,
-      ];
-
-      // Padding from the tile origin to valid data start
-      missingLeft = interLeft - tileBbox[0];
-      missingTop = interTop - tileBbox[1];
-    }
-
-    return [
-      width,
-      height,
-      window,
-      missingLeft,
-      missingTop,
-    ];
   }
 
   /**
