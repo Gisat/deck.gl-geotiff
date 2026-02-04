@@ -295,9 +295,9 @@ class CogTiles {
             }
           }
         }
-        tileBuffer.forEach((rasterValue, index) => {
-          validImageData[index * this.options.numOfChannels + band] = rasterValue;
-        });
+        for (let i = 0; i < tileBuffer.length; i += 1) {
+          validImageData[i * this.options.numOfChannels + band] = tileBuffer[i];
+        }
       }
       return [validImageData];
     }

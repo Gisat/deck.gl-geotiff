@@ -15,7 +15,7 @@ import { MapView } from '@deck.gl/core';
 // import { AnyARecord } from 'dns';
 // import CogTerrainLayer from '@gisatcz/deckgl-geolib/src/cogterrainlayer/CogTerrainLayer';
 // import CogBitmapLayer from '@gisatcz/deckgl-geolib/src/cogbitmaplayer/CogBitmapLayer';
-import { CogTerrainLayer as TerrainLayer } from "@gisatcz/deckgl-geolib/src";
+import { CogTerrainLayer } from "@gisatcz/deckgl-geolib";
 
 function hexToRgb(hex: string) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -113,7 +113,7 @@ const styleClasses = [
 //   'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.png?access_token=pk.eyJ1Ijoiam9ldmVjeiIsImEiOiJja3lpcms5N3ExZTAzMm5wbWRkeWFuNTA3In0.dHgiiwOgD-f7gD7qP084rg',
 // );
 
-const cogLayer = new TerrainLayer({
+const cogLayer = new CogTerrainLayer({
   // globální
   elevationData: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/dtm.bareearth_ensemble_p10_250m_s_2018_go_epsg4326_v20230221_deflate_cog.tif',
   // minZoom: 0,

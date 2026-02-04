@@ -5,7 +5,7 @@ import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { MapView } from '@deck.gl/core';
 import chroma from 'chroma-js';
-import { CogBitmapLayer } from '@gisatcz/deckgl-geolib/src';
+import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
 
 const cogLayerDefinition = {
   id: 'CogBitmapLayer',
@@ -30,7 +30,12 @@ const cogLayerDefinition = {
   // gruzie
   // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/bsadri/test_raster/COG/LC_2021_all_Georgia_WEST3940_ZOOM6_test1_defl_COG256.tif',
   // pavel uganda bez aligned levels
-  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Pavel_Luisa/openEO_2020-01-01Z_npp_act_cog_no_aligned_levels.tif',
+  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Pavel_Luisa/openEO_2020-01-01Z_npp_act_cog_no_aligned_levels.tif',
+  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/3dflus/COG_NEW_ndviMAX_2025_11.tif',
+  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlusCCN_GST-93/project/data_cog/WorldCereals/Indie_cog.tif',
+  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/3dflus/COG_NEW_ndviMAX_2025_11.tif',
+  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaGdaAdbNepal23/rasters/snow_cover_cog/WET_SNOW_3857_2017-2021_cog_deflate.tif',
+  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/GHS-POP/GHS_POP_E2015_COGeoN.tif',
   cogBitmapOptions: {
     type: 'image',
     blurredTexture: false,
@@ -40,8 +45,8 @@ const cogLayerDefinition = {
     // useSingleColor: true,
     useHeatMap: true,
     // colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
-    colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
-    colorScaleValueRange: [-200, -100, 0, 100, 200],
+    colorScale: chroma.brewer.Blues,
+    colorScaleValueRange: [-5000, 9000],
     // nullColor: [127, 0, 255, 120],//violet
     // unidentifiedColor: [255, 192, 203, 120],//pink
     // clippedColor: [255, 255, 0, 120],//yellow
@@ -53,6 +58,21 @@ const cogLayerDefinition = {
 };
 
 const getCogLayer = (opacity: number) => new CogBitmapLayer({ ...cogLayerDefinition, opacity });
+
+
+const originalCOG = new CogBitmapLayer({
+  id: 'origibalCOG_cog_bitmap_name',
+  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/3dflus/COG_ndviMAX_2021_11.tif',
+  isTiled: true,
+  cogBitmapOptions: {
+    type: 'image',
+    blurredTexture: false,
+    useChannel: 1,
+    useHeatMap: true,
+    colorScale: chroma.brewer.Reds,
+    colorScaleValueRange: [-5000, 9000],
+  },
+});
 
 const tileLayer = new TileLayer({
   data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -103,9 +123,10 @@ function CogBitmapLayerExample() {
   }
 
   const initialViewState: InitialViewStateProps = {
-    longitude: 0,
-    latitude: 0,
-    zoom: 1,
+    longitude: 14.320397477225718,
+    latitude: 49.93523045357465,
+    zoom: 17,
+    // zoom: 12,
   };
 
   return (
@@ -113,7 +134,7 @@ function CogBitmapLayerExample() {
       getCursor={() => 'inherit'}
       initialViewState={initialViewState}
       controller
-      layers={[tileLayer, layer]}
+      layers={[tileLayer, layer, originalCOG] }
       views={[
         new MapView({
           controller: true,

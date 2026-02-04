@@ -4,7 +4,7 @@ import { InitialViewStateProps } from '@deck.gl/core/lib/deck';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { MapView } from '@deck.gl/core';
-import { CogBitmapLayer } from '@gisatcz/deckgl-geolib/src';
+import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
 
 const cogLayerDefinition = {
   id: 'CogBitmapLayer',
