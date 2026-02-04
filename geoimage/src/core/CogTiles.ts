@@ -1,12 +1,10 @@
-/* eslint 'max-len': [1, { code: 100, comments: 999, ignoreStrings: true, ignoreUrls: true }] */
-// COG loading
 import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 
 // Image compression support
 import { worldToLngLat } from '@math.gl/web-mercator';
 
 // Bitmap styling
-import GeoImage, { GeoImageOptions } from './GeoImage.ts';
+import GeoImage, { GeoImageOptions } from './GeoImage';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -34,8 +32,6 @@ class CogTiles {
 
   bounds: Bounds;
 
-  loaded: boolean = false;
-
   geo: GeoImage = new GeoImage();
 
   options: GeoImageOptions;
@@ -49,7 +45,7 @@ class CogTiles {
     const image = await this.cog.getImage(); // by default, the first image is read.
     this.cogOrigin = image.getOrigin();
     this.options.noDataValue ??= this.getNoDataValue(image);
-    this.options.format ??= this.getDataTypeFromTags(image);
+    this.options.format ??= this.getDataTypeFromTags(image) as any;
     this.options.numOfChannels = this.getNumberOfChannels(image);
     this.options.planarConfig = this.getPlanarConfiguration(image);
     [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
@@ -273,7 +269,7 @@ class CogTiles {
 
       // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
       // I think this is less practical then the commented solution above, but I do it so it works with the code in GeoImage.ts in deck.gl-geoimage in function getColorValue.
-      const validImageData = Array(validRasterData.length * validRasterData[0].length);
+      const validImageData = Array((validRasterData as any).length * (validRasterData[0] as any).length);
       validImageData.fill(this.options.noDataValue);
 
       // Place the valid pixel data into the tile buffer.

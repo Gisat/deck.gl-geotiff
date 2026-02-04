@@ -12,6 +12,31 @@ export type EdgeIndices = {
 };
 
 /**
+ * Get geometry edges that located on a border of the mesh
+ * @param {object} indices - edge indices from quantized mesh data
+ * @param {TypedArray} position - position attribute geometry data
+ * @returns {number[][]} - outside edges data
+ */
+function getOutsideEdgesFromIndices(indices: EdgeIndices, position) {
+  // Sort skirt indices to create adjacent triangles
+  indices.westIndices.sort((a, b) => position[3 * a + 1] - position[3 * b + 1]);
+  // Reverse (b - a) to match triangle winding
+  indices.eastIndices.sort((a, b) => position[3 * b + 1] - position[3 * a + 1]);
+  indices.southIndices.sort((a, b) => position[3 * b] - position[3 * a]);
+  // Reverse (b - a) to match triangle winding
+  indices.northIndices.sort((a, b) => position[3 * a] - position[3 * b]);
+
+  const edges: number[][] = [];
+  for (const index in indices) {
+    const indexGroup = indices[index];
+    for (let i = 0; i < indexGroup.length - 1; i++) {
+      edges.push([indexGroup[i], indexGroup[i + 1]]);
+    }
+  }
+  return edges;
+}
+
+/**
  * Add skirt to existing mesh
  * @param {object} attributes - POSITION and TEXCOOD_0 attributes data
  * @param {any} triangles - indices array of the mesh geometry
@@ -83,31 +108,6 @@ function getOutsideEdgesFromTriangles(triangles) {
     }
   }
   return outsideEdges;
-}
-
-/**
- * Get geometry edges that located on a border of the mesh
- * @param {object} indices - edge indices from quantized mesh data
- * @param {TypedArray} position - position attribute geometry data
- * @returns {number[][]} - outside edges data
- */
-function getOutsideEdgesFromIndices(indices: EdgeIndices, position) {
-  // Sort skirt indices to create adjacent triangles
-  indices.westIndices.sort((a, b) => position[3 * a + 1] - position[3 * b + 1]);
-  // Reverse (b - a) to match triangle winding
-  indices.eastIndices.sort((a, b) => position[3 * b + 1] - position[3 * a + 1]);
-  indices.southIndices.sort((a, b) => position[3 * b] - position[3 * a]);
-  // Reverse (b - a) to match triangle winding
-  indices.northIndices.sort((a, b) => position[3 * a] - position[3 * b]);
-
-  const edges: number[][] = [];
-  for (const index in indices) {
-    const indexGroup = indices[index];
-    for (let i = 0; i < indexGroup.length - 1; i++) {
-      edges.push([indexGroup[i], indexGroup[i + 1]]);
-    }
-  }
-  return edges;
 }
 
 /**

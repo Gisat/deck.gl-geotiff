@@ -1,23 +1,3 @@
-// Copyright (c) 2015 - 2017 Uber Technologies, Inc.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
 import {
   Color,
   CompositeLayer,
@@ -35,10 +15,11 @@ import { SimpleMeshLayer } from '@deck.gl/mesh-layers';
 import type { MeshAttributes } from '@loaders.gl/schema';
 import {
   TileLayer, TileLayerProps, GeoBoundingBox, _TileLoadProps as TileLoadProps,
-  _Tile2DHeader as Tile2DHeader, _getURLFromTemplate as getURLFromTemplate, NonGeoBoundingBox,
+  _Tile2DHeader as Tile2DHeader, NonGeoBoundingBox,
 } from '@deck.gl/geo-layers';
 
-import CogTiles from '../core/CogTiles.ts';
+import CogTiles from '../core/CogTiles';
+import { GeoImageOptions } from '../core/GeoImage';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -76,7 +57,7 @@ export const urlType = {
 
 const DUMMY_DATA = [1];
 
-const defaultProps: DefaultProps<TerrainLayerProps> = {
+const defaultProps: DefaultProps<_CogTerrainLayerProps> = {
   ...TileLayer.defaultProps,
   // Image url that encodes height data
   elevationData: urlType,
@@ -129,14 +110,16 @@ function urlTemplateToUpdateTrigger(template: URLTemplate): string {
   type MeshAndTexture = [MeshAttributes | null, TextureSource | null];
 
 /** All properties supported by TerrainLayer */
-export type TerrainLayerProps = _TerrainLayerProps &
+export type CogTerrainLayerProps = _CogTerrainLayerProps &
 	TileLayerProps<MeshAndTexture> &
 	CompositeLayerProps;
 
   /** Props added by the TerrainLayer */
-  type _TerrainLayerProps = {
+  type _CogTerrainLayerProps = {
 	/** Image url that encodes height data. * */
 	elevationData: URLTemplate;
+
+  isTiled?: boolean;
 
 	/** Image url to use as texture. * */
 	texture?: URLTemplate;
@@ -162,7 +145,7 @@ export type TerrainLayerProps = _TerrainLayerProps &
   /**
    * TODO
    */
-  terrainOptions: Object
+  terrainOptions: GeoImageOptions;
 
 	/**
 	 * @deprecated Use `loadOptions.terrain.workerUrl` instead
@@ -175,23 +158,25 @@ export type TerrainLayerProps = _TerrainLayerProps &
 // TODO - pass signal to getTile
 
 /** Render mesh surfaces from height map images. */
-export default class TerrainLayer<ExtraPropsT extends {} = {}> extends CompositeLayer<
-	ExtraPropsT & Required<_TerrainLayerProps & Required<TileLayerProps<MeshAndTexture>>>
+export default class CogTerrainLayer<ExtraPropsT extends object = object> extends CompositeLayer<
+	ExtraPropsT & Required<_CogTerrainLayerProps & Required<TileLayerProps<MeshAndTexture>>>
   > {
   static defaultProps = defaultProps;
 
-  static layerName = 'TerrainLayer';
+  static layerName = 'CogTerrainLayer';
 
   // terrainCogTiles: CogTiles;
 
   terrainUrl: string;
 
-  state!: {
+  declare state: {
 	  isTiled?: boolean;
 	  terrain?: MeshAttributes;
 	  zRange?: ZRange | null;
     minZoom: number;
     maxZoom: number;
+    terrainCogTiles: CogTiles;
+    initialized: boolean;
 	};
 
   async initializeState(context: any) {
@@ -202,11 +187,11 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
       initialized: false,
     });
 
-    await this.init(this.terrainUrl);
+    await (this as any).init(this.terrainUrl);
   }
 
-  async init(terrainUrl: string) {
-    await this.state.terrainCogTiles.initializeCog(this.props.elevationData);
+  async init() {
+    await this.state.terrainCogTiles.initializeCog(this.props.elevationData as any);
     // this.tileSize = this.terrainCogTiles.getTileSize(cog);
 
     const zoomRange = this.state.terrainCogTiles.getZoomRange();
@@ -238,8 +223,6 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
       // this.setState({ terrain });
 	  }
 
-	  // TODO - remove in v9
-	  // @ts-ignore
 	  if (props.workerUrl) {
       log.removed('workerUrl', 'loadOptions.terrain.workerUrl')();
 	  }
@@ -275,14 +258,14 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
   }
 
   async getTiledTerrainData(tile: TileLoadProps): Promise<MeshAndTexture> {
-	  const {
-      elevationData, fetch, texture, elevationDecoder, meshMaxError,
-    } = this.props;
+	  // const {
+    //   elevationData, fetch, texture, elevationDecoder, meshMaxError,
+    // } = this.props;
 	  const { viewport } = this.context;
 	  // const dataUrl = getURLFromTemplate(elevationData, tile);
 	  // const textureUrl = texture && getURLFromTemplate(texture, tile);
 
-	  const { signal } = tile;
+	  // const { signal } = tile;
 	  let bottomLeft = [0, 0] as [number, number];
 	  let topRight = [0, 0] as [number, number];
 	  if (viewport.isGeospatial) {
@@ -307,7 +290,7 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
       this.props.meshMaxError,
     );
 
-    return Promise.all([terrain]);
+    return Promise.all([terrain, null]) as unknown as Promise<MeshAndTexture>;
   }
 
   renderSubLayers(
@@ -335,7 +318,7 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
       // texture,
       _instanced: false,
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-      getPosition: (d) => [0, 0, 0],
+      // getPosition: (d) => [0, 0, 0],
       getColor: color,
       wireframe,
       material,
@@ -353,7 +336,7 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
       .map((tile) => tile.content)
       .filter((x) => x && x[0])
       .map((arr) => {
-		  // @ts-ignore
+        // @ts-expect-error: Tile content structure is not fully typed in the source layer
 		  const bounds = arr[0]?.header?.boundingBox;
 		  return bounds?.map((bound) => bound[2]);
       });
@@ -370,11 +353,11 @@ export default class TerrainLayer<ExtraPropsT extends {} = {}> extends Composite
 
   renderLayers(): Layer | null | LayersList {
 	  const {
-      color,
-      material,
+      // color,
+      // material,
       elevationData,
-      texture,
-      wireframe,
+      // texture,
+      // wireframe,
       meshMaxError,
       elevationDecoder,
       tileSize,
