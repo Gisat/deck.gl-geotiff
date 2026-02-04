@@ -17,7 +17,7 @@ export type EdgeIndices = {
  * @param {TypedArray} position - position attribute geometry data
  * @returns {number[][]} - outside edges data
  */
-function getOutsideEdgesFromIndices(indices: EdgeIndices, position) {
+function getOutsideEdgesFromIndices(indices: EdgeIndices, position: ArrayLike<number>) {
   // Sort skirt indices to create adjacent triangles
   indices.westIndices.sort((a, b) => position[3 * a + 1] - position[3 * b + 1]);
   // Reverse (b - a) to match triangle winding
