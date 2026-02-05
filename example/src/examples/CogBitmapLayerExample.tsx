@@ -66,9 +66,11 @@ const originalCOG = new CogBitmapLayer({
   isTiled: true,
   cogBitmapOptions: {
     type: 'image',
-    blurredTexture: false,
+    blurredTexture: true,
     useChannel: 1,
+    // alpha: 80,
     useHeatMap: true,
+    // useDataForOpacity: true,
     colorScale: chroma.brewer.Reds,
     colorScaleValueRange: [-5000, 9000],
   },

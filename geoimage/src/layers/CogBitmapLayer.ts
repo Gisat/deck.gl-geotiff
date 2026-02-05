@@ -15,10 +15,17 @@ import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 // import GL from '@luma.gl/constants';
 // GL.GL.CLIP_DISTANCE0_WEBGL
 import type { MeshAttributes } from '@loaders.gl/schema';
-import CogTiles from '../core/CogTiles.ts';
-
-import { GeoImageOptions } from '../core/GeoImage.ts';
+import CogTiles from '../core/CogTiles';
+import { GeoImageOptions } from '../core/GeoImage';
 // import { TileBoundingBox, ZRange } from '../cogterrainlayer/CogTerrainLayer.js';
+
+interface TileBounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
 export type TileBoundingBox = NonGeoBoundingBox | GeoBoundingBox;
 
 export type ZRange = [minZ: number, maxZ: number];
@@ -72,10 +79,6 @@ const defaultProps: DefaultProps<CogBitmapLayerProps> = {
     type: 'array', value: null, optional: true, compare: true,
   },
   rasterData: urlType,
-  // Color to use if texture is unavailable
-  // color: { type: 'color', value: [255, 255, 255] },
-  blurredTexture: true,
-  opacity: 1,
   clampToTerrain: false,
   // Object to decode height data, from (r, g, b) to height in meters
   // elevationDecoder: {
@@ -97,12 +100,12 @@ const defaultProps: DefaultProps<CogBitmapLayerProps> = {
 };
 
 // Turns array of templates into a single string to work around shallow change
-function urlTemplateToUpdateTrigger(template: URLTemplate): string {
-  if (Array.isArray(template)) {
-    return template.join(';');
-  }
-  return template || '';
-}
+// function urlTemplateToUpdateTrigger(template: URLTemplate): string {
+//   if (Array.isArray(template)) {
+//     return template.join(';');
+//   }
+//   return template || '';
+// }
 
 type MeshAndTexture = [MeshAttributes | null, TextureSource | null];
 
@@ -114,8 +117,8 @@ type _CogBitmapLayerProps = {
   /** Bounding box of the bitmap image, [minX, minY, maxX, maxY] in world coordinates. * */
   bounds: Bounds | null;
 
-  /** Weather visualise the entire image with specified opacity (0-1) * */
-  opacity?: number;
+  // /** Weather visualise the entire image with specified opacity (0-1) * */
+  // opacity?: number;
 
   /** Whether the rendered texture should be clamped to terrain * */
   clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
@@ -139,14 +142,14 @@ export type CogBitmapLayerProps = _CogBitmapLayerProps &
     CompositeLayerProps;
 
 /** Render bitmap texture from cog raster images. */
-export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends CompositeLayer<
+export default class CogBitmapLayer<ExtraPropsT extends object = object> extends CompositeLayer<
   ExtraPropsT & Required<_CogBitmapLayerProps & Required<TileLayerProps<MeshAndTexture>>>
 > {
   static defaultProps = defaultProps;
 
   static layerName = 'CogBitmapLayer';
 
-  state!: {
+  declare state: {
     initialized: boolean;
     isTiled?: boolean;
     terrain?: MeshAttributes;
@@ -155,19 +158,6 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
     minZoom: number;
     maxZoom: number;
   };
-
-  // private _isLoaded: boolean;
-
-  // id = '';
-
-  // url: string;
-
-  // static displayName: string;
-
-  // cogTiles: CogTiles;
-  //
-  // tileSize: number;
-  //
 
   async initializeState(context: any) {
     super.initializeState(context);
@@ -221,8 +211,6 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
       this.state.bitmapCogTiles.options.useChannel = props.cogBitmapOptions.useChannel;
     }
 
-    // TODO - remove in v9
-    // @ts-ignore
     if (props.workerUrl) {
       log.removed('workerUrl', 'loadOptions.terrain.workerUrl')();
     }
@@ -251,7 +239,8 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
     const SubLayerClass = this.getSubLayerClass('image', BitmapLayer);
     const { blurredTexture } = this.state.bitmapCogTiles.options;
 
-    const { opacity, clampToTerrain } = this.props;
+    const { clampToTerrain } = this.props;
+    const hasDrawMode = typeof clampToTerrain === 'object' && clampToTerrain !== null && 'terrainDrawMode' in clampToTerrain;
 
     const { data } = props;
 
@@ -263,33 +252,28 @@ export default class CogBitmapLayer<ExtraPropsT extends {} = {}> extends Composi
       bbox: {
         west, south, east, north,
       },
-    } = props.tile;
+    } = props.tile as { bbox: TileBounds };
 
     return new SubLayerClass({ ...props, tileSize: this.state.bitmapCogTiles.tileSize }, {
       data: null,
       image: data,
       _instanced: false,
       bounds: [west, south, east, north],
-      opacity,
       textureParameters: {
         minFilter: blurredTexture ? 'linear' : 'nearest',
         magFilter: blurredTexture ? 'linear' : 'nearest',
       },
       //  TODO check if works!!!
       extensions: clampToTerrain ? [new TerrainExtension()] : [],
-      ...(clampToTerrain?.terrainDrawMode
-        ? { terrainDrawMode: clampToTerrain.terrainDrawMode }
+      ...(hasDrawMode
+        ? { terrainDrawMode: (clampToTerrain as any).terrainDrawMode }
         : {}),
     });
   }
 
   renderLayers() {
     const {
-      rasterData,
-      blurredTexture,
-      opacity,
       clampToTerrain,
-      // tileSize,
       maxRequests,
       onTileLoad,
       onTileUnload,

@@ -1,11 +1,9 @@
-/* eslint 'max-len': [1, { code: 105, comments: 999, ignoreStrings: true, ignoreUrls: true }] */
-
 // import { ExtentsLeftBottomRightTop } from '@deck.gl/core/utils/positions';
 import { fromArrayBuffer, GeoTIFFImage, TypedArray } from 'geotiff';
 import chroma from 'chroma-js';
 import Martini from '@mapbox/martini';
 import { getMeshBoundingBox } from '@loaders.gl/schema';
-import { addSkirt } from './helpers/skirt.ts';
+import { addSkirt } from './helpers/skirt';
 import Delatin from './delatin';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
@@ -192,7 +190,7 @@ export default class GeoImage {
     const { terrainSkirtHeight } = options;
 
     let mesh;
-    switch (tesselator) {
+    switch (tesselator as string) {
       case 'martini':
         mesh = getMartiniTileMesh(meshMaxError, width, terrain);
 
@@ -214,15 +212,9 @@ export default class GeoImage {
         break;
     }
 
-    // Martini
-    // Martini
-
-    // Delatin
-    // Delatin
-
     const { vertices } = mesh;
     let { triangles } = mesh;
-    let attributes = getMeshAttributes(vertices, terrain, width, height, input.bounds);
+    let attributes = getMeshAttributes(vertices, terrain as any, width, height, (input as any).bounds);
     // Compute bounding box before adding skirt so that z values are not skewed
     const boundingBox = getMeshBoundingBox(attributes);
 
@@ -458,7 +450,7 @@ export default class GeoImage {
           if (options.useHeatMap) {
             // FIXME
             // eslint-disable-next-line
-            pixelColor = [...colorScale(dataArray[pixel]).rgb(), Math.floor(options.alpha * 2.55)];
+            pixelColor = [...(colorScale(dataArray[pixel]) as any).rgb(), Math.floor(options.alpha * 2.55)];
           }
           if (options.useColorsBasedOnValues) {
             const index = dataValues.indexOf(dataArray[pixel]);
@@ -484,7 +476,7 @@ export default class GeoImage {
       }
       // FIXME
       // eslint-disable-next-line
-      [colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = pixelColor;
+      ([colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = pixelColor as any);
 
       pixel += numOfChannels;
     }
@@ -595,7 +587,7 @@ function getMeshAttributes(
 function getDelatinTileMesh(meshMaxError, width, height, terrain) {
   const tin = new Delatin(terrain, width + 1, height + 1);
   tin.run(meshMaxError);
-  // @ts-expect-error
+  // @ts-expect-error: Delatin instance properties 'coords' and 'triangles' are not explicitly typed in the library port
   const { coords, triangles } = tin;
   const vertices = coords;
   return { vertices, triangles };
