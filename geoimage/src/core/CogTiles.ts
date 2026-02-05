@@ -45,7 +45,7 @@ class CogTiles {
     const image = await this.cog.getImage(); // by default, the first image is read.
     this.cogOrigin = image.getOrigin();
     this.options.noDataValue ??= this.getNoDataValue(image);
-    this.options.format ??= this.getDataTypeFromTags(image) as any;
+    this.options.format ??= this.getDataTypeFromTags(image) as GeoImageOptions['format'];
     this.options.numOfChannels = this.getNumberOfChannels(image);
     this.options.planarConfig = this.getPlanarConfiguration(image);
     [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
