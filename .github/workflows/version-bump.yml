@@ -41,7 +41,7 @@ jobs:
           PRERELEASE: ${{ env.PRERELEASE }}
           PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
           DEFAULT_BUMP: patch
-          DRY_RUN: false
+          DRY_RUN: true
 
       - name: Determine if new tag differs
         id: tag-check
@@ -62,9 +62,9 @@ jobs:
       - name: Update version in package.json
         if: ${{ steps.tag-check.outputs.changed == 'true' }}
         run: |
-          cd geoimage
           git config --local user.email "panterobot@gisat.cz"
           git config --local user.name "github-actions[bot]"
+          cd geoimage
           npm version ${{ steps.next-version.outputs.new_tag }} -m "Set package.json version to ${{ steps.next-version.outputs.new_tag }} #skip_next_version" --legacy-peer-deps
 
       - name: Push changes
@@ -74,3 +74,14 @@ jobs:
           github_token: ${{ secrets.GH_TOKEN }}
           branch: ${{ github.ref }}
           tags: true
+
+      - name: Create version tag (REAL RUN)
+        if: ${{ steps.tag-check.outputs.changed == 'true' }}
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          WITH_V: true
+          PRERELEASE: ${{ env.PRERELEASE }}
+          PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
+          DEFAULT_BUMP: patch
+          DRY_RUN: false
