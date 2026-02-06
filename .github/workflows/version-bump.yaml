@@ -127,17 +127,19 @@ jobs:
           git config --local user.email "panterobot@gisat.cz"
           git config --local user.name "github-actions[bot]"
           
-          # Update root package.json without commit
-          npm version ${{ steps.version-check.outputs.final_tag }} --no-git-tag-version
+          VERSION="${{ steps.version-check.outputs.final_tag }}"
           
-          # Update geoimage/package.json without commit
+          # Update root package.json using jq (avoids npm dependency resolution)
+          jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp && mv package.json.tmp package.json
+          
+          # Update geoimage/package.json using jq
           cd geoimage
-          npm version ${{ steps.version-check.outputs.final_tag }} --no-git-tag-version
+          jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp && mv package.json.tmp package.json
           cd ..
           
           # Stage both package.json files and commit once
           git add package.json geoimage/package.json
-          git commit -m "Set package.json versions to ${{ steps.version-check.outputs.final_tag }} #skip_next_version"
+          git commit -m "Set package.json versions to $VERSION #skip_next_version"
 
       - name: Push changes
         if: ${{ steps.tag-check.outputs.changed == 'true' }}
