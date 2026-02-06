@@ -9,7 +9,7 @@ on:
 
 jobs:
   create-version-tag:
-    if: ${{ !contains(github.event.head_commit.message, '#skip_next_version') }}
+    if: ${{ !(contains(github.event.head_commit.message, '#skip_next_version') || contains(github.event.head_commit.message, '#none')) }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -43,19 +43,81 @@ jobs:
           DEFAULT_BUMP: patch
           DRY_RUN: true
 
+      - name: Validate and adjust next version
+        id: version-check
+        env:
+          PROPOSED_TAG: ${{ steps.next-version.outputs.new_tag }}
+          PRERELEASE: ${{ env.PRERELEASE }}
+          PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
+        run: |
+          # Get the highest existing version tag (both release and pre-release)
+          HIGHEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+          echo "::notice::Highest existing tag: $HIGHEST_TAG"
+          echo "::notice::Proposed new tag: $PROPOSED_TAG"
+
+          # Function to compare versions (returns 0 if v1 >= v2)
+          version_ge() {
+            [ "$1" = "$2" ] && return 0
+            [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ]
+          }
+
+          # Strip 'v' prefix for comparison
+          PROPOSED_VERSION="${PROPOSED_TAG#v}"
+          HIGHEST_VERSION="${HIGHEST_TAG#v}"
+
+          FINAL_TAG="$PROPOSED_TAG"
+
+          # Check if proposed version is less than or equal to highest existing
+          if version_ge "$HIGHEST_VERSION" "$PROPOSED_VERSION"; then
+            echo "::warning::Proposed version $PROPOSED_TAG is not greater than highest existing $HIGHEST_TAG"
+
+            # Parse the highest version
+            if [[ "$HIGHEST_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([a-zA-Z]+)\.([0-9]+))?$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              PRE_RELEASE_TYPE="${BASH_REMATCH[5]}"
+              PRE_RELEASE_NUM="${BASH_REMATCH[6]}"
+
+              if [ "$PRERELEASE" = "true" ]; then
+                # For pre-release builds
+                if [ -n "$PRE_RELEASE_TYPE" ] && [ "$PRE_RELEASE_TYPE" = "$PRERELEASE_SUFFIX" ]; then
+                  # If highest is same pre-release type, increment the pre-release number
+                  NEW_PRE_NUM=$((PRE_RELEASE_NUM + 1))
+                  FINAL_TAG="v${MAJOR}.${MINOR}.${PATCH}-${PRERELEASE_SUFFIX}.${NEW_PRE_NUM}"
+                else
+                  # Highest is either a release or different pre-release type
+                  # Start with .0 for this pre-release suffix
+                  FINAL_TAG="v${MAJOR}.${MINOR}.${PATCH}-${PRERELEASE_SUFFIX}.0"
+                fi
+              else
+                # For release builds, increment patch version
+                NEW_PATCH=$((PATCH + 1))
+                FINAL_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+              fi
+            else
+              # Fallback: just append .0 if version parsing fails
+              FINAL_TAG="${HIGHEST_TAG}.0"
+            fi
+
+            echo "::notice::Adjusted tag to: $FINAL_TAG"
+          fi
+
+          echo "final_tag=$FINAL_TAG" >> $GITHUB_OUTPUT
+
       - name: Determine if new tag differs
         id: tag-check
         env:
           OLD_TAG: ${{ steps.next-version.outputs.old_tag }}
-          NEW_TAG: ${{ steps.next-version.outputs.new_tag }}
+          NEW_TAG: ${{ steps.version-check.outputs.final_tag }}
         run: |
-          echo "::notice::OLD_TAG=$OLD_TAG"
-          echo "::notice::NEW_TAG=$NEW_TAG"
+          echo "Diagnostic: OLD_TAG='$OLD_TAG'"
+          echo "Diagnostic: NEW_TAG='$NEW_TAG'"
           if [ "$OLD_TAG" = "$NEW_TAG" ]; then
-            echo "::notice::tags are equal; no change"
+            echo "Diagnostic: tags are equal; no change"
             echo "changed=false" >> $GITHUB_OUTPUT
           else
-            echo "::notice::tags differ; will update"
+            echo "Diagnostic: tags differ; will update"
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
@@ -64,7 +126,18 @@ jobs:
         run: |
           git config --local user.email "panterobot@gisat.cz"
           git config --local user.name "github-actions[bot]"
-          npm version ${{ steps.next-version.outputs.new_tag }} -m "Set package.json version to ${{ steps.next-version.outputs.new_tag }} #skip_next_version"
+          
+          # Update root package.json without commit
+          npm version ${{ steps.version-check.outputs.final_tag }} --no-git-tag-version
+          
+          # Update geoimage/package.json without commit
+          cd geoimage
+          npm version ${{ steps.version-check.outputs.final_tag }} --no-git-tag-version
+          cd ..
+          
+          # Stage both package.json files and commit once
+          git add package.json geoimage/package.json
+          git commit -m "Set package.json versions to ${{ steps.version-check.outputs.final_tag }} #skip_next_version"
 
       - name: Push changes
         if: ${{ steps.tag-check.outputs.changed == 'true' }}
