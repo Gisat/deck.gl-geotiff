@@ -41,7 +41,7 @@ jobs:
           PRERELEASE: ${{ env.PRERELEASE }}
           PRERELEASE_SUFFIX: ${{ env.PRERELEASE_SUFFIX }}
           DEFAULT_BUMP: patch
-          DRY_RUN: true
+          DRY_RUN: false
 
       - name: Determine if new tag differs
         id: tag-check
