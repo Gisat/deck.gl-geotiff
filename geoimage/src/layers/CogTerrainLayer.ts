@@ -109,12 +109,12 @@ function urlTemplateToUpdateTrigger(template: URLTemplate): string {
 
   type MeshAndTexture = [MeshAttributes | null, TextureSource | null];
 
-/** All properties supported by TerrainLayer */
+/** All properties supported by CogTerrainLayer */
 export type CogTerrainLayerProps = _CogTerrainLayerProps &
 	TileLayerProps<MeshAndTexture> &
 	CompositeLayerProps;
 
-  /** Props added by the TerrainLayer */
+  /** Props added by the CogTerrainLayer */
   type _CogTerrainLayerProps = {
 	/** Image url that encodes height data. * */
 	elevationData: URLTemplate;
