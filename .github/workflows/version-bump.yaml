@@ -140,6 +140,9 @@ jobs:
           # Stage both package.json files and commit once
           git add package.json geoimage/package.json
           git commit -m "Set package.json versions to $VERSION #skip_next_version"
+          
+          # Create git tag
+          git tag -a "$VERSION" -m "Release $VERSION"
 
       - name: Push changes
         if: ${{ steps.tag-check.outputs.changed == 'true' }}
