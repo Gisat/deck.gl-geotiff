@@ -1,8 +1,15 @@
 {
   "name": "@gisatcz/deckgl-geolib",
-  "version": "1.12.0-dev.15",
+  "version": "v1.12.0-dev.16",
   "description": "Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data",
-  "keywords": ["deck.gl", "geotiff", "webgl", "gis", "visualization", "cog"],
+  "keywords": [
+    "deck.gl",
+    "geotiff",
+    "webgl",
+    "gis",
+    "visualization",
+    "cog"
+  ],
   "private": false,
   "license": "MIT",
   "author": "Gisat",
