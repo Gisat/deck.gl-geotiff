@@ -8,7 +8,7 @@
 
 **A Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data.**
 
-This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery/heatmaps and the `CogTerrainLayer` for 3D terrain meshes.
+This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery and thematic layers and the `CogTerrainLayer` for 3D terrain meshes.
 
 ![Heatmap Example](docs/images/ManillaCogHeatmap.png)
 
@@ -21,7 +21,7 @@ This library allows you to efficiently visualize high-resolution bitmap and terr
 
 ## Installation
 
-To use the Geolib Visualizer library, you need to have deck.gl and its dependencies installed.
+To use this library, you need to have deck.gl and its dependencies installed.
 
 ```bash
 npm install @gisatcz/deckgl-geolib
@@ -36,7 +36,7 @@ For more information, visit the [npm package page](https://www.npmjs.com/package
 
 ### 1. CogBitmapLayer
 
-Used for displaying 2D rasters (satellite imagery, analysis results, heatmaps).
+Used for displaying 2D rasters: Raw Observation (Satellite/Aerial), Data Structure (Multi-band/Single-band), and Analysis Output (Thematic/Categorical).
 
 ```typescript
 import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
@@ -68,7 +68,6 @@ const cogLayer = new CogTerrainLayer({
   elevationData:  'cog_terrain_data_url.tif',
   isTiled: true,
   tileSize: 256,
-  meshMaxError: 1,
   operation: 'terrain+draw',
   terrainOptions: {
     type: 'terrain',
