@@ -1,17 +1,53 @@
 {
   "name": "@gisatcz/deckgl-geolib",
-  "version": "1.2.0",
+  "version": "v1.12.0-dev.17",
+  "description": "Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data",
+  "keywords": [
+    "deck.gl",
+    "geotiff",
+    "webgl",
+    "gis",
+    "visualization",
+    "cog"
+  ],
   "private": false,
+  "license": "MIT",
+  "author": "Gisat",
+  "homepage": "https://github.com/gisat/deck.gl-geotiff/tree/master/geoimage#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gisat/deck.gl-geotiff.git",
+    "directory": "geoimage"
+  },
+  "bugs": {
+    "url": "https://github.com/Gisat/deck.gl-geotiff/issues"
+  },
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "type": "module",
-  "types": "dist/index.d.ts",
+  "types": "dist/esm/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
   "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "scripts": {
     "rollup": "rollup -c",
     "start": "yarn && yarn rollup",
-    "lint": "eslint 'src/**/*.{js, ts,tsx}' -c ./.eslintrc.cjs",
-    "lintFix": "eslint 'src/**/*.{js, ts,tsx}' -c ./.eslintrc.cjs --fix"
+    "lint": "eslint 'src/**/*.{js,ts,tsx}' -c ./.eslintrc.cjs",
+    "lintFix": "eslint 'src/**/*.{js,ts,tsx}' -c ./.eslintrc.cjs --fix"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.1",
@@ -29,13 +65,13 @@
   },
   "dependencies": {
     "@chunkd/source-http": "^11.1.0",
-    "@cogeotiff/core": "^9.0.3",
     "@deck.gl/core": "^9.0.33",
     "@deck.gl/extensions": "^9.0.33",
     "@deck.gl/geo-layers": "^9.0.33",
     "@deck.gl/layers": "^9.0.33",
     "@deck.gl/mesh-layers": "^9.0.33",
     "@deck.gl/react": "^9.0.33",
+    "@deck.gl/widgets": "^9.0.33",
     "@loaders.gl/loader-utils": "^4.3.1",
     "@loaders.gl/schema": "^4.3.1",
     "@luma.gl/constants": "^9.0.27",

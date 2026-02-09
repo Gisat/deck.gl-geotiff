@@ -1,84 +1,69 @@
-<p align="right">
+# @gisatcz/deckgl-geolib
+
+<p style="text-align: right;">
   <a href="https://www.npmjs.com/package/@gisatcz/deckgl-geolib">
     <img src="https://img.shields.io/npm/v/@gisatcz/deckgl-geolib.svg?style=flat-square" alt="version" />
   </a>
 </p>
 
-# 3DFLUS - Geolib Visualizer
+**A Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data.**
 
-The Geolib Visualizer is a library that extends the `deck.gl` framework to enable the visualization of geospatial data, 
-currently supporting Cloud-Optimized GeoTIFF (COG) files. This library offers an efficient way to display bitmap and 
-terrain data in applications with advanced customization options using [CogBitmapLayer](./geoimage/src/cogbitmaplayer/README.md)
-and [CogTerrainLayer](./geoimage/src/cogterrainlayer/README.md). Another developed libraries [GeoImage](./geoimage/src/geoimage/README.md) 
-and [CogTiles](./geoimage/src/cogtiles/README.md) enhance rendering options.
+This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery/heatmaps and the `CogTerrainLayer` for 3D terrain meshes.
 
-<img src = "/images/ManillaCogHeatmap.png" width = "100%">
+![Heatmap Example](geoimage/docs/images/ManillaCogHeatmap.png)
 
-## Key Features
+## Features
 
-- **COG Rendering**: Efficiently loads and displays Cloud-Optimized GeoTIFF files.
-- **Bitmap and Terrain Layers**: Supports visualizing both bitmap and elevation data.
-- **Customizable Rendering**: Allows custom color scales, opacity control, and flexible geographic bounds.
+- **COG Rendering**: Efficiently loads and displays COG files directly without a backend server.
+- **Bitmap and Terrain Layers**: Supports visualizing both raster and elevation data.
+- **Customizable Rendering**: Allows custom color scales, multichannel support, and opacity control.
 
 
 ## Installation
 
-To use the Geolib Visualizer library, you need to have deck.gl and its dependencies installed. 
+To use the Geolib Visualizer library, you need to have deck.gl and its dependencies installed.
 
-Install the Geolib Visualizer via npm or yarn:
-
-```
+```bash
 npm install @gisatcz/deckgl-geolib
-```
-
-or
-```
+# or
 yarn add @gisatcz/deckgl-geolib
 ```
 
-For more information, visit the [npm package page](https://www.npmjs.com/package/@gisatcz/deckgl-geolib). 
-You can visit the package page to explore further versions and additional information.
-
-## COG Data Preparation
-For seamless integration of Geolib Visualizer library, please make sure you have followed our workflow [Data Preparation Guide for converting GeoTIFFs to COG files](dataPreparation.md).
-
-
+For more information, visit the [npm package page](https://www.npmjs.com/package/@gisatcz/deckgl-geolib).
 
 ## Usage
 
-Import package into project:
+
+### 1. CogBitmapLayer
+
+Used for displaying 2D rasters (satellite imagery, analysis results, heatmaps).
 
 ```typescript
-import geolib from '@gisatcz/deckgl-geolib'
-```
+import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
 
-### 1. COG Bitmap Layer
-
-The `CogBitmapLayer` is designed for visualizing Cloud-Optimized GeoTIFF files as raster layers. 
-The example below demonstrates its implementation, for more information and examples refer to the [CogBitmapLayer](./geoimage/src/cogbitmaplayer/README.md).
-
-```typescript
-const CogBitmapLayer = geolib.CogBitmapLayer;
-
-const cogLayer = new CogBitmapLayer(
+const cogLayer = new CogBitmapLayer({
   id: 'cog_bitmap_name',
   rasterData:  'cog_bitmap_data_url.tif',
   isTiled: true,
   cogBitmapOptions: {
     type: 'image'
   }
-);
+});
 ```
-### 2. COG Terrain Layer
 
-For 3D terrain rendering, use `CogTerrainLayer` to visualize elevation data stored 
-in Cloud-Optimized GeoTIFF format, for more information and examples refer to the [CogTerrainLayer](./geoimage/src/cogterrainlayer/README.md).
+Detailed Documentation:
+* [API Reference & Examples](geoimage/docs/layer-cogbitmap.md)
+* [Visualization Options (GeoImage Core)](geoimage/docs/architecture-geoimage.md)
+
+### 2. CogTerrainLayer
+
+Used for displaying 3D terrain from elevation data.
 
 
 ```typescript
-const CogTerrainLayer = geolib.CogTerrainLayer;
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
 
-const cogLayer = new CogTerrainLayer(
+const cogLayer = new CogTerrainLayer({
   id: 'cog_terrain_name',
   elevationData:  'cog_terrain_data_url.tif',
   isTiled: true,
@@ -88,34 +73,52 @@ const cogLayer = new CogTerrainLayer(
   terrainOptions: {
     type: 'terrain',
   }
-);
+});
 ```
 
-add layer to `DeckGL` instance, visit [deck.gl](https://deck.gl/docs/get-started/using-with-react) for more about deck.gl compoments.
-```javascript
-<DeckGL
-    initialViewState={INITIAL_VIEW_STATE}
-    controller={true}
-    layers={cogLayer} />
-```
+Detailed Documentation:
+* [API Reference & Examples](geoimage/docs/layer-cogterrain.md)
+* [Terrain Processing Options (GeoImage Core)](geoimage/docs/architecture-geoimage.md)
 
-## Development
-Clone the repository and install dependencies
-```
+## Data Preparation
+
+For this library to work efficiently, your COG must be Web-Optimized and projected in Web Mercator (EPSG:3857).
+
+Quick Checklist:
+1.  **Projection:** Web Mercator EPSG:3857
+2.  **Tiling:** 256x256 tiles
+3.  **Compression:** DEFLATE is recommended
+
+[Read the full Data Preparation Guide](geoimage/docs/dataPreparation.md)
+*(Includes standard commands for `rio-cogeo`)*
+
+
+## Architecture & Development
+
+This repository is a monorepo containing the core library and example applications.
+
+* `geoimage/`: The core library source code.
+* `example/`: A React application for testing the layers.
+
+### Building Locally
+
+```bash
+# 1. Install dependencies
 yarn install
-```
-Start an example
 
-```
+# 2. Build the library
+yarn build
+
+# 3. Run the example app
 yarn start
 ```
-The example is defaultly running at http://localhost:5173/
 
-The bitmap and terrain example files are located here [example/src/examples](./example/src/examples)
+### Technical Documentation
+For developers contributing to the core logic:
+* [GeoImage Internal Logic](geoimage/docs/architecture-geoimage.md) – How the image processing and configuration work.
+* [CogTiles Architecture](geoimage/docs/architecture-cogtiles.md) – How the tiling grid is calculated.
 
-[//]: # (## Contributions)
 
-[//]: # (Contributions and feedback are welcome! If you encounter any issues or have suggestions for improvements, please feel free to open an issue or submit a pull request.)
-
-[//]: # ()
-[//]: # (## License)
+<p style="text-align: center;">
+  <sub>Maintained by <a href="https://gisat.cz">Gisat</a></sub>
+</p>

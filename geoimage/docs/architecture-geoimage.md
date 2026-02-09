@@ -1,6 +1,6 @@
 # Geoimage
 ##### A Javascript library for rendering bitmaps and terrain out of **geoTIFF** files.
-<img src = "/images/example0crop1.png" width = "100%">
+<img src = "/geoimage/docs/images/example0crop1.png" width = "100%">
 
 ### Features
 ##### Color texture generation
@@ -16,18 +16,18 @@
 ##### Data visualisation options
 - Color
 - Transparency
-- Heatmap (custom color scale example [here](../cogbitmaplayer/README.md#custom-heatmap-color-scale))
+- Heatmap (custom color scale example [here](layer-cogbitmap.md#custom-heatmap-color-scale))
 - Data slice
 - Automatic data range
 - Manual data range
-- Assign color to specific data value (example [here](../cogbitmaplayer/README.md#assigning-color-to-specific-data-value))
+- Assign color to specific data value (example [here](layer-cogbitmap.md#assigning-color-to-specific-data-value))
 
 ### Data processing options
 - `useAutoRange : boolean` - set automatic range of color gradient **(default false)**
 - `useDataForOpacity : boolean` - visualise data with opacity of each pixel according to its value **(default false)**
 - `alpha : number` - visualise entire image with specified opacity **(if useDataOpacity is false)**, values 0-100 **(default 100)**
 - `useHeatMap : boolean` - generate data as a color heatmap **(default true)**
- `useChannel : number | null` - specify a single channel to use **(default null)**
+- `useChannel : number | null` - specify a single channel to use; first channel is equal to 1, etc... for RGB(A) imagery leave it to `null` **(default null)**
 - `multiplier : number  ` - multiplies each value **(default 1.00)**
 - `clipLow : number | null`- generate only data greater than this **(default null)**
 

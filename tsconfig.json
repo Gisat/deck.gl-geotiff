@@ -1,18 +1,17 @@
 {
   "exclude": ["**/tests", "**/*.test.ts", "node_modules"],
-  "allowSyntheticDefaultImports": true,
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "target": "ES2022",
     "lib": ["ES2022", "DOM"],
-    "target": "es6",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "importHelpers": true,
     "declaration": true,
     "declarationDir": "types",
     "baseUrl": ".",
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    // "allowImportingTsExtensions": true,
-    // "noEmit": true,
+    "skipLibCheck": true,
     "paths": {
       "tslib": ["./node_modules/tslib/tslib.d.ts"]
     }

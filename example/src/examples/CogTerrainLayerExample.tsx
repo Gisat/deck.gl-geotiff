@@ -15,7 +15,7 @@ import { MapView } from '@deck.gl/core';
 // import { AnyARecord } from 'dns';
 // import CogTerrainLayer from '@gisatcz/deckgl-geolib/src/cogterrainlayer/CogTerrainLayer';
 // import CogBitmapLayer from '@gisatcz/deckgl-geolib/src/cogbitmaplayer/CogBitmapLayer';
-import TerrainLayer from '@gisatcz/deckgl-geolib/src/cogterrainlayer/CogTerrainLayer';
+import { CogTerrainLayer } from "@gisatcz/deckgl-geolib";
 
 function hexToRgb(hex: string) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -113,7 +113,7 @@ const styleClasses = [
 //   'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.png?access_token=pk.eyJ1Ijoiam9ldmVjeiIsImEiOiJja3lpcms5N3ExZTAzMm5wbWRkeWFuNTA3In0.dHgiiwOgD-f7gD7qP084rg',
 // );
 
-const cogLayer = new TerrainLayer({
+const cogLayer = new CogTerrainLayer({
   // globální
   elevationData: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/dtm.bareearth_ensemble_p10_250m_s_2018_go_epsg4326_v20230221_deflate_cog.tif',
   // minZoom: 0,
@@ -131,35 +131,17 @@ const cogLayer = new TerrainLayer({
   // maxZoom: 9,
   // meshMaxError: 20,
 
-  opacity: 1,
+  opacity: 0.5,
   isTiled: true,
   useChannel: null,
   tileSize: 256,
-
+  // wireframe: true,
   operation: 'terrain+draw',
   // elevationData: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/website/terrain.png',
   terrainOptions: {
-    type: 'terrain', multiplier: 0.1, useChannel: null, terrainSkirtHeight: 1,
+    type: 'terrain', multiplier: 0.1, useChannel: null, terrainSkirtHeight: 1
   },
 });
-
-// const coBitmapLayer = new CogBitmapLayer(
-//   'CogBitmapLayer',
-//   'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/dtm.bareearth_ensemble_p10_250m_s_2018_go_epsg4326_v20230221_deflate_cog.tif',
-//   // 'https://gisat-gis.eu-central-1.linodeobjects.com/esaGdaAdbNepal23/rasters/snow_cover_cog/WET_SNOW_3857_2017-2021_cog_deflate_in16_zoom16_levels8.tif',
-//   {
-//     type: 'image',
-//     useChannel: null,
-//     multiplier: 0.1,
-//     useHeatMap: true,
-//     terrainMinValue: 100,
-//     colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
-//     colorScaleValueRange: [1, 100, 200, 300, 366],
-//     clampToTerrain: {
-//       terrainDrawMode: 'terrain+draw',
-//     },
-//   },
-// );
 
 class CogTerrainLayerExample extends React.Component<{}> {
   render() {
@@ -211,53 +193,26 @@ class CogTerrainLayerExample extends React.Component<{}> {
     //   // terrainDrawMode: 'drape',
     //   terrainDrawMode: 'terrain+draw',
     // });
-    /*
-    const vectorLayer = new MVTLayer({
-      extensions: [new TerrainExtension()],
-      terrainDrawMode: 'drape',
-      data: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/mvt/142_decimated_2/{z}/{x}/{y}.mvt',
-      loaders: [MVTLoader],
-      loadOptions: { worker: false },
-      minZoom: 0,
-      maxZoom: 15,
-      getLineColor: [192, 192, 192],
-      pointType: 'circle',
-      getPointRadius: 100,
-      getFillColor: (feature: Object) => {
-        const styleClass = styleClasses.find((c) => {
-          return (
-            c.interval[0] < feature.properties.vel_avg &&
-            c.interval[1] > feature.properties.vel_avg
-          );
-        });
-        return hexToRgb(styleClass.fill);
-      },
-      getLineWidth: () => {
-        return 6;
-      },
-      lineWidthMinPixels: 1,
-    });
-    */
-    // const deckRef = useRef();
+
     const deckRef = React.createRef();
     const onHover = (event) => {
       const hoveredItems = deckRef?.current?.pickMultipleObjects(event);
       const item = hoveredItems?.[0];
       // existuje pouze item?.tile?.layers?.[0]?.props?.tile?.layers?.[0]?.props?.elevationData z toho by asi šla hodnota dekodovat
       // item?.tile?.layers?.[0]?.props?.tile?.layers?.[0]?.props?.image
-      const image = item?.tile?.layers?.[0]?.props?.tile?.layers?.[0]?.props?.image;
-      if (image) {
-        console.log('xxx', image);
-
-        // item.pixelColor = readPixelsToArray(image, {
-        //   sourceX: event?.bitmap?.pixel?.[0],
-        //   sourceY: event?.bitmap?.pixel?.[1],
-        //   sourceWidth: 1,
-        //   sourceHeight: 1,
-        // });
-      }
-
-      console.log(item, image, item?.pixelColor);
+      // const image = item?.tile?.layers?.[0]?.props?.tile?.layers?.[0]?.props?.image;
+      // if (image) {
+      //   console.log('xxx', image);
+      //
+      //   // item.pixelColor = readPixelsToArray(image, {
+      //   //   sourceX: event?.bitmap?.pixel?.[0],
+      //   //   sourceY: event?.bitmap?.pixel?.[1],
+      //   //   sourceWidth: 1,
+      //   //   sourceHeight: 1,
+      //   // });
+      // }
+      //
+      // console.log(item, image, item?.pixelColor);
     };
 
     return (
@@ -274,7 +229,6 @@ class CogTerrainLayerExample extends React.Component<{}> {
               cogLayer,
               // coBitmapLayer,
               // WMSlayerMapped,
-
               // vectorLayer,
             ]}
             views={[

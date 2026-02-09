@@ -5,7 +5,13 @@
 // ISC License
 // Copyright(c) 2019, Michael Fogleman, Vladimir Agafonkin
 
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
+/* eslint-enable @typescript-eslint/ban-ts-comment */
+
+function orient(ax, ay, bx, by, cx, cy) {
+	return (bx - cx) * (ay - cy) - (by - cy) * (ax - cx);
+}
 
 /* eslint-disable complexity, max-params, max-statements, max-depth, no-constant-condition */
 export default class Delatin {
@@ -473,10 +479,6 @@ export default class Delatin {
 	  }
 	  return i > i0;
   }
-}
-
-function orient(ax, ay, bx, by, cx, cy) {
-  return (bx - cx) * (ay - cy) - (by - cy) * (ax - cx);
 }
 
 function inCircle(ax, ay, bx, by, cx, cy, px, py) {

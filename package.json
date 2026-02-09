@@ -1,15 +1,25 @@
 {
   "name": "gisatcz-deckgl-geolib-repo",
-  "version": "1.1.0",
+  "version": "v1.12.0-dev.17",
   "private": true,
-  "main": "geoimage/dist/cjs/index.js",
-  "module": "geoimage/dist/esm/index.js",
-  "type": "module",
-  "types": "geoimage/dist/esm/types/index.d.ts",
+  "description": "Monorepo for deck.gl Cloud-Optimized GeoTIFF (COG) utilities",
+  "license": "MIT",
+  "author": "Gisat",
+  "homepage": "https://github.com/gisat/deck.gl-geotiff#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gisat/deck.gl-geotiff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gisat/deck.gl-geotiff/issues"
+  },
   "workspaces": [
     "geoimage",
     "example"
   ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "scripts": {
     "start": "yarn && yarn rollup && yarn example",
     "build": "yarn rollup",
@@ -24,8 +34,5 @@
     "eslint": "^8.43.0",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-plugin-react": "^7.32.2"
-  },
-  "dependencies": {
-    "auto": "^11.2.1"
   }
 }

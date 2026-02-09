@@ -14,12 +14,12 @@ A Deck.gl-compatible layer for loading and displaying tiled COG image data
 ## Usage
 ### Initialize the layer
 To create CogBitmapLayer, you need an id name, URL of your COG, declare that data is tiled, 
-and also an object containing [geoimage](../geoimage/README.md) options for data processing.
+and also an object containing [geoimage](architecture-geoimage.md) options for data processing.
 
 ### Examples
 > **Note**: The examples below showcase only a subset of available rendering options. 
 > To view all configurable options for `CogBitmapLayer`, 
-> refer to the [geoimage](../geoimage/README.md) library documentation.
+> refer to the [geoimage](architecture-geoimage.md) library documentation.
 
 Import package into project and create bitmap layer
 
@@ -40,7 +40,7 @@ const cogLayer = new CogBitmapLayer(
 );
 ```
 
-<img src = "/images/cogBitmapLayer_rgb.jpg" width = "50%" alt="COG bitmap RGB image.">
+<img src = "/geoimage/docs/images/cogBitmapLayer_rgb.jpg" width = "50%" alt="COG bitmap RGB image.">
 
 Display the second channel as a heatmap with data from 0 to 1000
 - Currently, when `useAutoRange` is `true`, min and max data value for each image is calculated separately, thus it is recommended to set min and max values in `colorScaleValueRange`.
@@ -75,7 +75,7 @@ const cogLayer = new CogBitmapLayer(
   }
 );
 ```
-<img src = "/images/cogBitmapLayer_customColor.jpg" width = "50%" alt="COG bitmap image with custom color scale.">
+<img src = "/geoimage/docs/images/cogBitmapLayer_customColor.jpg" width = "50%" alt="COG bitmap image with custom color scale.">
 
 Display the third channel as a green color and only show data from 100 to 200, the clipped data should be visualized with yellow color
 ```typescript
@@ -94,7 +94,7 @@ const cogLayer = new CogBitmapLayer(
   }
 );
 ```
-<img src = "/images/cogBitmapLayer_clip.jpg" width = "50%" alt="COG bitmap image with clipped areas.">
+<img src = "/geoimage/docs/images/cogBitmapLayer_clip.jpg" width = "50%" alt="COG bitmap image with clipped areas.">
 
 <a name='assigning-color-to-specific-data-value'></a>
 Assign color to specific data values 

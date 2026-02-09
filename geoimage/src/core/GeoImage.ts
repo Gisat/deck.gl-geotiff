@@ -1,12 +1,10 @@
-/* eslint 'max-len': [1, { code: 105, comments: 999, ignoreStrings: true, ignoreUrls: true }] */
-
 // import { ExtentsLeftBottomRightTop } from '@deck.gl/core/utils/positions';
 import { fromArrayBuffer, GeoTIFFImage, TypedArray } from 'geotiff';
 import chroma from 'chroma-js';
 import Martini from '@mapbox/martini';
 import { getMeshBoundingBox } from '@loaders.gl/schema';
-import { addSkirt } from './helpers/skirt.ts';
-import Delatin from './delatin/index.ts';
+import { addSkirt } from './helpers/skirt';
+import Delatin from './delatin';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -24,7 +22,8 @@ export type GeoImageOptions = {
     useColorClasses? : boolean,
     useAutoRange?: boolean,
     useDataForOpacity?: boolean,
-    useChannel?: number | null,
+    useChannel?: Exclude<number, 0> | null,
+    useChannelIndex?: number | null,
     useSingleColor?: boolean,
     blurredTexture? : boolean,
     clipLow?: number | null,
@@ -44,7 +43,8 @@ export type GeoImageOptions = {
     clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
     terrainColor?: Array<number> | chroma.Color,
     terrainSkirtHeight?: number,
-    terrainMinValue?: number
+    terrainMinValue?: number,
+    planarConfig?: number,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -67,6 +67,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
   colorClasses: null,
   alpha: 100,
   useChannel: null,
+  useChannelIndex: null,
   noDataValue: undefined,
   numOfChannels: undefined,
   nullColor: [0, 0, 0, 0],
@@ -75,6 +76,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
   terrainColor: [133, 133, 133, 255],
   terrainSkirtHeight: 100,
   terrainMinValue: 0,
+  planarConfig: undefined,
 };
 
 export default class GeoImage {
@@ -148,12 +150,14 @@ export default class GeoImage {
       width = input.width;
       height = input.height;
     }
+    const optionsLocal = { ...options };
 
     let channel = rasters[0];
 
-    if (options.useChannel != null) {
-      if (rasters[options.useChannel]) {
-        channel = rasters[options.useChannel]; // length = 65536
+    optionsLocal.useChannelIndex ??= optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
+    if (options.useChannelIndex != null) {
+      if (rasters[optionsLocal.useChannelIndex]) {
+        channel = rasters[optionsLocal.useChannelIndex];
       }
     }
 
@@ -161,7 +165,7 @@ export default class GeoImage {
 
     const numOfChannels = channel.length / (width * height);
 
-    let pixel:number = options.useChannel === null ? 0 : options.useChannel;
+    let pixel:number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
 
     for (let i = 0, y = 0; y < height; y++) {
       for (let x = 0; x < width; x++, i++) {
@@ -186,7 +190,7 @@ export default class GeoImage {
     const { terrainSkirtHeight } = options;
 
     let mesh;
-    switch (tesselator) {
+    switch (tesselator as string) {
       case 'martini':
         mesh = getMartiniTileMesh(meshMaxError, width, terrain);
 
@@ -208,15 +212,9 @@ export default class GeoImage {
         break;
     }
 
-    // Martini
-    // Martini
-
-    // Delatin
-    // Delatin
-
     const { vertices } = mesh;
     let { triangles } = mesh;
-    let attributes = getMeshAttributes(vertices, terrain, width, height, input.bounds);
+    let attributes = getMeshAttributes(vertices, terrain as any, width, height, (input as any).bounds);
     // Compute bounding box before adding skirt so that z values are not skewed
     const boundingBox = getMeshBoundingBox(attributes);
 
@@ -287,13 +285,14 @@ export default class GeoImage {
     const size = width * height * 4;
     // const size = width * height;
 
-    if (!options.noDataValue) {
-      console.log('Missing noData value. Raster might be displayed incorrectly.');
-    }
+    // if (!options.noDataValue) {
+    //   console.log('Missing noData value. Raster might be displayed incorrectly.');
+    // }
     optionsLocal.unidentifiedColor = this.getColorFromChromaType(optionsLocal.unidentifiedColor);
     optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor);
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor);
     optionsLocal.color = this.getColorFromChromaType(optionsLocal.color);
+    optionsLocal.useChannelIndex ??= options.useChannel === null ? null : options.useChannel - 1;
 
     // console.log(rasters[0])
     /* console.log("raster 0 length: " + rasters[0].length)
@@ -302,7 +301,7 @@ export default class GeoImage {
     console.log("format: " + rasters[0].length / (width * height))
     */
 
-    if (optionsLocal.useChannel == null) {
+    if (optionsLocal.useChannelIndex == null) {
       if (channels === 1) {
         if (rasters[0].length / (width * height) === 1) {
           const channel = rasters[0];
@@ -372,24 +371,24 @@ export default class GeoImage {
           pixel += 1;
         }
       }
-    } else if (optionsLocal.useChannel <= optionsLocal.numOfChannels) {
+    } else if (optionsLocal.useChannelIndex < optionsLocal.numOfChannels && optionsLocal.useChannelIndex >= 0) {
       let channel = rasters[0];
-      if (rasters[optionsLocal.useChannel]) {
-        channel = rasters[optionsLocal.useChannel];
+      if (rasters[optionsLocal.useChannelIndex]) {
+        channel = rasters[optionsLocal.useChannelIndex];
       }
       // AUTO RANGE
       if (optionsLocal.useAutoRange) {
         optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal);
         // console.log('data min: ' + optionsLocal.rangeMin + ', max: ' + optionsLocal.rangeMax);
       }
-      const numOfChannels = channel.length / (width * height);
-      const colorData = this.getColorValue(channel, optionsLocal, size, numOfChannels);
+      // const numOfChannels = channel.length / (width * height);
+      const colorData = this.getColorValue(channel, optionsLocal, size, optionsLocal.numOfChannels);
       colorData.forEach((value, index) => {
         imageData.data[index] = value;
       });
     } else {
-      // if user defined channel does not exist --> return greyscale image
-      console.log('Defined channel does not exist, displaying only grey values');
+      // if user defined channel does not exist
+      console.log(`Defined channel(${options.useChannel}) or channel index(${options.useChannelIndex}) does not exist, choose a different channel or set the useChannel property to null if you want to visualize RGB(A) imagery`);
       const defaultColorData = this.getDefaultColor(size, optionsLocal.nullColor);
       defaultColorData.forEach((value, index) => {
         imageData.data[index] = value;
@@ -416,8 +415,11 @@ export default class GeoImage {
   }
 
   getColorValue(dataArray:[], options:GeoImageOptions, arrayLength:number, numOfChannels = 1) {
+    // const rgb = chroma.random().rgb(); // [R, G, B]
+    // const randomColor = [...rgb, 120];
     const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
-    let pixel:number = options.useChannel === null ? 0 : options.useChannel;
+    // channel index is equal to channel number - 1
+    let pixel:number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
     const colorsArray = new Array(arrayLength);
 
     // if useColorsBasedOnValues is true
@@ -435,6 +437,7 @@ export default class GeoImage {
 
     for (let i = 0; i < arrayLength; i += 4) {
       let pixelColor = options.nullColor;
+      // let pixelColor = randomColor;
       // FIXME
       // eslint-disable-next-line max-len
       if ((!Number.isNaN(dataArray[pixel])) && (options.noDataValue === undefined || dataArray[pixel] !== options.noDataValue)) {
@@ -447,7 +450,7 @@ export default class GeoImage {
           if (options.useHeatMap) {
             // FIXME
             // eslint-disable-next-line
-            pixelColor = [...colorScale(dataArray[pixel]).rgb(), Math.floor(options.alpha * 2.55)];
+            pixelColor = [...(colorScale(dataArray[pixel]) as any).rgb(), Math.floor(options.alpha * 2.55)];
           }
           if (options.useColorsBasedOnValues) {
             const index = dataValues.indexOf(dataArray[pixel]);
@@ -473,7 +476,7 @@ export default class GeoImage {
       }
       // FIXME
       // eslint-disable-next-line
-      [colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = pixelColor;
+      ([colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = pixelColor as any);
 
       pixel += numOfChannels;
     }
@@ -584,7 +587,7 @@ function getMeshAttributes(
 function getDelatinTileMesh(meshMaxError, width, height, terrain) {
   const tin = new Delatin(terrain, width + 1, height + 1);
   tin.run(meshMaxError);
-  // @ts-expect-error
+  // @ts-expect-error: Delatin instance properties 'coords' and 'triangles' are not explicitly typed in the library port
   const { coords, triangles } = tin;
   const vertices = coords;
   return { vertices, triangles };
