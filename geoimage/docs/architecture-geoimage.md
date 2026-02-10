@@ -16,11 +16,11 @@
 ##### Data visualisation options
 - Color
 - Transparency
-- Heatmap (custom color scale example [here](layer-cogbitmap.md#custom-heatmap-color-scale))
+- Heatmap (custom color scale example [here](showcase-layers.md#a-heatmaps))
 - Data slice
 - Automatic data range
 - Manual data range
-- Assign color to specific data value (example [here](layer-cogbitmap.md#assigning-color-to-specific-data-value))
+- Assign color to specific data value (example [here](showcase-layers.md#c-categorical-classification))
 
 ### Data processing options
 - `useAutoRange : boolean` - set automatic range of color gradient **(default false)**

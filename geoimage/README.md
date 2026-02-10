@@ -10,7 +10,7 @@
 
 This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery and thematic layers and the `CogTerrainLayer` for 3D terrain meshes.
 
-![Heatmap Example](docs/images/ManillaCogHeatmap.png)
+[//]: # (![Heatmap Example]&#40;geoimage/docs/images/ManillaCogHeatmap.png&#41;)
 
 ## Features
 
@@ -31,8 +31,12 @@ yarn add @gisatcz/deckgl-geolib
 
 For more information, visit the [npm package page](https://www.npmjs.com/package/@gisatcz/deckgl-geolib).
 
-## Usage
+## Documentation
 
+* **[Layer Showcase](docs/showcase-layers.md)** – Visual examples (RGB, Heatmaps, Terrain).
+* **[API Reference](docs/api-reference.md)** – Detailed property configuration.
+
+## Usage
 
 ### 1. CogBitmapLayer
 
@@ -50,10 +54,6 @@ const cogLayer = new CogBitmapLayer({
   }
 });
 ```
-
-Detailed Documentation:
-* [API Reference & Examples](docs/layer-cogbitmap.md)
-* [Visualization Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ### 2. CogTerrainLayer
 
@@ -75,9 +75,6 @@ const cogLayer = new CogTerrainLayer({
 });
 ```
 
-Detailed Documentation:
-* [API Reference & Examples](docs/layer-cogterrain.md)
-* [Terrain Processing Options (GeoImage Core)](docs/architecture-geoimage.md)
 
 ## Data Preparation
 
