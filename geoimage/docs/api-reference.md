@@ -2,37 +2,43 @@
 
 This document outlines the configuration options for the core `GeoImage` processing engine used by both `CogBitmapLayer` and `CogTerrainLayer`.
 
-## Common Options
+## Channel Selection (Common)
 
-All options below are passed via the `cogBitmapOptions` (for bitmap layers) or `terrainOptions` (for terrain layers) object.
+These options select which band of the GeoTIFF to use. Shared by both Bitmap and Terrain layers. **All parameters are optional.**
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **`useChannel`** | `number` \| `null` | `null` | Index of the channel to visualize. Defaults to `null` (RGB/RGBA). |
-| **`multiplier`** | `number` | `1.0` | Multiplies each data value by this factor. |
+| **`useChannel`** | `number` \| `null` | `null` | **Optional**. 1-based index of the channel to visualize (e.g. `1` for the first channel). Defaults to `null` (RGB/RGBA). |
+| **`useChannelIndex`** | `number` \| `null` | `null` | **Optional**. 0-based index of the channel to visualize (e.g. `0` for the first channel). Alternative to `useChannel`. |
+
+## Bitmap Specific Options
+
+These options apply specifically to `CogBitmapLayer` or when generating textures. **All parameters are optional.**
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
 | **`blurredTexture`** | `boolean` | `true` | If `true` (default), uses `GL.LINEAR` for smooth pixels. If `false`, uses `GL.NEAREST` for pixelated look. |
 
-### Visualization Modes
+### Visualization & Colors
+
+#### Continuous & Single Color
+Used for visualizing continuous data (elevation, temperature) or simple single-color styling.
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **`useHeatMap`** | `boolean` | `true` | Renders single-channel data as a color heatmap. |
+| **`useHeatMap`** | `boolean` | `true` | Renders single-channel data as a color heatmap using `colorScale`. |
+| **`colorScale`** | `ChromaColor[]` | `YlOrRd` | Array of colors for the heatmap gradient. |
 | **`useSingleColor`** | `boolean` | `false` | Renders all data values in a single solid color. |
 | **`color`** | `ChromaColor` | `magenta` | The solid color to use when `useSingleColor` is `true`. |
-| **`useAutoRange`** | `boolean` | `false` | Automatically calculates min/max values for color scaling. **Note:** Range is calculated per-tile (separately for each image), not globally. For consistent visualization across large areas, it is recommended to set identifying `colorScaleValueRange` manually. |
-
-### Colors & Classification
-
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| **`colorScale`** | `ChromaColor[]` | - | Array of colors for the heatmap gradient. |
+| **`useAutoRange`** | `boolean` | `false` | Automatically calculates min/max values for color scaling. **Note:** Range is calculated per-tile. |
 | **`colorScaleValueRange`** | `number[]` | `[0, 255]` | Min and Max values for the color scale (if `useAutoRange` is false). |
 | **`clipLow`** | `number` \| `null` | `null` | Hide values below this threshold. |
 | **`clipHigh`** | `number` \| `null` | `null` | Hide values above this threshold. |
 | **`clippedColor`** | `ChromaColor` | `transparent` | Color for values outside of the clip range. |
 | **`nullColor`** | `ChromaColor` | `transparent` | Color for NoData values. |
 
-### Thematic Coloring
+#### Thematic Colors
+Used for categorical data (land cover, classification).
 
 | Option | Type | Default | Exact Usage |
 | :--- | :--- | :--- | :--- |
@@ -42,7 +48,7 @@ All options below are passed via the `cogBitmapOptions` (for bitmap layers) or `
 | **`colorClasses`** | `[Color, [min, max]][]` | `[]` | Map ranges to colors. `[['red', [0, 10]], ['blue', [10, 20]]]` |
 | **`unidentifiedColor`** | `ChromaColor` | `transparent` | Color for values that don't match any class or value rule. |
 
-### Transparency & Opacity
+#### Transparency
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -51,12 +57,13 @@ All options below are passed via the `cogBitmapOptions` (for bitmap layers) or `
 
 ---
 
-## Terrain Specific Options
+## Terrain Options
 
-These options apply specifically to `CogTerrainLayer`.
+These options apply specifically to `CogTerrainLayer` or when generating heightmaps. **All parameters are optional.**
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| **`multiplier`** | `number` | `1.0` | Multiplies each data value by this factor (e.g. vertical exaggeration). Used in calculating elevation. |
 | **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
 
