@@ -79,7 +79,7 @@ In *Layer Properties* you can check detailed information about format, compressi
 - [COG Explorer](https://gisat.github.io/app-gisat-cog-explorer/)
   - application for verification and style creation for COG files developed by Gisat
   - based on Panther components
-  - supports all COG styles available in [Geoimage](architecture-geoimage.md) library from Geolib Visualiser
+  - supports all COG styles available in [Geoimage](api-reference.md) library from Geolib Visualiser
   - <ins>requirements</ins>: URL for COG file uploaded on S3 server
 
     <img src = "/geoimage/docs/images/gisat_cog_explorer.jpg" width = "60%">

@@ -109,11 +109,6 @@ yarn build
 yarn start
 ```
 
-### Technical Documentation
-For developers contributing to the core logic:
-* [GeoImage Internal Logic](docs/architecture-geoimage.md) – How the image processing and configuration work.
-* [CogTiles Architecture](docs/architecture-cogtiles.md) – How the tiling grid is calculated.
-
 
 <p style="text-align: center;">
   <sub>Maintained by <a href="https://gisat.cz">Gisat</a></sub>

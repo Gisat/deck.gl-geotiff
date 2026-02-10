@@ -43,10 +43,10 @@ Used for categorical data (land cover, classification).
 | Option | Type | Default | Exact Usage |
 | :--- | :--- | :--- | :--- |
 | **`useColorsBasedOnValues`** | `boolean` | `false` | Enable exact value matching. |
-| **`colorsBasedOnValues`** | `[number, Color][]` | `[]` | Map exact values to colors. `[[1, 'red'], [2, 'blue']]` |
+| **`colorsBasedOnValues`** | `[number, chroma.Color][]` | `[]` | Map exact values to colors. `[[1, 'red'], [2, 'blue']]` |
 | **`useColorClasses`** | `boolean` | `false` | Enable range-based classification. |
-| **`colorClasses`** | `[Color, [min, max]][]` | `[]` | Map ranges to colors. `[['red', [0, 10]], ['blue', [10, 20]]]` |
-| **`unidentifiedColor`** | `ChromaColor` | `transparent` | Color for values that don't match any class or value rule. |
+| **`colorClasses`** | `[chroma.Color, [min, max]][]` | `[]` | Map ranges to colors. `[['red', [0, 10]], ['blue', [10, 20]]]` |
+| **`unidentifiedColor`** | `chroma.Color` | `transparent` | Color for values that don't match any class or value rule. |
 
 #### Transparency
 
@@ -67,11 +67,14 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 | **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
 
+### Opacity
+**Setting opacity for terrain layers**: The Terrain layer is an ordinary Deck.gl layer instance, so `opacity` is a common prop.
+
 ---
 
 ## Type Definitions
 
-### `ChromaColor`
+### `chroma.Color`
 Any color format supported by [chroma.js](https://gka.github.io/chroma.js/), including:
 *   Named colors: `'red'`, `'darkblue'`
 *   Hex codes: `'#ff0000'`
