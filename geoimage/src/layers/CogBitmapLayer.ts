@@ -11,9 +11,6 @@ import {
 } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-// import { GL } from '@luma.gl/constants';
-// import GL from '@luma.gl/constants';
-// GL.GL.CLIP_DISTANCE0_WEBGL
 import type { MeshAttributes } from '@loaders.gl/schema';
 import CogTiles from '../core/CogTiles';
 import { GeoImageOptions } from '../core/GeoImage';

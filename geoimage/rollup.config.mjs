@@ -24,7 +24,6 @@ export default [
       '@deck.gl/geo-layers',
       '@deck.gl/layers',
       '@deck.gl/mesh-layers',
-      '@luma.gl/constants',
       '@loaders.gl/schema',
       '@loaders.gl/loader-utils',
     ],
