@@ -5,13 +5,13 @@
   "description": "Monorepo for deck.gl Cloud-Optimized GeoTIFF (COG) utilities",
   "license": "MIT",
   "author": "Gisat",
-  "homepage": "https://github.com/gisat/deck.gl-geotiff#readme",
+  "homepage": "https://github.com/Gisat/deck.gl-geotiff#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gisat/deck.gl-geotiff.git"
+    "url": "https://github.com/Gisat/deck.gl-geotiff.git"
   },
   "bugs": {
-    "url": "https://github.com/gisat/deck.gl-geotiff/issues"
+    "url": "https://github.com/Gisat/deck.gl-geotiff/issues"
   },
   "workspaces": [
     "geoimage",
