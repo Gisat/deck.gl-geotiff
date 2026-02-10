@@ -1,148 +1,69 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo } from 'react';
 import DeckGL from '@deck.gl/react';
-import { InitialViewStateProps } from '@deck.gl/core/lib/deck';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { MapView } from '@deck.gl/core';
-import chroma from 'chroma-js';
 import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
 
-const cogLayerDefinition = {
-  id: 'CogBitmapLayer',
-  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/GHS-POP/GHS_POP_E2015_COGeoN.tif',
-  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/Manila/jrc_gsw_mercator_comp_cog_deflate_float32.tif',
-  // deflate
-  // rasterData: 'http://gisat-gis.eu-central-1.linodeobjects.com/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_deflate.tif',
-  // lzw
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/LUISA_GST-66/project/demo_data_20250507/v1/regional/UG/UG-sosd-2018-2023_cog.tif',
-  // packbits
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_packbits_8.tif',
-  // lerc
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_lerc_8.tif',
-  // raw
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_raw.tif',
-  // jpeg
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/Manila_S2_Composite_2020022_Mercator_RGB_COG_jpeg_8.tif',
-  // erika test 1 co nesedi
-  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/COG_testy/openEO_2010-01-01Z_3857_1000m_web.tif',
-  // erika test 2 co je ok
-  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/COG_testy/openEO_2010-01-01Z_3857_32768_COGeoN.tif',
-  // gruzie
-  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/bsadri/test_raster/COG/LC_2021_all_Georgia_WEST3940_ZOOM6_test1_defl_COG256.tif',
-  // pavel uganda bez aligned levels
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Pavel_Luisa/openEO_2020-01-01Z_npp_act_cog_no_aligned_levels.tif',
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/3dflus/COG_NEW_ndviMAX_2025_11.tif',
-  // rasterData: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlusCCN_GST-93/project/data_cog/WorldCereals/Indie_cog.tif',
-  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/3dflus/COG_NEW_ndviMAX_2025_11.tif',
-  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaGdaAdbNepal23/rasters/snow_cover_cog/WET_SNOW_3857_2017-2021_cog_deflate.tif',
-  // rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/GHS-POP/GHS_POP_E2015_COGeoN.tif',
-  cogBitmapOptions: {
-    type: 'image',
-    blurredTexture: false,
-    // clipLow: 0,
-    useChannel: 1,
-    // alpha: 50,
-    // useSingleColor: true,
-    useHeatMap: true,
-    // colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
-    colorScale: chroma.brewer.Blues,
-    colorScaleValueRange: [-5000, 9000],
-    // nullColor: [127, 0, 255, 120],//violet
-    // unidentifiedColor: [255, 192, 203, 120],//pink
-    // clippedColor: [255, 255, 0, 120],//yellow
-    // colorScale: ['green', 'red', 'blue'],
-    // colorScaleValueRange: [0, 3],
-  },
-
-  isTiled: true,
-};
-
-const getCogLayer = (opacity: number) => new CogBitmapLayer({ ...cogLayerDefinition, opacity });
-
-
-const originalCOG = new CogBitmapLayer({
-  id: 'origibalCOG_cog_bitmap_name',
-  rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/3dflus/COG_ndviMAX_2021_11.tif',
-  isTiled: true,
-  cogBitmapOptions: {
-    type: 'image',
-    blurredTexture: true,
-    useChannel: 1,
-    // alpha: 80,
-    useHeatMap: true,
-    // useDataForOpacity: true,
-    colorScale: chroma.brewer.Reds,
-    colorScaleValueRange: [-5000, 9000],
-  },
-});
-
-const tileLayer = new TileLayer({
-  data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  id: 'standard-tile-layer',
-  minZoom: 0,
-  maxZoom: 19,
-  tileSize: 256,
-
-  renderSubLayers: (props) => {
-    const {
-      bbox: {
-        west, south, east, north,
-      },
-    } = props.tile;
-
-    return new BitmapLayer(props, {
-      data: null,
-      image: props.data,
-      bounds: [west, south, east, north],
-    });
-  },
-});
-const useInterval = (callback, delay) => {
-  const [intervalId, setIntervalId] = useState(null);
-
-  useEffect(() => {
-    if (delay !== null) {
-      const id = setInterval(callback, delay);
-      setIntervalId(id);
-      return () => clearInterval(id);
-    }
-  }, []);
-
-  return intervalId;
-};
-
 function CogBitmapLayerExample() {
-  const [layer, setLayer] = useState(getCogLayer(1));
-  const opacityRef = useRef(1);
-
-  // Set true to test change opacity in interval
-  if (false) {
-    useInterval(() => {
-      const newOpacity = opacityRef.current - 0.1;
-      opacityRef.current = newOpacity;
-      setLayer(getCogLayer(newOpacity));
-    }, 2000);
-  }
-
-  const initialViewState: InitialViewStateProps = {
-    longitude: 14.320397477225718,
-    latitude: 49.93523045357465,
-    zoom: 17,
-    // zoom: 12,
+  const initialViewState = {
+    longitude: 85.481261,
+    latitude: 28.11902,
+    zoom: 11,
   };
+
+  const layers = useMemo(() => {
+    const cogLayer = new CogBitmapLayer({
+      id: 'cogLayer_bitmap',
+      rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/esaGdaAdbNepal23/rasters/snow_cover_cog/WET_SNOW_3857_2017-2021_cog_deflate_in16_zoom16_levels8.tif',
+      isTiled: true,
+      cogBitmapOptions: {
+        type: 'image',
+        blurredTexture: true,
+        useChannel: 1,
+        // alpha: 80,
+        useHeatMap: true,
+        colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
+        colorScaleValueRange: [0, 300],
+      },
+    });
+
+    const tileLayer = new TileLayer({
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      id: 'standard-tile-layer',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile as any;
+        const { west, south, east, north } = bbox;
+
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [west, south, east, north],
+        });
+      },
+    });
+
+    return [
+      tileLayer,
+      cogLayer,
+    ];
+  }, []);
 
   return (
     <DeckGL
       getCursor={() => 'inherit'}
-      initialViewState={initialViewState}
+      initialViewState={initialViewState as any}
       controller
-      layers={[tileLayer, layer, originalCOG] }
+      layers={layers}
       views={[
         new MapView({
           controller: true,
           id: 'map',
           height: '100%',
-          top: '100px',
           width: '100%',
         }),
       ]}
