@@ -85,8 +85,19 @@ Quick Checklist:
 2.  **Tiling:** 256x256 tiles
 3.  **Compression:** DEFLATE is recommended
 
-[Read the full Data Preparation Guide](geoimage/docs/dataPreparation.md)
-*(Includes standard commands for `rio-cogeo`)*
+Use the following `rio-cogeo` command to generate compatible files:
+
+```bash
+rio cogeo create \
+  --cog-profile=deflate \
+  --blocksize=256 \
+  --overview-blocksize=256 \
+  --web-optimized \
+  --nodata=nan \
+  --forward-band-tags \
+  [input_file.tif] \
+  [output_cog_file.tif]
+```
 
 
 ## Architecture & Development
