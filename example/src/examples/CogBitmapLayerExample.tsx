@@ -21,7 +21,8 @@ function CogBitmapLayerExample() {
       isTiled: true,
       cogBitmapOptions: {
         ...COG_BITMAP_EXAMPLES.NEPAL_SNOW.defaultOptions as GeoImageOptions,
-        colorScale: ['#edf8b1','#7fcdbb','#2c7fb8'],
+        type: 'image',
+        useChannel: 1,
 
       },
     });

@@ -18,10 +18,10 @@ function CogMultibandExample() {
   const layers = useMemo(() => {
     const cogLayer = new CogBitmapLayer({
       id: 'CogBitmapLayer',
-      rasterData: COG_BITMAP_EXAMPLES.UGANDA.url,
+      rasterData: COG_BITMAP_EXAMPLES.UGANDA_MULTIBAND.url,
       isTiled: true,
       cogBitmapOptions: {
-        ...(COG_BITMAP_EXAMPLES.UGANDA.defaultOptions as GeoImageOptions),
+        ...(COG_BITMAP_EXAMPLES.UGANDA_MULTIBAND.defaultOptions as GeoImageOptions),
         useChannel: useChannel16 ? 16 : 15,
       },
     });

@@ -24,7 +24,10 @@ function CogTerrainLayerExample() {
       tileSize: 256,
       // meshMaxError: 1,
       operation: 'terrain+draw',
-      terrainOptions: { ...COG_TERRAIN_EXAMPLES.PAMZAM_DEM.defaultOptions as GeoImageOptions },
+      terrainOptions: {
+        ...COG_TERRAIN_EXAMPLES.PAMZAM_DEM.defaultOptions as GeoImageOptions,
+        type: 'terrain',
+      },
     });
 
     const tileLayer = new TileLayer({
