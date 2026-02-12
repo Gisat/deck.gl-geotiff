@@ -5,6 +5,8 @@ import { BitmapLayer } from '@deck.gl/layers';
 import { MapView } from '@deck.gl/core';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import { CogTerrainLayer, CogBitmapLayer } from "@gisatcz/deckgl-geolib";
+import { COG_TERRAIN_EXAMPLES } from './dataSources';
+import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
 function CogTerrainLayerExample() {
   const initialViewState = {
@@ -17,16 +19,12 @@ function CogTerrainLayerExample() {
   const layers = useMemo(() => {
     const cogLayer = new CogTerrainLayer({
       id: 'cog-terrain-layer',
-      elevationData: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v2/DEMs/pamzam_10m_Mercator_COG_DEFLATE.tif',
+      elevationData: COG_TERRAIN_EXAMPLES.PAMZAM_DEM.url,
       isTiled: true,
       tileSize: 256,
       // meshMaxError: 1,
       operation: 'terrain+draw',
-      terrainOptions: {
-        type: 'terrain',
-        // multiplier: 0.1,
-        // terrainSkirtHeight: 100
-      },
+      terrainOptions: { ...COG_TERRAIN_EXAMPLES.PAMZAM_DEM.defaultOptions as GeoImageOptions },
     });
 
     const tileLayer = new TileLayer({
@@ -54,7 +52,7 @@ function CogTerrainLayerExample() {
 
     const heatmap = new CogBitmapLayer({
       id: 'cog-bitmap-heatmap',
-      rasterData: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v2/DEMs/pamzam_10m_Mercator_COG_DEFLATE.tif',
+      rasterData: COG_TERRAIN_EXAMPLES.PAMZAM_DEM.url,
       isTiled: true,
       clampToTerrain: true,
       cogBitmapOptions: {

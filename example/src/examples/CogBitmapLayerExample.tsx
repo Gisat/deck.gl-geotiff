@@ -4,6 +4,8 @@ import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { MapView } from '@deck.gl/core';
 import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
+import { COG_BITMAP_EXAMPLES } from './dataSources';
+import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
 function CogBitmapLayerExample() {
   const initialViewState = {
@@ -15,16 +17,12 @@ function CogBitmapLayerExample() {
   const layers = useMemo(() => {
     const cogLayer = new CogBitmapLayer({
       id: 'cogLayer_bitmap',
-      rasterData: 'https://eu-central-1.linodeobjects.com/gisat-gis/esaGdaAdbNepal23/rasters/snow_cover_cog/WET_SNOW_3857_2017-2021_cog_deflate_in16_zoom16_levels8.tif',
+      rasterData: COG_BITMAP_EXAMPLES.NEPAL_SNOW.url,
       isTiled: true,
       cogBitmapOptions: {
-        type: 'image',
-        blurredTexture: true,
-        useChannel: 1,
-        // alpha: 80,
-        useHeatMap: true,
-        colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
-        colorScaleValueRange: [0, 300],
+        ...COG_BITMAP_EXAMPLES.NEPAL_SNOW.defaultOptions as GeoImageOptions,
+        colorScale: ['#edf8b1','#7fcdbb','#2c7fb8'],
+
       },
     });
 
