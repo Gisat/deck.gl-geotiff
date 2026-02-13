@@ -325,7 +325,7 @@ export default class GeoImage {
             const rgbaColor = this.hasPixelsNoData(rgbColor, optionsLocal.noDataValue)
               ? optionsLocal.nullColor
               : [...rgbColor, Math.floor(optionsLocal.alpha! * 2.55)];
-            // eslint-disable-next-line max-len
+
             [imageData.data[idx], imageData.data[idx + 1], imageData.data[idx + 2], imageData.data[idx + 3]] = rgbaColor;
             pixel += 3;
           }
@@ -388,6 +388,7 @@ export default class GeoImage {
       });
     } else {
       // if user defined channel does not exist
+      /* eslint-disable no-console */
       console.log(`Defined channel(${options.useChannel}) or channel index(${options.useChannelIndex}) does not exist, choose a different channel or set the useChannel property to null if you want to visualize RGB(A) imagery`);
       const defaultColorData = this.getDefaultColor(size, optionsLocal.nullColor);
       defaultColorData.forEach((value, index) => {
@@ -439,7 +440,7 @@ export default class GeoImage {
       let pixelColor = options.nullColor;
       // let pixelColor = randomColor;
       // FIXME
-      // eslint-disable-next-line max-len
+
       if ((!Number.isNaN(dataArray[pixel])) && (options.noDataValue === undefined || dataArray[pixel] !== options.noDataValue)) {
         if (
           (options.clipLow != null && dataArray[pixel] <= options.clipLow)
@@ -449,7 +450,7 @@ export default class GeoImage {
         } else {
           if (options.useHeatMap) {
             // FIXME
-            // eslint-disable-next-line
+
             pixelColor = [...(colorScale(dataArray[pixel]) as any).rgb(), Math.floor(options.alpha * 2.55)];
           }
           if (options.useColorsBasedOnValues) {
@@ -469,13 +470,13 @@ export default class GeoImage {
             pixelColor = options.color;
           }
           if (options.useDataForOpacity) {
-            // eslint-disable-next-line max-len
+
             pixelColor[3] = this.scale(dataArray[pixel], options.colorScaleValueRange[0]!, options.colorScaleValueRange.slice(-1)[0]!, 0, 255);
           }
         }
       }
       // FIXME
-      // eslint-disable-next-line
+
       ([colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = pixelColor as any);
 
       pixel += numOfChannels;

@@ -22,7 +22,14 @@
     "react-router-dom": "^6.2.1",
     "react-scripts": "5.0.0",
     "recoil": "^0.6.1",
-    "styled-components": "^5.3.3"
+    "styled-components": "^5.3.3",
+    "@deck.gl/react": "^9.0.33",
+    "@deck.gl/widgets": "^9.0.33",
+    "@deck.gl/core": "^9.0.33",
+    "@deck.gl/layers": "^9.0.33",
+    "@deck.gl/geo-layers": "^9.0.33",
+    "@deck.gl/extensions": "^9.0.33",
+    "@gisatcz/deckgl-geolib": "*"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

@@ -181,6 +181,7 @@ class CogTiles {
     const exactMatchIndex = this.cogZoomLookup.indexOf(zoom);
     if (exactMatchIndex === -1) {
       // TO DO improve the condition if the match index is not found
+      /* eslint-disable no-console */
       console.log('getImageIndexForZoomLevel: error in retrieving image by zoom index');
     }
     return exactMatchIndex;
@@ -296,6 +297,7 @@ class CogTiles {
             if (destRow < tileWidth && destCol < tileHeight) {
               tileBuffer[destRowOffset + destCol] = validRasterData[band][srcRowOffset + col];
             } else {
+              /* eslint-disable no-console */
               console.log('error in assigning data to tile buffer');
             }
           }
@@ -402,6 +404,7 @@ class CogTiles {
   getNoDataValue(image: GeoTIFFImage) {
     const noDataRaw = image.getGDALNoData();
     if (noDataRaw === undefined || noDataRaw === null) {
+      /* eslint-disable no-console */
       console.warn('No noData value defined — raster might be rendered incorrectly.');
       return undefined;
     }
@@ -409,6 +412,7 @@ class CogTiles {
     const cleaned = String(noDataRaw).replace(/\0/g, '').trim();
 
     if (cleaned === '') {
+      /* eslint-disable no-console */
       console.warn('noData value is an empty string after cleanup.');
       return undefined;
     }
@@ -422,6 +426,7 @@ class CogTiles {
 
     // If not declared as "nan" and still parsed to NaN, it's an error
     if (Number.isNaN(parsed)) {
+      /* eslint-disable no-console */
       console.warn(`Failed to parse numeric noData value: '${cleaned}'`);
       return undefined;
     }
