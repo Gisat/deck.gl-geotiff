@@ -8,9 +8,9 @@
 
 **A Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data.**
 
-This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery/heatmaps and the `CogTerrainLayer` for 3D terrain meshes.
+This library allows you to efficiently visualize high-resolution bitmap and terrain data directly from COG sources. It includes the `CogBitmapLayer` for 2D imagery and thematic layers and the `CogTerrainLayer` for 3D terrain meshes.
 
-![Heatmap Example](geoimage/docs/images/ManillaCogHeatmap.png)
+[//]: # (![Heatmap Example]&#40;geoimage/docs/images/ManillaCogHeatmap.png&#41;)
 
 ## Features
 
@@ -21,7 +21,7 @@ This library allows you to efficiently visualize high-resolution bitmap and terr
 
 ## Installation
 
-To use the Geolib Visualizer library, you need to have deck.gl and its dependencies installed.
+To use this library, you need to have deck.gl and its dependencies installed.
 
 ```bash
 npm install @gisatcz/deckgl-geolib
@@ -31,12 +31,16 @@ yarn add @gisatcz/deckgl-geolib
 
 For more information, visit the [npm package page](https://www.npmjs.com/package/@gisatcz/deckgl-geolib).
 
-## Usage
+## Documentation
 
+* **[Layer Showcase](geoimage/docs/showcase-layers.md)** – Visual examples (RGB, Heatmaps, Terrain).
+* **[API Reference](geoimage/docs/api-reference.md)** – Detailed property configuration.
+
+## Usage
 
 ### 1. CogBitmapLayer
 
-Used for displaying 2D rasters (satellite imagery, analysis results, heatmaps).
+Used for displaying 2D rasters: Raw Observation (Satellite/Aerial), Data Structure (Multi-band/Single-band), and Analysis Output (Thematic/Categorical).
 
 ```typescript
 import { CogBitmapLayer } from '@gisatcz/deckgl-geolib';
@@ -51,10 +55,6 @@ const cogLayer = new CogBitmapLayer({
 });
 ```
 
-Detailed Documentation:
-* [API Reference & Examples](geoimage/docs/layer-cogbitmap.md)
-* [Visualization Options (GeoImage Core)](geoimage/docs/architecture-geoimage.md)
-
 ### 2. CogTerrainLayer
 
 Used for displaying 3D terrain from elevation data.
@@ -68,7 +68,6 @@ const cogLayer = new CogTerrainLayer({
   elevationData:  'cog_terrain_data_url.tif',
   isTiled: true,
   tileSize: 256,
-  meshMaxError: 1,
   operation: 'terrain+draw',
   terrainOptions: {
     type: 'terrain',
@@ -76,9 +75,6 @@ const cogLayer = new CogTerrainLayer({
 });
 ```
 
-Detailed Documentation:
-* [API Reference & Examples](geoimage/docs/layer-cogterrain.md)
-* [Terrain Processing Options (GeoImage Core)](geoimage/docs/architecture-geoimage.md)
 
 ## Data Preparation
 
@@ -89,8 +85,19 @@ Quick Checklist:
 2.  **Tiling:** 256x256 tiles
 3.  **Compression:** DEFLATE is recommended
 
-[Read the full Data Preparation Guide](geoimage/docs/dataPreparation.md)
-*(Includes standard commands for `rio-cogeo`)*
+Use the following `rio-cogeo` command to generate compatible files:
+
+```bash
+rio cogeo create \
+  --cog-profile=deflate \
+  --blocksize=256 \
+  --overview-blocksize=256 \
+  --web-optimized \
+  --nodata=nan \
+  --forward-band-tags \
+  [input_file.tif] \
+  [output_cog_file.tif]
+```
 
 
 ## Architecture & Development
@@ -112,11 +119,6 @@ yarn build
 # 3. Run the example app
 yarn start
 ```
-
-### Technical Documentation
-For developers contributing to the core logic:
-* [GeoImage Internal Logic](geoimage/docs/architecture-geoimage.md) – How the image processing and configuration work.
-* [CogTiles Architecture](geoimage/docs/architecture-cogtiles.md) – How the tiling grid is calculated.
 
 
 <p style="text-align: center;">
