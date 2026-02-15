@@ -41,43 +41,39 @@ class CogTiles {
   async initializeCog(url: string) {
     this.cog = await fromUrl(url);
     const image = await this.cog.getImage();
+    const fileDirectory = image.fileDirectory;
 
-    // 1. Metadata getters are now async
-    this.cogOrigin = await image.getOrigin();
+    this.cogOrigin = image.getOrigin();
 
-    // 2. Internal logic helper updates
     this.options.noDataValue ??= await this.getNoDataValue(image);
-    this.options.format ??= await this.getDataTypeFromTags(image) as GeoImageOptions['format'];
+    this.options.format ??= await this.getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
 
-    // 3. Tile/Channel metadata
-    this.options.numOfChannels = image.fileDirectory.getValue('SamplesPerPixel');
-    this.options.planarConfig = image.fileDirectory.getValue('PlanarConfiguration');
+    this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
+    this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
 
     [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
 
-    // 4. Tile dimensions
-    this.tileSize = image.getTileWidth(); // This remains sync in v3
+    this.tileSize = image.getTileWidth();
 
-    this.zoomRange = this.calculateZoomRange(image, await this.cog.getImageCount());
+    this.zoomRange = this.calculateZoomRange(
+      this.tileSize, image.getResolution()[0], await this.cog.getImageCount()
+    );
 
-    // 5. Bounds calculation
-    this.bounds = await this.calculateBoundsAsLatLon(image);
+    this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
   }
 
   getZoomRange() {
     return this.zoomRange;
   }
 
-  calculateZoomRange(img: GeoTIFFImage, imgCount: number) {
-    const maxZoom = this.getZoomLevelFromResolution(img.getTileWidth(), img.getResolution()[0]);
+  calculateZoomRange(tileSize: number, resolution: number, imgCount: number) {
+    const maxZoom = this.getZoomLevelFromResolution(tileSize, resolution);
     const minZoom = maxZoom - (imgCount - 1);
 
     return [minZoom, maxZoom];
   }
 
-  calculateBoundsAsLatLon(image: GeoTIFFImage) {
-    const bbox = image.getBoundingBox();
-
+  calculateBoundsAsLatLon(bbox: number[]){
     const minX = Math.min(bbox[0], bbox[2]);
     const maxX = Math.max(bbox[0], bbox[2]);
     const minY = Math.min(bbox[1], bbox[3]);
@@ -357,9 +353,14 @@ class CogTiles {
    * @param {GeoTIFFImage} image - A GeoTIFF.js image.
    * @returns {Promise<string>} - A string representing the data type.
    */
- async getDataTypeFromTags(image: GeoTIFFImage) {
-    // Retrieve the file directory containing TIFF tags.
-    const fileDirectory = image.getFileDirectory();
+ async getDataTypeFromTags(fileDirectory: any) {
+    const hasSampleFormat = fileDirectory.hasTag('SampleFormat');
+    const hasBitsPerSample = fileDirectory.hasTag('BitsPerSample');
+
+    if (!hasSampleFormat || !hasBitsPerSample) {
+      console.warn("Missing SampleFormat or BitsPerSample tags, defaulting to UInt8");
+      return 'UInt8';
+    }
 
     // In GeoTIFF, BitsPerSample (tag 258) and SampleFormat (tag 339) provide the type info.
     // They can be either a single number or an array if there are multiple samples.
@@ -375,12 +376,8 @@ class CogTiles {
       ? bitsPerSample[0]
       : bitsPerSample;
 
-    // Map the sample format to its corresponding type string.
-    // The common definitions are:
-    //   1: Unsigned integer
-    //   2: Signed integer
-    //   3: Floating point
     let typePrefix;
+    // 1 = Unsigned Integer, 2 = Signed Integer, 3 = Floating Point
     if (format === 1) {
       typePrefix = 'UInt';
     } else if (format === 2) {
@@ -390,7 +387,7 @@ class CogTiles {
     } else {
       typePrefix = 'Unknown';
     }
-    // console.log(`data type ${typePrefix}${bits}`);
+
     return `${typePrefix}${bits}`;
   }
 
