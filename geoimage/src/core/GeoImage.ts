@@ -8,14 +8,12 @@ import Delatin from './delatin';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
-// FIXME - tesselator as a parameter
-const tesselator = 'martini';
-// const tesselator = 'delatin';
 export type ClampToTerrainOptions = {
   terrainDrawMode?: string
 }
 export type GeoImageOptions = {
     type: 'image' | 'terrain',
+    tesselator?: 'martini' | 'delatin',
     format?: 'uint8' | 'uint16' | 'uint32' |'int8' | 'int16' | 'int32' | 'float32' | 'float64'
     useHeatMap?: boolean,
     useColorsBasedOnValues? : boolean,
@@ -49,6 +47,7 @@ export type GeoImageOptions = {
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
   type: 'image',
+  tesselator: 'martini',
   format: 'uint8',
   useHeatMap: true,
   useColorsBasedOnValues: false,
@@ -175,7 +174,7 @@ export default class GeoImage {
       }
     }
 
-    if (tesselator === 'martini') {
+    if (options.tesselator === 'martini') {
     // backfill bottom border
       for (let i = (width + 1) * width, x = 0; x < width; x++, i++) {
         terrain[i] = terrain[i - width - 1];
@@ -190,7 +189,7 @@ export default class GeoImage {
     const { terrainSkirtHeight } = options;
 
     let mesh;
-    switch (tesselator as string) {
+    switch (options.tesselator) {
       case 'martini':
         mesh = getMartiniTileMesh(meshMaxError, width, terrain);
 
@@ -250,8 +249,6 @@ export default class GeoImage {
         rasters: any[] },
     options: GeoImageOptions,
   ) {
-    // console.time('bitmap-generated-in');
-    // const optionsLocal = { ...options };
     const optionsLocal = { ...options };
 
     let rasters = [];
