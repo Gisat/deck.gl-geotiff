@@ -37,8 +37,46 @@ export const COG_BITMAP_EXAMPLES: Record<string, CogDataSource> = {
     url: 'https://gisat-gis.eu-central-1.linodeobjects.com/bsadri/test_raster/COG/LC_2021_all_Georgia_WEST3940_ZOOM6_test1_defl_COG256.tif',
     defaultOptions: {
       useAutoRange: true,
+      clipLow: 0
    },
   },
+  INDIA: {
+    name: 'Georgia Land Cover',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-gis/3dflus/Indie_cog.tif',
+  },
+  // 512 blocksize not supported yet
+  WSF_EVOLUTION_512: {
+    name: 'WSF Evolution',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/WSFevolution/WSF2019evolution_zoom0_nearest_COG.tif',
+
+  },
+  WSF_EVOLUTION_256: {
+    name: 'WSF Evolution 2',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/wsf/WSF2019_zoom2_2-2_nearest_COGeo.tif',
+
+  },
+  MANILA_RGB: {
+    name: 'Manila RGB Imagery',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v2/MANILA/Manila_S2_Composite_2020022_Mercator_RGB_COG_DEFLATE.tif',
+    defaultOptions: {
+      useChannel: null
+    }
+  },
+  MANILA_SURFACE_WATER: {
+    name: 'Manila Global Surface Water',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/Manila/jrc_gsw_mercator_comp_cog_deflate_float32.tif',
+    defaultOptions:{
+      useChannel: 3,
+      clipLow: 0,
+      colorScaleValueRange: [0,3],
+      colorScale: ['blue', 'red', 'green']
+    }
+  },
+  NEPAL_SLOPE: {
+    name: 'Nepal Slope',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaGdaAdbNepal23/rasters/copdem_cog/copdem_slope_cog_deflate_float32_zoom16_levels8.tif',
+  },
+
 
   // --- COMPRESSION & FORMAT TESTS ---
   TEST_DEFLATE: {
@@ -61,6 +99,10 @@ export const COG_BITMAP_EXAMPLES: Record<string, CogDataSource> = {
     name: 'Compression: LERC',
     url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_lerc.tif',
   },
+  TEST_RAW: {
+    name: 'Compression: Raw',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/compressions/SNOW_3857_2017-2021_cog_int16_raw.tif',
+  },
 
   // --- GLOBAL & LARGE DATASETS ---
   WORLD_CEREAL: {
@@ -80,7 +122,49 @@ export const COG_BITMAP_EXAMPLES: Record<string, CogDataSource> = {
   TEST: {
     name: 'OpenEO (Not Aligned to Web Mercator)',
     url: 'https://gisat-gis.eu-central-1.linodeobjects.com/COG_testy/openEO_2010-01-01Z_3857_1000m_web.tif',
-  }
+  },
+  OPENEO_ALIGNED: {
+    name: 'OpenEO Aligned',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/COG_testy/openEO_2010-01-01Z_3857_32768_web.tif',
+  },
+  OPENEO_NOT_ALIGNED: {
+    name: 'OpenEO Not Aligned',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/COG_testy/openEO_2010-01-01Z_3857_1000m_web.tif',
+  },
+
+  // --- RESAMPLING METHODS ---
+  RESAMPLE_AVERAGE: {
+      name: 'Resampling: Average',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_average.tif',
+  },
+  RESAMPLE_BILINEAR: {
+      name: 'Resampling: Bilinear',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_bilinear.tif',
+  },
+   RESAMPLE_CUBIC_SPLINE: {
+      name: 'Resampling: Cubic Spline',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_cubic_spline.tif',
+  },
+  RESAMPLE_CUBIC: {
+      name: 'Resampling: Cubic',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_cubic.tif',
+  },
+  RESAMPLE_GAUSS: {
+      name: 'Resampling: Gauss',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_gauss.tif',
+  },
+  RESAMPLE_LANCZOS: {
+      name: 'Resampling: Lanczos',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_lanczos.tif',
+  },
+  RESAMPLE_MODE: {
+      name: 'Resampling: Mode',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_mode.tif',
+  },
+  RESAMPLE_NEAREST: {
+      name: 'Resampling: Nearest',
+      url: 'https://eu-central-1.linodeobjects.com/gisat-gis/COG_testy/Resampling_samples/openEO_2020-01-01Z_hanpp_luc_cog_3_nearest.tif',
+  },
 };
 
 export const COG_TERRAIN_EXAMPLES: Record<string, CogDataSource> = {
@@ -93,6 +177,51 @@ export const COG_TERRAIN_EXAMPLES: Record<string, CogDataSource> = {
     url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/dtm.bareearth_ensemble_p10_250m_s_2018_go_epsg4326_v20230221_deflate_cog.tif',
     defaultOptions: {
       multiplier: 0.2
+    }
+  },
+  COPERNICUS_DEM: {
+    name: 'Copernicus DEM',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaGdaAdbNepal23/rasters/copdem_cog/copdem_cog_deflate_float32_levels8.tif',
+  },
+  NEPAL_COP30: {
+    name: 'Nepal Copernicus 30m DEM',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/DEM_COP30_float32_wgs84_deflate_cog_float32.tif',
+  },
+
+  // --- LUZON DEM - different data types ---
+  LUZON_UINT8: {
+    name: 'Luzon DEM: UInt8',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/luzon_dem_deflate_cog_uint8.tif',
+    defaultOptions: {
+      clipLow: 0
+    }
+  },
+  LUZON_UINT16: {
+    name: 'Luzon DEM: UInt16',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/luzon_dem_deflate_cog_uint16.tif',
+    defaultOptions: {
+      clipLow: 0
+    }
+  },
+  LUZON_UINT32: {
+    name: 'Luzon DEM: UInt32',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/luzon_dem_deflate_cog_uint32.tif',
+    defaultOptions: {
+      clipLow: 0
+    }
+  },
+  LUZON_FLOAT32: {
+    name: 'Luzon DEM: Float32',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/luzon_dem_deflate_cog_float32.tif',
+    defaultOptions: {
+      clipLow: 0
+    }
+  },
+  LUZON_FLOAT64: {
+    name: 'Luzon DEM: Float64',
+    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/luzon_dem_deflate_cog_float64.tif',
+    defaultOptions: {
+      clipLow: 0
     }
   },
 };

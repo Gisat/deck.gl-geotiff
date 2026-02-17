@@ -127,6 +127,10 @@ type _CogBitmapLayerProps = {
 
   isTiled: boolean;
 
+  /** Pre-initialized CogTiles object */
+  cogTiles?: CogTiles;
+
+
   /**
    * @deprecated Use `loadOptions.terrain.workerUrl` instead
    */
@@ -160,7 +164,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     super.initializeState(context);
 
     this.setState({
-      bitmapCogTiles: new CogTiles(this.props.cogBitmapOptions),
+      bitmapCogTiles: this.props.cogTiles || new CogTiles(this.props.cogBitmapOptions),
       initialized: false,
     });
 

@@ -1,61 +1,69 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
-import { TileLayer } from '@deck.gl/geo-layers';
-import { BitmapLayer } from '@deck.gl/layers';
-import { MapView } from '@deck.gl/core';
-import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-import { CogTerrainLayer, CogBitmapLayer } from "@gisatcz/deckgl-geolib";
+import { MapView, WebMercatorViewport } from '@deck.gl/core';
+import { CogTerrainLayer, CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
 function CogTerrainLayerExample() {
-  const initialViewState = {
-    longitude: 120.73420,
-    latitude: 15.20150,
-    zoom: 12,
-    pitch: 60,
+  const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_DEM;
+  const [viewState, setViewState] = useState<any>(null);
+  const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
+
+  const terrainOptions: GeoImageOptions = {
+    ...mainCog.defaultOptions as GeoImageOptions,
+    type: 'terrain',
   };
 
+  useEffect(() => {
+    const init = async () => {
+      const cog = new CogTiles(terrainOptions);
+
+      await cog.initializeCog(mainCog.url);
+      setInitializedCog(cog);
+      const bounds = cog.getBoundsAsLatLon();
+
+      const viewport = new WebMercatorViewport({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+
+      const {
+        longitude, latitude, zoom,
+      } = viewport.fitBounds(
+        [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+        { padding: 20 },
+      );
+
+      setViewState({
+        longitude,
+        latitude,
+        zoom,
+        pitch: 60,
+        bearing: 0,
+      });
+    };
+
+    init();
+  }, []);
+
   const layers = useMemo(() => {
+    if (!viewState || !initializedCog) return [];
+
     const cogLayer = new CogTerrainLayer({
       id: 'cog-terrain-layer',
-      elevationData: COG_TERRAIN_EXAMPLES.PAMZAM_DEM.url,
+      elevationData: mainCog.url,
+      cogTiles: initializedCog,
       isTiled: true,
       tileSize: 256,
       // meshMaxError: 1,
       operation: 'terrain+draw',
-      terrainOptions: {
-        ...COG_TERRAIN_EXAMPLES.PAMZAM_DEM.defaultOptions as GeoImageOptions,
-        type: 'terrain',
-      },
-    });
-
-    const tileLayer = new TileLayer({
-      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      id: 'standard-tile-layer',
-      minZoom: 0,
-      maxZoom: 19,
-      tileSize: 256,
-      extensions: [new TerrainExtension()],
-
-      renderSubLayers: (props) => {
-        const {
-          bbox: {
-            west, south, east, north,
-          },
-        } = props.tile as any;
-
-        return new BitmapLayer(props, {
-          data: undefined,
-          image: props.data,
-          bounds: [west, south, east, north],
-        });
-      },
+      terrainOptions,
     });
 
     const heatmap = new CogBitmapLayer({
       id: 'cog-bitmap-heatmap',
-      rasterData: COG_TERRAIN_EXAMPLES.PAMZAM_DEM.url,
+      rasterData: mainCog.url,
       isTiled: true,
       clampToTerrain: true,
       cogBitmapOptions: {
@@ -72,12 +80,24 @@ function CogTerrainLayerExample() {
       heatmap,
       cogLayer,
     ];
-  }, []);
+  }, [viewState, initializedCog]);
+
+  if (!viewState) {
+    return (
+      <div style={{
+        width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      >
+        <div>Loading AOI...</div>
+      </div>
+    );
+  }
 
   return (
     <DeckGL
       getCursor={() => 'inherit'}
-      initialViewState={initialViewState as any}
+      viewState={viewState}
+      onViewStateChange={({ viewState: newViewState }) => setViewState(newViewState as any)}
       controller
       layers={layers}
       views={[
