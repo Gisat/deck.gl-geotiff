@@ -8,7 +8,7 @@ import { COG_BITMAP_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
 function CogBitmapLayerExample() {
-  const mainCog = COG_BITMAP_EXAMPLES.WSF_EVOLUTION;
+  const mainCog = COG_BITMAP_EXAMPLES.NEPAL_SNOW;
   const [viewState, setViewState] = useState<any>(null); // Start with null viewState
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
 
