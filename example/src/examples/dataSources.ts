@@ -101,11 +101,11 @@ export const COG_BITMAP_EXAMPLES: Record<string, CogDataSource> = {
   // --- GLOBAL & LARGE DATASETS ---
   WORLD_CEREAL: {
     name: 'WorldCereal Global Map',
-    url: 'https://eu-central-1.linodeobjects.com/gisat-data/WorldCereal_GST-10/project/demo/merged_cog.tif',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/deck.gl-geotiff/examples/dataSources/cog_bitmap/merged_cog.tif',
   },
   GHS_POPULATION: {
     name: 'Global Human Settlement Pop',
-    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/esaUtepUnHabitat/rasters/global/GHS-POP/GHS_POP_E2015_COGeoN.tif',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/deck.gl-geotiff/examples/dataSources/cog_bitmap/GHS_POP_E2015_COGeoN.tif',
   },
 
   // --- DEBUGGING ---
@@ -164,7 +164,7 @@ export const COG_TERRAIN_EXAMPLES: Record<string, CogDataSource> = {
   },
   GLOBAL_DTM_BAREEARTH: {
     name: 'Global DTM BareEarth',
-    url: 'https://gisat-gis.eu-central-1.linodeobjects.com/eman/versions/v3/DEM/dtm.bareearth_ensemble_p10_250m_s_2018_go_epsg4326_v20230221_deflate_cog.tif',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/deck.gl-geotiff/examples/dataSources/cog_terrain/dtm.bareearth_ensemble_p10_250m_s_2018_go_epsg4326_v20230221_deflate_cog.tif',
     defaultOptions: {
       multiplier: 0.2
     }
