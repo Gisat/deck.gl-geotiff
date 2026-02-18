@@ -433,40 +433,6 @@ class CogTiles {
     return parsed;
   }
 
-  // /**
-  //  * Retrieves the number of channels (samples per pixel) in a GeoTIFF image.
-  //  *
-  //  * @param {GeoTIFFImage} image - A GeoTIFFImage object from which to extract the number of channels.
-  //  * @returns {number} The number of channels in the image.
-  //  */
-  // getNumberOfChannels(image) {
-  //   return image.fileDirectory.getValue('SamplesPerPixel') || 1;
-  // }
-  //
-  // /**
-  //  * Retrieves the PlanarConfiguration value from a GeoTIFF image.
-  //  *
-  //  * @param {GeoTIFFImage} image - The GeoTIFF image object.
-  //  * @returns {number} The PlanarConfiguration value (1 for Chunky format, 2 for Planar format).
-  //  */
-  // getPlanarConfiguration(image: GeoTIFFImage): number {
-  //   // Access the tag using the v3 getValue method
-  //   const planarConfiguration = image.fileDirectory.getValue('PlanarConfiguration');
-  //
-  //   // If the tag is missing (undefined), the TIFF spec says default to 1
-  //   if (planarConfiguration === undefined) {
-  //     return 1;
-  //   }
-  //
-  //
-  //   // If the tag exists but is a weird value, then throw the error
-  //   if (planarConfiguration !== 1 && planarConfiguration !== 2) {
-  //     throw new Error(`Invalid planar configuration: ${planarConfiguration}`);
-  //   }
-  //
-  //   return planarConfiguration;
-  // }
-
   /**
    * Creates a tile buffer of the specified size using a typed array corresponding to the provided data type.
    *
