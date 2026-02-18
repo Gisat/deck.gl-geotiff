@@ -63,6 +63,7 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| **`tesselator`** | `'martini'` \| `'delatin'` | `'martini'` | The algorithm used for terrain mesh generation. 'Martini' is generally faster, 'Delatin' may produce higher quality meshes. |
 | **`multiplier`** | `number` | `1.0` | Multiplies each data value by this factor (e.g. vertical exaggeration). Used in calculating elevation. |
 | **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |

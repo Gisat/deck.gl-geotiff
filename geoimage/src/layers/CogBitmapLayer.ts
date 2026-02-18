@@ -11,9 +11,6 @@ import {
 } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-// import { GL } from '@luma.gl/constants';
-// import GL from '@luma.gl/constants';
-// GL.GL.CLIP_DISTANCE0_WEBGL
 import type { MeshAttributes } from '@loaders.gl/schema';
 import CogTiles from '../core/CogTiles';
 import { GeoImageOptions } from '../core/GeoImage';
@@ -130,6 +127,10 @@ type _CogBitmapLayerProps = {
 
   isTiled: boolean;
 
+  /** Pre-initialized CogTiles object */
+  cogTiles?: CogTiles;
+
+
   /**
    * @deprecated Use `loadOptions.terrain.workerUrl` instead
    */
@@ -163,7 +164,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     super.initializeState(context);
 
     this.setState({
-      bitmapCogTiles: new CogTiles(this.props.cogBitmapOptions),
+      bitmapCogTiles: this.props.cogTiles || new CogTiles(this.props.cogBitmapOptions),
       initialized: false,
     });
 
