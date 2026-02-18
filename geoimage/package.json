@@ -50,7 +50,6 @@
     "lintFix": "eslint 'src/**/*.{js,ts,tsx}' --fix"
   },
   "dependencies": {
-    "@loaders.gl/loader-utils": "^4.3.1",
     "@mapbox/martini": "^0.2.0",
     "chroma-js": "^2.4.2",
     "geotiff": "^3.0.0"
@@ -61,6 +60,8 @@
     "@deck.gl/geo-layers": ">=9.0.0",
     "@deck.gl/layers": ">=9.0.0",
     "@deck.gl/mesh-layers": ">=9.0.0",
+    "@loaders.gl/core": ">=4.0.0",
+    "@loaders.gl/loader-utils": ">=4.0.0",
     "@loaders.gl/schema": ">=4.0.0",
     "@math.gl/web-mercator": ">=4.0.0"
   },
@@ -70,9 +71,10 @@
     "@deck.gl/geo-layers": "^9.0.33",
     "@deck.gl/mesh-layers": "^9.0.33",
     "@deck.gl/extensions": "^9.0.33",
-    "@math.gl/web-mercator": "^4.0.0",
-    "@loaders.gl/schema": "^4.3.1",
     "@loaders.gl/core": "^4.3.1",
+    "@loaders.gl/loader-utils": "^4.3.1",
+    "@loaders.gl/schema": "^4.3.1",
+    "@math.gl/web-mercator": "^4.0.0",
     "@rollup/plugin-commonjs": "^25.0.1",
     "@rollup/plugin-json": "^6.0.0",
     "@rollup/plugin-node-resolve": "^15.1.0",

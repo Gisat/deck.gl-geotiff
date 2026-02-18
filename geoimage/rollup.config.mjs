@@ -24,8 +24,10 @@ export default [
       '@deck.gl/geo-layers',
       '@deck.gl/layers',
       '@deck.gl/mesh-layers',
+      '@loaders.gl/core',
       '@loaders.gl/schema',
       '@loaders.gl/loader-utils',
+      '@math.gl/web-mercator'
     ],
     input: './src/index.ts',
     output: [
