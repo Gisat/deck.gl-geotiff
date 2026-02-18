@@ -1,12 +1,15 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import { CogTerrainLayer, CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
+import { BitmapLayer } from '@deck.gl/layers';
 
 function CogTerrainLayerExample() {
-  const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_DEM;
+  const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_PHILIPPINES_DEM;
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
 
@@ -49,6 +52,26 @@ function CogTerrainLayerExample() {
 
   const layers = useMemo(() => {
     if (!viewState || !initializedCog) return [];
+
+    const tileLayer = new TileLayer({
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      id: 'standard-tile-layer',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      extensions: [new TerrainExtension()],
+
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile as any;
+        const { west, south, east, north } = bbox;
+
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [west, south, east, north],
+        });
+      },
+    })
 
     const cogLayer = new CogTerrainLayer({
       id: 'cog-terrain-layer',
