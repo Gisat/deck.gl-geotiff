@@ -1,6 +1,6 @@
 {
   "name": "gisatcz-deckgl-geolib-repo",
-  "version": "v2.1.0-dev.0",
+  "version": "v2.1.0-dev.1",
   "private": true,
   "description": "Monorepo for deck.gl Cloud-Optimized GeoTIFF (COG) utilities",
   "license": "MIT",
