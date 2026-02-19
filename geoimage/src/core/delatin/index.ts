@@ -13,7 +13,7 @@ function orient(ax, ay, bx, by, cx, cy) {
 	return (bx - cx) * (ay - cy) - (by - cy) * (ax - cx);
 }
 
-/* eslint-disable complexity, max-params, max-statements, max-depth, no-constant-condition */
+ 
 export default class Delatin {
   constructor(data, width, height = width) {
 	  this.data = data; // height data

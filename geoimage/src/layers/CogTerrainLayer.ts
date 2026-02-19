@@ -147,6 +147,9 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
    */
   terrainOptions: GeoImageOptions;
 
+  /** Pre-initialized CogTiles object for terrain */
+  cogTiles?: CogTiles;
+
 	/**
 	 * @deprecated Use `loadOptions.terrain.workerUrl` instead
 	 */
@@ -183,7 +186,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     super.initializeState(context);
 
     this.setState({
-      terrainCogTiles: new CogTiles(this.props.terrainOptions),
+      terrainCogTiles: this.props.cogTiles || new CogTiles(this.props.terrainOptions),
       initialized: false,
     });
 

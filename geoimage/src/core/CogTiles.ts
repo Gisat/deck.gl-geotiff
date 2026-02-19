@@ -20,20 +20,18 @@ const CogTilesGeoImageOptionsDefaults = {
 class CogTiles {
   cog: GeoTIFF;
 
-  cogZoomLookup = [0];
+  cogZoomLookup: number[] = [];
+  cogResolutionLookup: number[] = [];
 
-  cogResolutionLookup = [0];
+  cogOrigin: number[] = [0, 0];
 
-  cogOrigin = [0, 0];
-
-  zoomRange = [0, 0];
+  zoomRange: number[] = [0, 0];
 
   tileSize: number;
 
-  bounds: Bounds;
+  bounds: [number, number, number, number]; // Or your Bounds type
 
   geo: GeoImage = new GeoImage();
-
   options: GeoImageOptions;
 
   constructor(options: GeoImageOptions) {
@@ -41,33 +39,43 @@ class CogTiles {
   }
 
   async initializeCog(url: string) {
+    if (this.cog) return; // Prevent re-initialization
+
     this.cog = await fromUrl(url);
-    const image = await this.cog.getImage(); // by default, the first image is read.
+    const image = await this.cog.getImage();
+    const fileDirectory = image.fileDirectory;
+
     this.cogOrigin = image.getOrigin();
-    this.options.noDataValue ??= this.getNoDataValue(image);
-    this.options.format ??= this.getDataTypeFromTags(image) as GeoImageOptions['format'];
-    this.options.numOfChannels = this.getNumberOfChannels(image);
-    this.options.planarConfig = this.getPlanarConfiguration(image);
+
+    this.options.noDataValue ??= await this.getNoDataValue(image);
+    this.options.format ??= await this.getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
+
+    this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
+    this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
+
     [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
+
     this.tileSize = image.getTileWidth();
-    this.zoomRange = this.calculateZoomRange(image, await this.cog.getImageCount());
-    this.bounds = this.calculateBoundsAsLatLon(image);
+
+    this.zoomRange = this.calculateZoomRange(
+      this.tileSize, image.getResolution()[0], await this.cog.getImageCount()
+    );
+
+    this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
   }
 
   getZoomRange() {
     return this.zoomRange;
   }
 
-  calculateZoomRange(img: GeoTIFFImage, imgCount: number) {
-    const maxZoom = this.getZoomLevelFromResolution(img.getTileWidth(), img.getResolution()[0]);
+  calculateZoomRange(tileSize: number, resolution: number, imgCount: number) {
+    const maxZoom = this.getZoomLevelFromResolution(tileSize, resolution);
     const minZoom = maxZoom - (imgCount - 1);
 
     return [minZoom, maxZoom];
   }
 
-  calculateBoundsAsLatLon(image: GeoTIFFImage) {
-    const bbox = image.getBoundingBox();
-
+  calculateBoundsAsLatLon(bbox: number[]){
     const minX = Math.min(bbox[0], bbox[2]);
     const maxX = Math.max(bbox[0], bbox[2]);
     const minY = Math.min(bbox[1], bbox[3]);
@@ -116,7 +124,7 @@ class CogTiles {
    *   - The first array (`zoomLookup`) maps each image index to its computed zoom level.
    *   - The second array (`resolutionLookup`) maps each image index to its estimated resolution (m/pixel).
    */
-  async buildCogZoomResolutionLookup(cog) {
+  async buildCogZoomResolutionLookup(cog: GeoTIFF) {
     // Retrieve the total number of images (overviews) in the COG.
     const imageCount = await cog.getImageCount();
 
@@ -141,7 +149,6 @@ class CogTiles {
       // Calculate the zoom level using the Web Mercator resolution standard:
       // webMercatorRes0 is the resolution at zoom level 0; each zoom level halves the resolution.
       const zoomLevel = Math.round(Math.log2(webMercatorRes0 / estimatedResolution));
-      // console.log(`buildCogZoomResolutionLookup: Image index ${idx}: Estimated Resolution = ${estimatedResolution} m/pixel, Zoom Level = ${zoomLevel}`);
 
       zoomLookup[idx] = zoomLevel;
       resolutionLookup[idx] = estimatedResolution;
@@ -172,6 +179,7 @@ class CogTiles {
     const exactMatchIndex = this.cogZoomLookup.indexOf(zoom);
     if (exactMatchIndex === -1) {
       // TO DO improve the condition if the match index is not found
+      /* eslint-disable no-console */
       console.log('getImageIndexForZoomLevel: error in retrieving image by zoom index');
     }
     return exactMatchIndex;
@@ -287,6 +295,7 @@ class CogTiles {
             if (destRow < tileWidth && destCol < tileHeight) {
               tileBuffer[destRowOffset + destCol] = validRasterData[band][srcRowOffset + col];
             } else {
+              /* eslint-disable no-console */
               console.log('error in assigning data to tile buffer');
             }
           }
@@ -346,14 +355,19 @@ class CogTiles {
    * @param {GeoTIFFImage} image - A GeoTIFF.js image.
    * @returns {Promise<string>} - A string representing the data type.
    */
-  getDataTypeFromTags(image) {
-    // Retrieve the file directory containing TIFF tags.
-    const fileDirectory = image.getFileDirectory();
+ async getDataTypeFromTags(fileDirectory: any) {
+    const hasSampleFormat = fileDirectory.hasTag('SampleFormat');
+    const hasBitsPerSample = fileDirectory.hasTag('BitsPerSample');
+
+    if (!hasSampleFormat || !hasBitsPerSample) {
+      console.warn("Missing SampleFormat or BitsPerSample tags, defaulting to UInt8");
+      return 'UInt8';
+    }
 
     // In GeoTIFF, BitsPerSample (tag 258) and SampleFormat (tag 339) provide the type info.
     // They can be either a single number or an array if there are multiple samples.
-    const sampleFormat = fileDirectory.SampleFormat; // Tag 339
-    const bitsPerSample = fileDirectory.BitsPerSample; // Tag 258
+    const sampleFormat = fileDirectory.getValue('SampleFormat');// Tag 339
+    const bitsPerSample = fileDirectory.getValue('BitsPerSample');// Tag 258
 
     // If multiple bands exist, we assume all bands share the same type.
     const format = (sampleFormat && typeof sampleFormat.length === 'number' && sampleFormat.length > 0)
@@ -364,12 +378,8 @@ class CogTiles {
       ? bitsPerSample[0]
       : bitsPerSample;
 
-    // Map the sample format to its corresponding type string.
-    // The common definitions are:
-    //   1: Unsigned integer
-    //   2: Signed integer
-    //   3: Floating point
     let typePrefix;
+    // 1 = Unsigned Integer, 2 = Signed Integer, 3 = Floating Point
     if (format === 1) {
       typePrefix = 'UInt';
     } else if (format === 2) {
@@ -379,7 +389,7 @@ class CogTiles {
     } else {
       typePrefix = 'Unknown';
     }
-    // console.log(`data type ${typePrefix}${bits}`);
+
     return `${typePrefix}${bits}`;
   }
 
@@ -390,10 +400,10 @@ class CogTiles {
    * @param {GeoTIFFImage} image - The GeoTIFF.js image.
    * @returns {number|undefined} The noData value, possibly NaN, or undefined if not set or invalid.
    */
-  getNoDataValue(image) {
+  getNoDataValue(image: GeoTIFFImage) {
     const noDataRaw = image.getGDALNoData();
-
     if (noDataRaw === undefined || noDataRaw === null) {
+      /* eslint-disable no-console */
       console.warn('No noData value defined — raster might be rendered incorrectly.');
       return undefined;
     }
@@ -401,6 +411,7 @@ class CogTiles {
     const cleaned = String(noDataRaw).replace(/\0/g, '').trim();
 
     if (cleaned === '') {
+      /* eslint-disable no-console */
       console.warn('noData value is an empty string after cleanup.');
       return undefined;
     }
@@ -414,38 +425,12 @@ class CogTiles {
 
     // If not declared as "nan" and still parsed to NaN, it's an error
     if (Number.isNaN(parsed)) {
+      /* eslint-disable no-console */
       console.warn(`Failed to parse numeric noData value: '${cleaned}'`);
       return undefined;
     }
 
     return parsed;
-  }
-
-  /**
-   * Retrieves the number of channels (samples per pixel) in a GeoTIFF image.
-   *
-   * @param {GeoTIFFImage} image - A GeoTIFFImage object from which to extract the number of channels.
-   * @returns {number} The number of channels in the image.
-   */
-  getNumberOfChannels(image) {
-    return image.getSamplesPerPixel();
-  }
-
-  /**
-   * Retrieves the PlanarConfiguration value from a GeoTIFF image.
-   *
-   * @param {GeoTIFFImage} image - The GeoTIFF image object.
-   * @returns {number} The PlanarConfiguration value (1 for Chunky format, 2 for Planar format).
-   */
-  getPlanarConfiguration(image) {
-    // Access the PlanarConfiguration tag directly
-    const planarConfiguration = image.fileDirectory.PlanarConfiguration;
-
-    // If the tag is not present, default to 1 (Chunky format)
-    if (planarConfiguration !== 1 && planarConfiguration !== 2) {
-      throw new Error('Invalid planar configuration.');
-    }
-    return planarConfiguration;
   }
 
   /**

@@ -2,7 +2,7 @@ import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 // import dts from 'rollup-plugin-dts';
-import { terser } from 'rollup-plugin-terser';
+import terser from '@rollup/plugin-terser'
 import json from '@rollup/plugin-json';
 import filesize from 'rollup-plugin-filesize';
 import path from 'path';
@@ -24,9 +24,10 @@ export default [
       '@deck.gl/geo-layers',
       '@deck.gl/layers',
       '@deck.gl/mesh-layers',
-      '@luma.gl/constants',
+      '@loaders.gl/core',
       '@loaders.gl/schema',
       '@loaders.gl/loader-utils',
+      '@math.gl/web-mercator'
     ],
     input: './src/index.ts',
     output: [
