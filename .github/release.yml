@@ -1,0 +1,16 @@
+# .github/release.yml
+changelog:
+  categories:
+    - title: "💥 Breaking Change"
+      labels:
+        - "major"
+    - title: "🚀 Enhancement"
+      labels:
+        - "minor"
+    - title: "🐾 Patch"
+      labels:
+        - "patch"
+    - title: "📦 Maintenance"
+      labels:
+        - "chore"
+        - "skip-release"
