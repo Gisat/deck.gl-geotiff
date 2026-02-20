@@ -160,21 +160,25 @@ export default class GeoImage {
       }
     }
 
-    const terrain = new Float32Array((width + 1) * (height + 1));
+    const terrain = new Float32Array((width === 257 ? width : width + 1) * (height === 257 ? height : height + 1));
 
     const numOfChannels = channel.length / (width * height);
 
     let pixel:number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
 
-    for (let i = 0, y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++, i++) {
+    const isStitched = width === 257;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
         const elevationValue = (options.noDataValue && channel[pixel] === options.noDataValue) ? options.terrainMinValue : channel[pixel] * options.multiplier!;
-        terrain[i + y] = elevationValue;
+        // If stitched (257), fill linearly. If 256, fill with stride for padding.
+        const index = isStitched ? (y * width + x) : (y * (width + 1) + x);
+        terrain[index] = elevationValue;
         pixel += numOfChannels;
       }
     }
 
-    if (options.tesselator === 'martini') {
+    if (options.tesselator === 'martini' && !isStitched) {
     // backfill bottom border
       for (let i = (width + 1) * width, x = 0; x < width; x++, i++) {
         terrain[i] = terrain[i - width - 1];
@@ -527,7 +531,7 @@ export default class GeoImage {
  * @returns {{vertices: Uint16Array, triangles: Uint32Array}} vertices and triangles data
  */
 function getMartiniTileMesh(meshMaxError, width, terrain) {
-  const gridSize = width + 1;
+  const gridSize = width === 257 ? 257 : width + 1;
   const martini = new Martini(gridSize);
   const tile = martini.createTile(terrain);
   const { vertices, triangles } = tile.getMesh(meshMaxError);
@@ -542,7 +546,7 @@ function getMeshAttributes(
   height: number,
   bounds: number[],
 ) {
-  const gridSize = width + 1;
+  const gridSize = width === 257 ? 257 : width + 1;
   const numOfVerticies = vertices.length / 2;
   // vec3. x, y in pixels, z in meters
   const positions = new Float32Array(numOfVerticies * 3);
@@ -550,8 +554,13 @@ function getMeshAttributes(
   const texCoords = new Float32Array(numOfVerticies * 2);
 
   const [minX, minY, maxX, maxY] = bounds || [0, 0, width, height];
-  const xScale = (maxX - minX) / width;
-  const yScale = (maxY - minY) / height;
+  // If stitched (257), the spatial extent covers 0..256 pixels, so we divide by 256.
+  // If standard (256), the spatial extent covers 0..256 pixels (with backfill), so we divide by 256.
+  const effectiveWidth = width === 257 ? width - 1 : width;
+  const effectiveHeight = height === 257 ? height - 1 : height;
+
+  const xScale = (maxX - minX) / effectiveWidth;
+  const yScale = (maxY - minY) / effectiveHeight;
 
   for (let i = 0; i < numOfVerticies; i++) {
     const x = vertices[i * 2];
@@ -562,8 +571,8 @@ function getMeshAttributes(
     positions[3 * i + 1] = -y * yScale + maxY;
     positions[3 * i + 2] = terrain[pixelIdx];
 
-    texCoords[2 * i + 0] = x / width;
-    texCoords[2 * i + 1] = y / height;
+    texCoords[2 * i + 0] = x / effectiveWidth;
+    texCoords[2 * i + 1] = y / effectiveHeight;
   }
 
   return {
@@ -583,7 +592,9 @@ function getMeshAttributes(
  * @returns {{vertices: number[], triangles: number[]}} vertices and triangles data
  */
 function getDelatinTileMesh(meshMaxError, width, height, terrain) {
-  const tin = new Delatin(terrain, width + 1, height + 1);
+  const widthPlus = width === 257 ? 257 : width + 1;
+  const heightPlus = height === 257 ? 257 : height + 1;
+  const tin = new Delatin(terrain, widthPlus, heightPlus);
   tin.run(meshMaxError);
   // @ts-expect-error: Delatin instance properties 'coords' and 'triangles' are not explicitly typed in the library port
   const { coords, triangles } = tin;

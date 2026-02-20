@@ -96,18 +96,18 @@ class CogTiles {
   }
 
   getLatLon(input: number[]) {
-    const ax = EARTH_HALF_CIRCUMFERENCE + input[0];
-    const ay = -(EARTH_HALF_CIRCUMFERENCE + (input[1] - EARTH_CIRCUMFERENCE));
+    const x = input[0];
+    const y = input[1];
 
-    const cartesianPosition = [
-      ax * (512 / EARTH_CIRCUMFERENCE),
-      ay * (512 / EARTH_CIRCUMFERENCE),
-    ];
-    const cartographicPosition = worldToLngLat(cartesianPosition);
-    const cartographicPositionAdjusted = [cartographicPosition[0], -cartographicPosition[1]];
+    const lon = (x / EARTH_HALF_CIRCUMFERENCE) * 180;
+    let lat = (y / EARTH_HALF_CIRCUMFERENCE) * 180;
 
-    return cartographicPositionAdjusted;
+    lat = (180 / Math.PI) * (2 * Math.atan(Math.exp((lat * Math.PI) / 180)) - Math.PI / 2);
+
+    return [lon, lat] as [number, number];
   }
+    // return cartographicPositionAdjusted;
+  // }
 
   /**
    * Builds lookup tables for zoom levels and estimated resolutions from a Cloud Optimized GeoTIFF (COG) object.
@@ -185,7 +185,7 @@ class CogTiles {
     return exactMatchIndex;
   }
 
-  async getTileFromImage(tileX, tileY, zoom) {
+  async getTileFromImage(tileX, tileY, zoom, fetchSize?: number) {
     const imageIndex = this.getImageIndexForZoomLevel(zoom);
     const targetImage = await this.cog.getImage(imageIndex);
 
@@ -230,12 +230,11 @@ class CogTiles {
 
     // 6. Snap to Integer Grid (The "Force 256" Fix)
     // We round the start position to align with the nearest pixel.
-    // Crucially, we calculate endX/endY by adding tileSize to startX/startY.
-    // This guarantees the window is exactly 256x256, preventing "off-by-one" (257px) errors.
+    const FETCH_SIZE = fetchSize || TILE_SIZE; // Default to 256 if not provided
     const startX = Math.round(windowMinX);
     const startY = Math.round(windowMinY);
-    const endX = startX + TILE_SIZE;
-    const endY = startY + TILE_SIZE;
+    const endX = startX + FETCH_SIZE;
+    const endY = startY + FETCH_SIZE;
 
     // --- STEP 3: CALCULATE INTERSECTION ---
 
@@ -251,7 +250,7 @@ class CogTiles {
 
     // CHECK: If no overlap, return empty
     if (readWidth <= 0 || readHeight <= 0) {
-      return [this.createEmptyTile()];
+      return [this.createEmptyTile(FETCH_SIZE)];
     }
 
     // 8. Calculate Offsets (Padding)
@@ -266,10 +265,11 @@ class CogTiles {
 
     // Case A: Partial Overlap (Padding or Cropping required)
     // If the tile is hanging off the edge, we need to manually reconstruct it.
-    if (missingLeft > 0 || missingTop > 0 || readWidth < tileWidth || readHeight < tileHeight) {
+    // We strictly compare against FETCH_SIZE because that is our target buffer dimension.
+    if (missingLeft > 0 || missingTop > 0 || readWidth < FETCH_SIZE || readHeight < FETCH_SIZE) {
       /// Initialize a temporary buffer for a single band (filled with NoData)
       // We will reuse this buffer for each band to save memory allocations.
-      const tileBuffer = this.createTileBuffer(this.options.format, tileWidth);
+      const tileBuffer = this.createTileBuffer(this.options.format, FETCH_SIZE);
       tileBuffer.fill(this.options.noDataValue);
 
       // if the valid window is smaller than the tile size, it gets the image size width and height, thus validRasterData.width must be used as below
@@ -282,21 +282,27 @@ class CogTiles {
 
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
+        // We must reset the buffer for each band, otherwise data from previous band persists in padding areas
+        const tileBuffer = this.createTileBuffer(this.options.format, FETCH_SIZE);
+        if (this.options.noDataValue !== undefined) {
+             tileBuffer.fill(this.options.noDataValue);
+        }
+
         for (let row = 0; row < readHeight; row += 1) {
           const destRow = missingTop + row;
-          const destRowOffset = destRow * TILE_SIZE;
+          const destRowOffset = destRow * FETCH_SIZE;
           const srcRowOffset = row * validRasterData.width;
 
           for (let col = 0; col < readWidth; col += 1) {
             // Compute the destination position in the tile buffer.
             // We shift by the number of missing pixels (if any) at the top/left.
             const destCol = missingLeft + col;
-            // Bounds Check: Ensure we don't write outside the 256x256 buffer
-            if (destRow < tileWidth && destCol < tileHeight) {
+            // Bounds Check: Ensure we don't write outside the allocated buffer
+            if (destRow < FETCH_SIZE && destCol < FETCH_SIZE) {
               tileBuffer[destRowOffset + destCol] = validRasterData[band][srcRowOffset + col];
             } else {
               /* eslint-disable no-console */
-              console.log('error in assigning data to tile buffer');
+              console.log(`error in assigning data to tile buffer: destRow ${destRow}, destCol ${destCol}, FETCH_SIZE ${FETCH_SIZE}`);
             }
           }
         }
@@ -317,19 +323,15 @@ class CogTiles {
 
   /**
    * Creates a blank tile buffer filled with the "No Data" value.
+   * @param size The width/height of the square tile (e.g., 256 or 257)
    */
-  createEmptyTile() {
-    // 1. Determine the size
-    // Default to 1 channel (grayscale) if not specified
+  createEmptyTile(size?: number) {
+    const s = size || this.tileSize; // Defaults to 256
     const channels = this.options.numOfChannels || 1;
-    const size = this.tileSize * this.tileSize * channels;
+    const totalSize = s * s * channels;
 
-    // 2. Create the array
-    // Float32 is standard for GeoTIFF data handling in browsers
-    const tileData = new Float32Array(size);
+    const tileData = new Float32Array(totalSize);
 
-    // 3. Fill with "No Data" value
-    // If noDataValue is undefined, it defaults to 0
     if (this.options.noDataValue !== undefined) {
       tileData.fill(this.options.noDataValue);
     }
@@ -338,12 +340,18 @@ class CogTiles {
   }
 
   async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
-    const tileData = await this.getTileFromImage(x, y, z);
+    let requiredSize = this.tileSize; // Default 256 for image/bitmap
+
+    if (this.options.type === 'terrain') {
+      requiredSize = this.tileSize + 1; // 257 for stitching
+    }
+
+    const tileData = await this.getTileFromImage(x, y, z, requiredSize);
 
     return this.geo.getMap({
       rasters: [tileData[0]],
-      width: this.tileSize,
-      height: this.tileSize,
+      width: requiredSize,
+      height: requiredSize,
       bounds,
     }, this.options, meshMaxError);
   }
@@ -460,7 +468,8 @@ class CogTiles {
       case 'Float64':
         return new Float64Array(length);
       default:
-        throw new Error(`Unsupported data type: ${dataType}`);
+        console.warn(`Unsupported data type: ${dataType}, defaulting to Float32`);
+        return new Float32Array(length);
     }
   }
 }
