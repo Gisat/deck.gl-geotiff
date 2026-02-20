@@ -174,7 +174,7 @@ export default class GeoImage {
 
         // Validate that the elevation value is within the valid range for Float32.
         // Extreme values (like -1.79e308) can become -Infinity when cast, causing WebGL errors.
-        if (elevationValue < -3.4e38 || elevationValue > 3.4e38) {
+        if (Number.isNaN(elevationValue) || elevationValue < -3.4e38 || elevationValue > 3.4e38) {
             elevationValue = options.terrainMinValue;
         }
 
@@ -185,7 +185,7 @@ export default class GeoImage {
       }
     }
 
-    if (options.tesselator === 'martini' && !isStitched) {
+    if (!isStitched) {
     // backfill bottom border
       for (let i = (width + 1) * width, x = 0; x < width; x++, i++) {
         terrain[i] = terrain[i - width - 1];
