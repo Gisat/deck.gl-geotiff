@@ -170,7 +170,14 @@ export default class GeoImage {
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const elevationValue = (options.noDataValue && channel[pixel] === options.noDataValue) ? options.terrainMinValue : channel[pixel] * options.multiplier!;
+        let elevationValue = (options.noDataValue && channel[pixel] === options.noDataValue) ? options.terrainMinValue : channel[pixel] * options.multiplier!;
+
+        // Validate that the elevation value is within the valid range for Float32.
+        // Extreme values (like -1.79e308) can become -Infinity when cast, causing WebGL errors.
+        if (elevationValue < -3.4e38 || elevationValue > 3.4e38) {
+            elevationValue = options.terrainMinValue;
+        }
+
         // If stitched (257), fill linearly. If 256, fill with stride for padding.
         const index = isStitched ? (y * width + x) : (y * (width + 1) + x);
         terrain[index] = elevationValue;
