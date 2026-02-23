@@ -1,7 +1,8 @@
 import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 
 // Bitmap styling
-import GeoImage, { GeoImageOptions } from './GeoImage';
+import GeoImage from './GeoImage';
+import { GeoImageOptions } from './types';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
