@@ -1,8 +1,5 @@
 import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 
-// Image compression support
-import { worldToLngLat } from '@math.gl/web-mercator';
-
 // Bitmap styling
 import GeoImage, { GeoImageOptions } from './GeoImage';
 
