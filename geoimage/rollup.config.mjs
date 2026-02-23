@@ -26,8 +26,7 @@ export default [
       '@deck.gl/mesh-layers',
       '@loaders.gl/core',
       '@loaders.gl/schema',
-      '@loaders.gl/loader-utils',
-      '@math.gl/web-mercator'
+      '@loaders.gl/loader-utils'
     ],
     input: './src/index.ts',
     output: [
