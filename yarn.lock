@@ -1569,6 +1569,15 @@
   resolved "https://registry.yarnpkg.com/@gar/promisify/-/promisify-1.1.3.tgz#555193ab2e3bb3b6adc3d551c9c030d9e860daf6"
   integrity sha512-k2Ty1JcVojjJFwrg/ThKi2ujJ7XNLYaFGNB/bWT9wGR+oSMJHMa5w+CUq6p/pVrKeNNgA7pCqEcjSnHVoqJQFw==
 
+"@gisatcz/deckgl-geolib@*":
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/@gisatcz/deckgl-geolib/-/deckgl-geolib-2.1.1.tgz#2c7cbfe7b7816c890eddb8c3ea98bf2c7f0edf16"
+  integrity sha512-zL/iTwGwKKZhrAA4Um/MWJl8HZfzdc6DJu3uuBa8pm8FP/RUYQXDU8YK3zf6yv7El6Ne0hJ2PXP8Rfipr+9bMw==
+  dependencies:
+    "@mapbox/martini" "^0.2.0"
+    chroma-js "^2.4.2"
+    geotiff "^3.0.0"
+
 "@humanfs/core@^0.19.1":
   version "0.19.1"
   resolved "https://registry.yarnpkg.com/@humanfs/core/-/core-0.19.1.tgz#17c55ca7d426733fe3c561906b8173c336b40a77"

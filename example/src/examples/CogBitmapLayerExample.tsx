@@ -14,9 +14,9 @@ function CogBitmapLayerExample() {
 
   // Define GeoImageOptions outside to ensure consistency
   const cogBitmapOptions: GeoImageOptions = {
-    type: 'image',
     useChannel: 1,
-    ...mainCog.defaultOptions as GeoImageOptions,
+    ...(mainCog.defaultOptions as GeoImageOptions),
+    type: 'image',
   };
 
   useEffect(() => {
@@ -73,7 +73,7 @@ function CogBitmapLayerExample() {
         id: 'cogLayer_bitmap',
         rasterData: mainCog.url,
         isTiled: true,
-        cogTiles: initializedCog,
+        cogTiles: initializedCog || undefined,
         cogBitmapOptions,
       }),
     ];

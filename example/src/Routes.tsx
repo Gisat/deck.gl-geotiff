@@ -7,7 +7,6 @@ import {
     CogBitmapLayerExample, CogMultibandExample,
     CogTerrainLayerExample,
 } from './examples';
-import { TestLayerExample } from './examples/TestLayerExample';
 
 interface RoutesProps {}
 

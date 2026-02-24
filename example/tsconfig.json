@@ -19,6 +19,5 @@
     "baseUrl": ".",
     "strictPropertyInitialization": false
   },
-  // "include": ["src", "../geoimage/GeoImage.ts", "../cogtiles/CogTiles.ts", "../cogterrainlayer/CogTerrainLayer.ts", "../cogbitmaplayer/CogBitmapLayer.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
