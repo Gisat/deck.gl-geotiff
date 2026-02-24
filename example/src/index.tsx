@@ -6,6 +6,7 @@ import { RecoilRoot } from 'recoil';
 
 ReactDOM.render(
   <React.StrictMode>
+    {/* @ts-ignore */}
     <RecoilRoot>
       <Routing />
     </RecoilRoot>
