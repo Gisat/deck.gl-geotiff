@@ -10,6 +10,68 @@ export class TerrainGenerator {
     options: GeoImageOptions,
     meshMaxError: number
   ) {
+    const { width, height } = input;
+
+    // 1. Compute Terrain Data (Extract Elevation)
+    const terrain = this.computeTerrainData(input, options);
+
+    // 2. Tesselate (Generate Mesh)
+    const { terrainSkirtHeight } = options;
+
+    let mesh;
+    switch (options.tesselator) {
+      case 'martini':
+        mesh = this.getMartiniTileMesh(meshMaxError, width, terrain);
+        break;
+      case 'delatin':
+        mesh = this.getDelatinTileMesh(meshMaxError, width, height, terrain);
+        break;
+
+      default:
+        // Default behavior fallback
+        mesh = this.getMartiniTileMesh(meshMaxError, width, terrain);
+        break;
+    }
+
+    const { vertices } = mesh;
+    let { triangles } = mesh;
+    let attributes = this.getMeshAttributes(vertices, terrain as any, width, height, input.bounds);
+    // Compute bounding box before adding skirt so that z values are not skewed
+    const boundingBox = getMeshBoundingBox(attributes);
+
+    if (terrainSkirtHeight) {
+      const { attributes: newAttributes, triangles: newTriangles } = addSkirt(
+        attributes,
+        triangles,
+        terrainSkirtHeight,
+      );
+      attributes = newAttributes;
+      triangles = newTriangles;
+    }
+
+    return {
+      // Data return by this loader implementation
+      loaderData: {
+        header: {},
+      },
+      header: {
+        vertexCount: triangles.length,
+        boundingBox,
+      },
+      mode: 4, // TRIANGLES
+      indices: { value: Uint32Array.from(triangles), size: 1 },
+      attributes,
+    };
+  }
+
+  /**
+   * Decodes raw raster data into a Float32Array of elevation values.
+   * Handles channel selection, value scaling, data type validation, and border stitching.
+   */
+  private static computeTerrainData(
+    input: { width: number; height: number; rasters: any[] },
+    options: GeoImageOptions
+  ): Float32Array {
     const { width, height, rasters } = input;
     const optionsLocal = { ...options };
 
@@ -58,53 +120,7 @@ export class TerrainGenerator {
       }
     }
 
-    // getMesh
-    const { terrainSkirtHeight } = options;
-
-    let mesh;
-    switch (options.tesselator) {
-      case 'martini':
-        mesh = this.getMartiniTileMesh(meshMaxError, width, terrain);
-        break;
-      case 'delatin':
-        mesh = this.getDelatinTileMesh(meshMaxError, width, height, terrain);
-        break;
-
-      default:
-        // Default behavior fallback
-        mesh = this.getMartiniTileMesh(meshMaxError, width, terrain);
-        break;
-    }
-
-    const { vertices } = mesh;
-    let { triangles } = mesh;
-    let attributes = this.getMeshAttributes(vertices, terrain as any, width, height, input.bounds);
-    // Compute bounding box before adding skirt so that z values are not skewed
-    const boundingBox = getMeshBoundingBox(attributes);
-
-    if (terrainSkirtHeight) {
-      const { attributes: newAttributes, triangles: newTriangles } = addSkirt(
-        attributes,
-        triangles,
-        terrainSkirtHeight,
-      );
-      attributes = newAttributes;
-      triangles = newTriangles;
-    }
-
-    return {
-      // Data return by this loader implementation
-      loaderData: {
-        header: {},
-      },
-      header: {
-        vertexCount: triangles.length,
-        boundingBox,
-      },
-      mode: 4, // TRIANGLES
-      indices: { value: Uint32Array.from(triangles), size: 1 },
-      attributes,
-    };
+    return terrain;
   }
 
   static getMartiniTileMesh(meshMaxError: number, width: number, terrain: Float32Array) {
