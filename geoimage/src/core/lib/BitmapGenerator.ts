@@ -38,9 +38,7 @@ export class BitmapGenerator {
           }
           // SINGLE CHANNEL
           const colorData = this.getColorValue(channel, optionsLocal, size);
-          colorData.forEach((value, index) => {
-            imageData.data[index] = value;
-          });
+          imageData.data.set(colorData);
         }
         // RGB values in one channel
         if (rasters[0].length / (width * height) === 3) {
@@ -105,9 +103,7 @@ export class BitmapGenerator {
         optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal);
       }
       const colorData = this.getColorValue(channel, optionsLocal, size, optionsLocal.numOfChannels);
-      colorData.forEach((value, index) => {
-        imageData.data[index] = value;
-      });
+      imageData.data.set(colorData);
     } else {
       // if user defined channel does not exist
       /* eslint-disable no-console */
@@ -149,7 +145,7 @@ export class BitmapGenerator {
   static getColorValue(dataArray: any[], options: GeoImageOptions, arrayLength: number, numOfChannels = 1) {
     const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
     let pixel: number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
-    const colorsArray = new Array(arrayLength);
+    const colorsArray = new Uint8ClampedArray(arrayLength);
 
     const dataValues = options.colorsBasedOnValues ? options.colorsBasedOnValues.map(([first]) => first) : undefined;
     const colorValues = options.colorsBasedOnValues ? options.colorsBasedOnValues.map(([, second]) => [...chroma(second).rgb(), Math.floor(options.alpha * 2.55)]) : undefined;
@@ -162,41 +158,129 @@ export class BitmapGenerator {
       return [true, false];
     }) : undefined;
 
-    for (let i = 0; i < arrayLength; i += 4) {
-      let pixelColor = options.nullColor;
+    // Pre-calculate Loop Variables to avoid object lookup in loop
+    const optNoData = options.noDataValue;
+    const optClipLow = options.clipLow;
+    const optClipHigh = options.clipHigh;
+    const optClippedColor = options.clippedColor;
+    const optUseHeatMap = options.useHeatMap;
+    const optUseColorsBasedOnValues = options.useColorsBasedOnValues;
+    const optUseColorClasses = options.useColorClasses;
+    const optUseSingleColor = options.useSingleColor;
+    const optUseDataForOpacity = options.useDataForOpacity;
+    const optColor = options.color;
+    const optUnidentifiedColor = options.unidentifiedColor;
+    const optNullColor = options.nullColor;
+    const optAlpha = Math.floor(options.alpha * 2.55);
+    const rangeMin = options.colorScaleValueRange[0]!;
+    const rangeMax = options.colorScaleValueRange.slice(-1)[0]!;
 
-      if ((!Number.isNaN(dataArray[pixel])) && (options.noDataValue === undefined || dataArray[pixel] !== options.noDataValue)) {
+    // LOOKUP TABLE OPTIMIZATION (for 8-bit data)
+    // If the data is Uint8 (0-255), we can pre-calculate the result for every possible value.
+    const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
+
+    if (is8Bit && !optUseDataForOpacity) {
+      // Create LUT: 256 values * 4 channels (RGBA)
+      const lut = new Uint8ClampedArray(256 * 4);
+
+      for (let i = 0; i < 256; i++) {
+        let r = optNullColor[0], g = optNullColor[1], b = optNullColor[2], a = optNullColor[3];
+
+        // Logic mirroring the pixel loop
+        if (optNoData === undefined || i !== optNoData) {
+          if ((optClipLow != null && i <= optClipLow) || (optClipHigh != null && i >= optClipHigh)) {
+             [r, g, b, a] = optClippedColor as number[];
+          } else {
+             let c = [r, g, b, a];
+             if (optUseHeatMap) {
+               const rgb = (colorScale(i) as any).rgb();
+               c = [rgb[0], rgb[1], rgb[2], optAlpha];
+             }
+             else if (optUseColorsBasedOnValues) {
+                const index = dataValues.indexOf(i);
+                c = (index > -1) ? colorValues[index] : optUnidentifiedColor as number[];
+             }
+             else if (optUseColorClasses) {
+                const index = this.findClassIndex(i, dataIntervals, dataIntervalBounds);
+                c = (index > -1) ? colorClasses[index] : optUnidentifiedColor as number[];
+             }
+             else if (optUseSingleColor) {
+                c = optColor as number[];
+             }
+             [r, g, b, a] = c as number[];
+          }
+        }
+        lut[i * 4] = r;
+        lut[i * 4 + 1] = g;
+        lut[i * 4 + 2] = b;
+        lut[i * 4 + 3] = a;
+      }
+
+      // Fast Apply Loop
+      let outIdx = 0;
+      for (let i = 0; i < dataArray.length; i += numOfChannels) { // Note: arrayLength passed in is size*4, dataArray is original size
+        const val = dataArray[pixel]; // 'pixel' starts at channel offset
+
+        // Because dataArray length < arrayLength (which is rgba size), strict mapping:
+        // Actually, previous code said: for (let i = 0; i < arrayLength; i += 4)
+        // arrayLength is width*height*4. dataArray has length width*height*channels.
+        // The loop below is safer:
+
+        const lutIdx = val * 4;
+        colorsArray[outIdx++] = lut[lutIdx];
+        colorsArray[outIdx++] = lut[lutIdx + 1];
+        colorsArray[outIdx++] = lut[lutIdx + 2];
+        colorsArray[outIdx++] = lut[lutIdx + 3];
+
+        pixel += numOfChannels;
+        if (outIdx >= arrayLength) break;
+      }
+      return colorsArray;
+    }
+
+    // Standard Loop (Float or non-optimized)
+    for (let i = 0; i < arrayLength; i += 4) {
+      let r = optNullColor[0], g = optNullColor[1], b = optNullColor[2], a = optNullColor[3];
+
+      const val = dataArray[pixel];
+
+      if ((!Number.isNaN(val)) && (optNoData === undefined || val !== optNoData)) {
         if (
-          (options.clipLow != null && dataArray[pixel] <= options.clipLow)
-                || (options.clipHigh != null && dataArray[pixel] >= options.clipHigh)
+          (optClipLow != null && val <= optClipLow) || (optClipHigh != null && val >= optClipHigh)
         ) {
-          pixelColor = options.clippedColor;
+          [r, g, b, a] = optClippedColor as number[];
         } else {
-          if (options.useHeatMap) {
-            pixelColor = [...(colorScale(dataArray[pixel]) as any).rgb(), Math.floor(options.alpha * 2.55)];
+          let c;
+          if (optUseHeatMap) {
+             const rgb = (colorScale(val) as any).rgb();
+             c = [rgb[0], rgb[1], rgb[2], optAlpha];
           }
-          if (options.useColorsBasedOnValues) {
-            const index = dataValues.indexOf(dataArray[pixel]);
-            if (index > -1) {
-              pixelColor = colorValues[index];
-            } else pixelColor = options.unidentifiedColor;
+          else if (optUseColorsBasedOnValues) {
+            const index = dataValues.indexOf(val);
+            c = (index > -1) ? colorValues[index] : optUnidentifiedColor;
           }
-          if (options.useColorClasses) {
-            const index = this.findClassIndex(dataArray[pixel], dataIntervals, dataIntervalBounds);
-            if (index > -1) {
-              pixelColor = colorClasses[index];
-            } else pixelColor = options.unidentifiedColor;
+          else if (optUseColorClasses) {
+            const index = this.findClassIndex(val, dataIntervals, dataIntervalBounds);
+            c = (index > -1) ? colorClasses[index] : optUnidentifiedColor;
           }
-          if (options.useSingleColor) {
-            pixelColor = options.color;
+          else if (optUseSingleColor) {
+            c = optColor;
           }
-          if (options.useDataForOpacity) {
-            pixelColor[3] = scale(dataArray[pixel], options.colorScaleValueRange[0]!, options.colorScaleValueRange.slice(-1)[0]!, 0, 255);
+
+          if (c) {
+             [r, g, b, a] = c;
+          }
+
+          if (optUseDataForOpacity) {
+            a = scale(val, rangeMin, rangeMax, 0, 255);
           }
         }
       }
 
-      ([colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = pixelColor as any);
+      colorsArray[i] = r;
+      colorsArray[i + 1] = g;
+      colorsArray[i + 2] = b;
+      colorsArray[i + 3] = a;
 
       pixel += numOfChannels;
     }
