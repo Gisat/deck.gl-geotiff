@@ -114,9 +114,11 @@ export class BitmapGenerator {
       });
     }
 
+    // Optimization: Skip Canvas -> PNG encoding -> Base64 string
+    // Return raw GPU-ready ImageBitmap directly
+    // Note: createImageBitmap(imageData) is cleaner, but using the canvas ensures broad compatibility
     c!.putImageData(imageData, 0, 0);
-    const imageUrl = canvas.toDataURL('image/png');
-    return imageUrl;
+    return createImageBitmap(canvas);
   }
 
   static getMinMax(array: any, options: GeoImageOptions) {
