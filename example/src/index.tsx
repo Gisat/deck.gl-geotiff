@@ -10,6 +10,7 @@ const root = createRoot(container!);
 
 root.render(
   <React.StrictMode>
+    {/* @ts-ignore */}
     <RecoilRoot>
       <Routing />
     </RecoilRoot>
