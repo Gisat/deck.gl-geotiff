@@ -9,6 +9,9 @@ const UploadImage = () => {
   const fileBrowseHandler = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
     const value = URL.createObjectURL(event.target.files[0]);
     updateUploaded(value);
   };

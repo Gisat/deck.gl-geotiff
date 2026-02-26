@@ -7,12 +7,16 @@ import {
     CogBitmapLayerExample, CogMultibandExample,
     CogTerrainLayerExample,
 } from './examples';
-import { TestLayerExample } from './examples/TestLayerExample';
 
 interface RoutesProps {}
 
 const Routing: React.FC<RoutesProps> = () => (
-  <BrowserRouter>
+  <BrowserRouter
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    }}
+  >
     <SideBar />
     <UploadImage />
     <Routes>
