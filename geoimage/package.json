@@ -1,6 +1,6 @@
 {
   "name": "@gisatcz/deckgl-geolib",
-  "version": "v2.1.2-dev.0",
+  "version": "v2.1.2-dev.1",
   "description": "Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data",
   "keywords": [
     "deck.gl",
