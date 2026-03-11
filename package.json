@@ -1,6 +1,6 @@
 {
   "name": "gisatcz-deckgl-geolib-repo",
-  "version": "v2.1.1",
+  "version": "v2.1.2-dev.1",
   "private": true,
   "description": "Monorepo for deck.gl Cloud-Optimized GeoTIFF (COG) utilities",
   "license": "MIT",
@@ -34,6 +34,8 @@
     "eslint": "^9.0.0",
     "eslint-plugin-react": "^7.35.0",
     "globals": "^15.0.0",
+    "typescript": "^5.0.4",
     "typescript-eslint": "^8.0.0"
-  }
+  },
+  "packageManager": "yarn@4.12.0"
 }

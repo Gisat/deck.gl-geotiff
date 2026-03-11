@@ -68,8 +68,14 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 | **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
 
-### Opacity
-**Setting opacity for terrain layers**: The Terrain layer is an ordinary Deck.gl layer instance, so `opacity` is a common prop.
+### Layer Props (CogTerrainLayer)
+
+These properties are set directly on the `CogTerrainLayer` instance, not within the `terrainOptions` object.
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **`meshMaxError`** | `number` | `4.0` | Martini/Delatin error tolerance in meters. Smaller number -> more detailed mesh (higher triangle count). |
+| **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 
 ---
 

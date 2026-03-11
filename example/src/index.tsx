@@ -1,14 +1,17 @@
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client'; // 1. Changed import
 import Routing from './Routes';
 import './index.css';
 import { RecoilRoot } from 'recoil';
 
-ReactDOM.render(
+const container = document.getElementById('root');
+
+const root = createRoot(container!);
+
+root.render(
   <React.StrictMode>
     <RecoilRoot>
       <Routing />
     </RecoilRoot>
-  </React.StrictMode>,
-  document.getElementById('root'),
+  </React.StrictMode>
 );
