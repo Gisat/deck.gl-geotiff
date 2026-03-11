@@ -10,7 +10,7 @@ const root = createRoot(container!);
 
 root.render(
   <React.StrictMode>
-    {/* @ts-ignore */}
+    {/* @ts-expect-error Known typing incompatibility between RecoilRoot and current React/TypeScript versions */}
     <RecoilRoot>
       <Routing />
     </RecoilRoot>
