@@ -723,28 +723,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@gisatcz/deckgl-geolib@npm:*":
-  version: 2.1.1
-  resolution: "@gisatcz/deckgl-geolib@npm:2.1.1"
-  dependencies:
-    "@mapbox/martini": "npm:^0.2.0"
-    chroma-js: "npm:^2.4.2"
-    geotiff: "npm:^3.0.0"
-  peerDependencies:
-    "@deck.gl/core": ">=9.0.0"
-    "@deck.gl/extensions": ">=9.0.0"
-    "@deck.gl/geo-layers": ">=9.0.0"
-    "@deck.gl/layers": ">=9.0.0"
-    "@deck.gl/mesh-layers": ">=9.0.0"
-    "@loaders.gl/core": ">=4.0.0"
-    "@loaders.gl/loader-utils": ">=4.0.0"
-    "@loaders.gl/schema": ">=4.0.0"
-    "@math.gl/web-mercator": ">=4.0.0"
-  checksum: 10c0/67370258779b4ba4ec4b7fac23df16b673f089038f8d195b223d2f0a0751191e05c29016b676adfbf762e3a56a5df9a6af8b204b167cecd7b11ef791be0140c2
-  languageName: node
-  linkType: hard
-
-"@gisatcz/deckgl-geolib@workspace:geoimage":
+"@gisatcz/deckgl-geolib@workspace:*, @gisatcz/deckgl-geolib@workspace:geoimage":
   version: 0.0.0-use.local
   resolution: "@gisatcz/deckgl-geolib@workspace:geoimage"
   dependencies:
@@ -3558,7 +3537,7 @@ __metadata:
     "@fortawesome/fontawesome-svg-core": "npm:^7.2.0"
     "@fortawesome/free-solid-svg-icons": "npm:^7.2.0"
     "@fortawesome/react-fontawesome": "npm:^3.2.0"
-    "@gisatcz/deckgl-geolib": "npm:*"
+    "@gisatcz/deckgl-geolib": "workspace:*"
     "@loaders.gl/core": "npm:^4.3.4"
     "@loaders.gl/loader-utils": "npm:^4.3.4"
     "@loaders.gl/schema": "npm:^4.3.4"
