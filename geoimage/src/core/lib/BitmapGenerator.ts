@@ -28,6 +28,9 @@ export class BitmapGenerator {
     optionsLocal.color = this.getColorFromChromaType(optionsLocal.color);
     optionsLocal.useChannelIndex ??= options.useChannel === null ? null : options.useChannel - 1;
 
+    // Derive channel count from data if not provided
+    const numAvailableChannels = optionsLocal.numOfChannels ?? (rasters.length === 1 ? rasters[0].length / (width * height) : rasters.length);
+
     if (optionsLocal.useChannelIndex == null) {
       if (channels === 1) {
         if (rasters[0].length / (width * height) === 1) {
@@ -93,7 +96,7 @@ export class BitmapGenerator {
           pixel += 1;
         }
       }
-    } else if (optionsLocal.useChannelIndex < optionsLocal.numOfChannels && optionsLocal.useChannelIndex >= 0) {
+    } else if (optionsLocal.useChannelIndex < numAvailableChannels && optionsLocal.useChannelIndex >= 0) {
       let channel = rasters[0];
       if (rasters[optionsLocal.useChannelIndex]) {
         channel = rasters[optionsLocal.useChannelIndex];
@@ -122,18 +125,8 @@ export class BitmapGenerator {
   }
 
   static getMinMax(array: any, options: GeoImageOptions) {
-    let maxValue = Number.MIN_VALUE; // Fixed logic: previously depended on options but let's be safer
+    let maxValue = Number.MIN_VALUE;
     let minValue = Number.MAX_VALUE;
-    // To respect previous logic that might have set default min/max via options if present?
-    // The original code was:
-    // let maxValue = options.maxValue ? options.maxValue : Number.MIN_VALUE;
-    // Wait, typical GeoImageOptions doesn't have maxValue/minValue properties defined in the interface!
-    // But getMinMax implementation used them. I'll stick to original logic but type options as any or use extended type if needed.
-    // Looking at GeoImageOptions type definition, it doesn't have minValue/maxValue. Use "as any" for now or strict local logic.
-    // Better: use the original logic.
-    const opts = options as any;
-    maxValue = opts.maxValue ? opts.maxValue : Number.MIN_VALUE;
-    minValue = opts.minValue ? opts.minValue : Number.MAX_VALUE;
 
     for (let idx = 0; idx < array.length; idx += 1) {
       if (options.noDataValue === undefined || array[idx] !== options.noDataValue) {

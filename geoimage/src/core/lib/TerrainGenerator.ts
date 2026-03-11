@@ -78,7 +78,7 @@ export class TerrainGenerator {
     let channel = rasters[0];
 
     optionsLocal.useChannelIndex ??= optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
-    if (options.useChannelIndex != null) {
+    if (optionsLocal.useChannelIndex != null) {
       if (rasters[optionsLocal.useChannelIndex]) {
         channel = rasters[optionsLocal.useChannelIndex];
       }
@@ -88,13 +88,19 @@ export class TerrainGenerator {
 
     const numOfChannels = channel.length / (width * height);
 
-    let pixel: number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
+    let pixel: number = optionsLocal.useChannelIndex ?? 0;
 
     const isStitched = width === 257;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        let elevationValue = (options.noDataValue && channel[pixel] === options.noDataValue) ? options.terrainMinValue : channel[pixel] * options.multiplier!;
+        const multiplier = options.multiplier ?? 1;
+        let elevationValue =
+          (options.noDataValue !== undefined &&
+            options.noDataValue !== null &&
+            channel[pixel] === options.noDataValue)
+            ? options.terrainMinValue
+            : channel[pixel] * multiplier;
 
         // Validate that the elevation value is within the valid range for Float32.
         // Extreme values (like -1.79e308) can become -Infinity when cast, causing WebGL errors.
@@ -145,7 +151,7 @@ export class TerrainGenerator {
 
   static getMeshAttributes(
     vertices: any,
-    terrain: Uint8Array,
+    terrain: Float32Array,
     width: number,
     height: number,
     bounds: number[],
