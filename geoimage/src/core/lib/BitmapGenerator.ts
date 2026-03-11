@@ -103,13 +103,13 @@ export class BitmapGenerator {
     } else if (optionsLocal.useChannelIndex < numAvailableChannels && optionsLocal.useChannelIndex >= 0) {
       const isInterleaved = rasters.length === 1 && numAvailableChannels > 1;
       const channel = isInterleaved ? rasters[0] : (rasters[optionsLocal.useChannelIndex] ?? rasters[0]);
-      const stride = isInterleaved ? numAvailableChannels : 1;
+      const samplesPerPixel = isInterleaved ? numAvailableChannels : 1;
 
       // AUTO RANGE
       if (optionsLocal.useAutoRange) {
-        optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal, stride);
+        optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal, samplesPerPixel);
       }
-      const colorData = this.getColorValue(channel, optionsLocal, size, stride);
+      const colorData = this.getColorValue(channel, optionsLocal, size, samplesPerPixel);
       imageData.data.set(colorData);
     } else {
       // if user defined channel does not exist
@@ -128,12 +128,12 @@ export class BitmapGenerator {
     return createImageBitmap(canvas);
   }
 
-  static getMinMax(array: TypedArray, options: GeoImageOptions, stride = 1) {
+  static getMinMax(array: TypedArray, options: GeoImageOptions, samplesPerPixel = 1) {
     let maxValue = Number.MIN_VALUE;
     let minValue = Number.MAX_VALUE;
 
-    let pixel: number = stride === 1 ? 0 : (options.useChannelIndex ?? 0);
-    for (let idx = pixel; idx < array.length; idx += stride) {
+    let pixel: number = samplesPerPixel === 1 ? 0 : (options.useChannelIndex ?? 0);
+    for (let idx = pixel; idx < array.length; idx += samplesPerPixel) {
       if (options.noDataValue === undefined || array[idx] !== options.noDataValue) {
         if (array[idx] > maxValue) maxValue = array[idx];
         if (array[idx] < minValue) minValue = array[idx];
@@ -142,9 +142,9 @@ export class BitmapGenerator {
     return [minValue, maxValue];
   }
 
-  static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, stride = 1) {
+  static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
     const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
-    let pixel: number = stride === 1 ? 0 : (options.useChannelIndex ?? 0);
+    let pixel: number = samplesPerPixel === 1 ? 0 : (options.useChannelIndex ?? 0);
     const colorsArray = new Uint8ClampedArray(arrayLength);
 
     const dataValues = options.colorsBasedOnValues ? options.colorsBasedOnValues.map(([first]) => first) : undefined;
@@ -180,8 +180,8 @@ export class BitmapGenerator {
     const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
 
     // The LUT optimization is only applied for 8-bit data when `useDataForOpacity` is false.
-    // `useDataForOpacity` is excluded because it requires the raw data value for 
-    // dynamic opacity scaling. All other visualization modes (HeatMap, Categorical, 
+    // `useDataForOpacity` is excluded because it requires the raw data value for
+    // dynamic opacity scaling. All other visualization modes (HeatMap, Categorical,
     // Classes, Single Color) are pre-calculated into the LUT for maximum performance.
     if (is8Bit && !optUseDataForOpacity) {
       // Create LUT: 256 values * 4 channels (RGBA)
@@ -232,7 +232,7 @@ export class BitmapGenerator {
         colorsArray[outIdx++] = lut[lutIdx + 2];
         colorsArray[outIdx++] = lut[lutIdx + 3];
 
-        pixel += numOfChannels;
+        pixel += samplesPerPixel;
       }
       return colorsArray;
     }
@@ -281,7 +281,7 @@ export class BitmapGenerator {
       colorsArray[i + 2] = b;
       colorsArray[i + 3] = a;
 
-      pixel += numOfChannels;
+      pixel += samplesPerPixel;
     }
     return colorsArray;
   }
