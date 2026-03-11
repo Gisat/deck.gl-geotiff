@@ -1,10 +1,10 @@
 import chroma from 'chroma-js';
-import { GeoImageOptions } from '../types';
+import { GeoImageOptions, TypedArray } from '../types';
 import { scale } from './DataUtils';
 
 export class BitmapGenerator {
   static async generate(
-    input: { width: number; height: number; rasters: any[] },
+    input: { width: number; height: number; rasters: TypedArray[] },
     options: GeoImageOptions
   ) {
     const optionsLocal = { ...options };
@@ -138,7 +138,7 @@ export class BitmapGenerator {
     return [minValue, maxValue];
   }
 
-  static getColorValue(dataArray: any[], options: GeoImageOptions, arrayLength: number, numOfChannels = 1) {
+  static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, numOfChannels = 1) {
     const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
     let pixel: number = options.useChannelIndex ?? 0;
     const colorsArray = new Uint8ClampedArray(arrayLength);

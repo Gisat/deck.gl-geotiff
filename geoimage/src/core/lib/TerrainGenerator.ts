@@ -2,11 +2,11 @@ import Martini from '@mapbox/martini';
 import { getMeshBoundingBox } from '@loaders.gl/schema';
 import Delatin from '../delatin';
 import { addSkirt } from '../helpers/skirt';
-import { GeoImageOptions, Bounds } from '../types';
+import { GeoImageOptions, Bounds, TypedArray } from '../types';
 
 export class TerrainGenerator {
   static generate(
-    input: { width: number; height: number; rasters: any[] ; bounds: Bounds},
+    input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds},
     options: GeoImageOptions,
     meshMaxError: number
   ) {
@@ -69,7 +69,7 @@ export class TerrainGenerator {
    * Handles channel selection, value scaling, data type validation, and border stitching.
    */
   private static computeTerrainData(
-    input: { width: number; height: number; rasters: any[] },
+    input: { width: number; height: number; rasters: TypedArray[] },
     options: GeoImageOptions
   ): Float32Array {
     const { width, height, rasters } = input;
