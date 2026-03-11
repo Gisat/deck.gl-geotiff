@@ -91,6 +91,7 @@ export class TerrainGenerator {
     let pixel: number = optionsLocal.useChannelIndex ?? 0;
 
     const isStitched = width === 257;
+    const fallbackValue = options.terrainMinValue ?? 0;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -99,13 +100,13 @@ export class TerrainGenerator {
           (options.noDataValue !== undefined &&
             options.noDataValue !== null &&
             channel[pixel] === options.noDataValue)
-            ? options.terrainMinValue
+            ? fallbackValue
             : channel[pixel] * multiplier;
 
         // Validate that the elevation value is within the valid range for Float32.
         // Extreme values (like -1.79e308) can become -Infinity when cast, causing WebGL errors.
         if (Number.isNaN(elevationValue) || elevationValue < -3.4e38 || elevationValue > 3.4e38) {
-          elevationValue = options.terrainMinValue;
+          elevationValue = fallbackValue;
         }
 
         // If stitched (257), fill linearly. If 256, fill with stride for padding.

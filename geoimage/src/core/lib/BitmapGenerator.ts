@@ -22,10 +22,12 @@ export class BitmapGenerator {
       a;
     const size = width * height * 4;
 
-    optionsLocal.unidentifiedColor = this.getColorFromChromaType(optionsLocal.unidentifiedColor);
-    optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor);
-    optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor);
-    optionsLocal.color = this.getColorFromChromaType(optionsLocal.color);
+    const alpha255 = Math.floor(optionsLocal.alpha! * 2.55);
+
+    optionsLocal.unidentifiedColor = this.getColorFromChromaType(optionsLocal.unidentifiedColor, alpha255);
+    optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor, alpha255);
+    optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor, alpha255);
+    optionsLocal.color = this.getColorFromChromaType(optionsLocal.color, alpha255);
     optionsLocal.useChannelIndex ??= options.useChannel === null ? null : options.useChannel - 1;
 
     // Derive channel count from data if not provided
@@ -65,11 +67,12 @@ export class BitmapGenerator {
       if (channels === 3) {
         // RGB
         let pixel = 0;
+        const alphaConst = Math.floor(optionsLocal.alpha! * 2.55);
         for (let i = 0; i < size; i += 4) {
           r = rasters[0][pixel];
           g = rasters[1][pixel];
           b = rasters[2][pixel];
-          a = Math.floor(optionsLocal.alpha! * 2.55);
+          a = alphaConst;
 
           imageData.data[i] = r;
           imageData.data[i + 1] = g;
@@ -82,12 +85,12 @@ export class BitmapGenerator {
       if (channels === 4) {
         // RGBA
         let pixel = 0;
-        const alphaValue = Math.floor(optionsLocal.alpha! * 2.55);
+        const alphaConst = Math.floor(optionsLocal.alpha! * 2.55);
         for (let i = 0; i < size; i += 4) {
           r = rasters[0][pixel];
           g = rasters[1][pixel];
           b = rasters[2][pixel];
-          a = alphaValue;
+          a = alphaConst;
 
           imageData.data[i] = r;
           imageData.data[i + 1] = g;
@@ -125,7 +128,7 @@ export class BitmapGenerator {
     return createImageBitmap(canvas);
   }
 
-  static getMinMax(array: any, options: GeoImageOptions) {
+  static getMinMax(array: TypedArray, options: GeoImageOptions) {
     let maxValue = Number.MIN_VALUE;
     let minValue = Number.MAX_VALUE;
 
@@ -152,7 +155,7 @@ export class BitmapGenerator {
       if (bounds !== undefined) return bounds;
       if (index === options.colorClasses.length - 1) return [true, true];
       return [true, false];
-    }) : undefined;
+    }) as [boolean, boolean][] : undefined;
 
     // Pre-calculate Loop Variables to avoid object lookup in loop
     const optNoData = options.noDataValue;
@@ -218,10 +221,10 @@ export class BitmapGenerator {
 
       // Fast Apply Loop
       let outIdx = 0;
-      const numPixels = arrayLength / numOfChannels;
+      const numPixels = arrayLength / 4;
       for (let i = 0; i < numPixels; i++) {
         const val = dataArray[pixel];
-        const lutIdx = val * 4;
+        const lutIdx = Math.min(255, Math.max(0, val)) * 4;
 
         colorsArray[outIdx++] = lut[lutIdx];
         colorsArray[outIdx++] = lut[lutIdx + 1];
@@ -282,7 +285,7 @@ export class BitmapGenerator {
     return colorsArray;
   }
 
-  static findClassIndex(number: number, intervals: any, bounds: any) {
+  static findClassIndex(number: number, intervals: [number, number][], bounds: [boolean, boolean][]) {
     for (let idx = 0; idx < intervals.length; idx += 1) {
       const [min, max] = intervals[idx];
       const [includeEqualMin, includeEqualMax] = bounds[idx];
@@ -294,17 +297,17 @@ export class BitmapGenerator {
     return -1;
   }
 
-  static getDefaultColor(size: number, nullColor: any) {
-    const colorsArray = new Array(size);
+  static getDefaultColor(size: number, nullColor: number[]) {
+    const colorsArray = new Uint8ClampedArray(size);
     for (let i = 0; i < size; i += 4) {
       [colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = nullColor;
     }
     return colorsArray;
   }
 
-  static getColorFromChromaType(colorDefinition: any) {
+  static getColorFromChromaType(colorDefinition: number[] | chroma.Color, alpha = 255) {
     if (!Array.isArray(colorDefinition) || colorDefinition.length !== 4) {
-      return [...chroma(colorDefinition).rgb(), 255];
+      return [...chroma(colorDefinition as chroma.Color).rgb(), alpha];
     }
     return colorDefinition;
   }
