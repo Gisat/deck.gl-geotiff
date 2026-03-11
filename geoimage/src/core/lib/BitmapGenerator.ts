@@ -82,11 +82,12 @@ export class BitmapGenerator {
       if (channels === 4) {
         // RGBA
         let pixel = 0;
+        const alphaValue = Math.floor(optionsLocal.alpha! * 2.55);
         for (let i = 0; i < size; i += 4) {
           r = rasters[0][pixel];
           g = rasters[1][pixel];
           b = rasters[2][pixel];
-          a = Math.floor(optionsLocal.alpha! * 2.55);
+          a = alphaValue;
 
           imageData.data[i] = r;
           imageData.data[i + 1] = g;
@@ -139,7 +140,7 @@ export class BitmapGenerator {
 
   static getColorValue(dataArray: any[], options: GeoImageOptions, arrayLength: number, numOfChannels = 1) {
     const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
-    let pixel: number = options.useChannelIndex === null ? 0 : options.useChannelIndex;
+    let pixel: number = options.useChannelIndex ?? 0;
     const colorsArray = new Uint8ClampedArray(arrayLength);
 
     const dataValues = options.colorsBasedOnValues ? options.colorsBasedOnValues.map(([first]) => first) : undefined;
@@ -174,6 +175,10 @@ export class BitmapGenerator {
     // If the data is Uint8 (0-255), we can pre-calculate the result for every possible value.
     const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
 
+    // The LUT optimization is only applied for 8-bit data when `useDataForOpacity` is false.
+    // `useDataForOpacity` is excluded because it requires the raw data value for opacity calculations,
+    // which is not possible with a pre-computed LUT. Other cases like `useColorsBasedOnValues` and
+    // `useColorClasses` are handled in the main loop and do not use the LUT.
     if (is8Bit && !optUseDataForOpacity) {
       // Create LUT: 256 values * 4 channels (RGBA)
       const lut = new Uint8ClampedArray(256 * 4);
@@ -213,22 +218,17 @@ export class BitmapGenerator {
 
       // Fast Apply Loop
       let outIdx = 0;
-      for (let i = 0; i < dataArray.length; i += numOfChannels) { // Note: arrayLength passed in is size*4, dataArray is original size
-        const val = dataArray[pixel]; // 'pixel' starts at channel offset
-
-        // Because dataArray length < arrayLength (which is rgba size), strict mapping:
-        // Actually, previous code said: for (let i = 0; i < arrayLength; i += 4)
-        // arrayLength is width*height*4. dataArray has length width*height*channels.
-        // The loop below is safer:
-
+      const numPixels = arrayLength / numOfChannels;
+      for (let i = 0; i < numPixels; i++) {
+        const val = dataArray[pixel];
         const lutIdx = val * 4;
+
         colorsArray[outIdx++] = lut[lutIdx];
         colorsArray[outIdx++] = lut[lutIdx + 1];
         colorsArray[outIdx++] = lut[lutIdx + 2];
         colorsArray[outIdx++] = lut[lutIdx + 3];
 
         pixel += numOfChannels;
-        if (outIdx >= arrayLength) break;
       }
       return colorsArray;
     }

@@ -28,14 +28,14 @@ export class TerrainGenerator {
         break;
 
       default:
-        // Default behavior fallback
+        // Intentional: default to Martini for any unspecified or unrecognized tesselator.
         mesh = this.getMartiniTileMesh(meshMaxError, width, terrain);
         break;
     }
 
     const { vertices } = mesh;
     let { triangles } = mesh;
-    let attributes = this.getMeshAttributes(vertices, terrain as any, width, height, input.bounds);
+    let attributes = this.getMeshAttributes(vertices, terrain, width, height, input.bounds);
     // Compute bounding box before adding skirt so that z values are not skewed
     const boundingBox = getMeshBoundingBox(attributes);
 
@@ -150,11 +150,11 @@ export class TerrainGenerator {
   }
 
   static getMeshAttributes(
-    vertices: any,
+    vertices: Uint16Array | Uint32Array | Float32Array | Float64Array,
     terrain: Float32Array,
     width: number,
     height: number,
-    bounds: number[],
+    bounds: Bounds | number[],
   ) {
     const gridSize = width === 257 ? 257 : width + 1;
     const numOfVerticies = vertices.length / 2;
@@ -177,11 +177,11 @@ export class TerrainGenerator {
       const y = vertices[i * 2 + 1];
       const pixelIdx = y * gridSize + x;
 
-      positions[3 * i + 0] = x * xScale + minX;
+      positions[3 * i] = x * xScale + minX;
       positions[3 * i + 1] = -y * yScale + maxY;
       positions[3 * i + 2] = terrain[pixelIdx];
 
-      texCoords[2 * i + 0] = x / effectiveWidth;
+      texCoords[2 * i] = x / effectiveWidth;
       texCoords[2 * i + 1] = y / effectiveHeight;
     }
 

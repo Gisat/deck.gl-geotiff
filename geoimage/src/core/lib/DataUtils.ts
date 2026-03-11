@@ -6,5 +6,8 @@ export function scale(
     outMin: number,
     outMax: number,
   ) {
-    return ((num - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+  if (inMax === inMin) {
+    return outMin;
+  }
+  return ((num - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
   }

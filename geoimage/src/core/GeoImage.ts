@@ -55,6 +55,7 @@ export default class GeoImage {
     let rasters = [];
     let width: number;
     let height: number;
+    let bounds: Bounds;
 
     if (typeof (input) === 'string') {
       // TODO not tested
@@ -64,14 +65,16 @@ export default class GeoImage {
       rasters = (await this.data!.readRasters()) as TypedArray[];
       width = this.data!.getWidth();
       height = this.data!.getHeight();
+      bounds = this.data!.getBoundingBox() as Bounds;
     } else {
       rasters = input.rasters;
       width = input.width;
       height = input.height;
+      bounds = input.bounds;
     }
 
     // Delegate to TerrainGenerator
-    return TerrainGenerator.generate({ width, height, rasters, bounds: (input as any).bounds }, options, meshMaxError);
+    return TerrainGenerator.generate({ width, height, rasters, bounds }, options, meshMaxError);
   }
 
   async getBitmap(

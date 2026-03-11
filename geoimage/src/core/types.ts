@@ -16,7 +16,7 @@ export type GeoImageOptions = {
     useColorClasses? : boolean,
     useAutoRange?: boolean,
     useDataForOpacity?: boolean,
-    useChannel?: Exclude<number, 0> | null,
+    useChannel?: number | null, // Note: 0 is not a valid channel; this is enforced at runtime.
     useChannelIndex?: number | null,
     useSingleColor?: boolean,
     blurredTexture? : boolean,
@@ -70,6 +70,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     clippedColor: [0, 0, 0, 0],
     terrainColor: [133, 133, 133, 255],
     terrainSkirtHeight: 100,
+    // Default fallback for invalid/nodata elevations. Should be configured based on the dataset's actual range.
     terrainMinValue: 0,
     planarConfig: undefined,
 };
