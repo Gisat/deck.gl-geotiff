@@ -1,7 +1,8 @@
 import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 
 // Bitmap styling
-import GeoImage, { GeoImageOptions } from './GeoImage';
+import GeoImage from './GeoImage';
+import { GeoImageOptions } from './types';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -36,29 +37,43 @@ class CogTiles {
   }
 
   async initializeCog(url: string) {
-    if (this.cog) return; // Prevent re-initialization
+    if (this.cog) return; // Prevent re-initialization on the same instance
 
-    this.cog = await fromUrl(url);
-    const image = await this.cog.getImage();
-    const fileDirectory = image.fileDirectory;
+    try {
+      this.cog = await fromUrl(url);
+      const image = await this.cog.getImage();
+      const fileDirectory = image.fileDirectory;
 
-    this.cogOrigin = image.getOrigin();
+      this.cogOrigin = image.getOrigin();
 
-    this.options.noDataValue ??= await this.getNoDataValue(image);
-    this.options.format ??= await this.getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
+      this.options.noDataValue ??= await this.getNoDataValue(image);
+      this.options.format ??= await this.getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
 
-    this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
-    this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
+      this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
+      this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
 
-    [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
+      [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
 
-    this.tileSize = image.getTileWidth();
+      this.tileSize = image.getTileWidth();
 
-    this.zoomRange = this.calculateZoomRange(
-      this.tileSize, image.getResolution()[0], await this.cog.getImageCount()
-    );
+      // 1. Validation: Ensure the image is tiled
+      if (!this.tileSize || !image.getTileHeight()) {
+        throw new Error(
+          'GeoTIFF Error: The provided image is not tiled. '
+          + 'Please use "rio cogeo create --web-optimized" to fix this.',
+        );
+      }
 
-    this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
+      this.zoomRange = this.calculateZoomRange(
+        this.tileSize, image.getResolution()[0], await this.cog.getImageCount()
+      );
+
+      this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
+    } catch (error) {
+      /* eslint-disable no-console */
+      console.error(`[CogTiles] Failed to initialize COG from ${url}:`, error);
+      throw error;
+    }
   }
 
   getZoomRange() {
@@ -186,16 +201,6 @@ class CogTiles {
     const imageIndex = this.getImageIndexForZoomLevel(zoom);
     const targetImage = await this.cog.getImage(imageIndex);
 
-    // 1. Validation: Ensure the image is tiled
-    const tileWidth = targetImage.getTileWidth();
-    const tileHeight = targetImage.getTileHeight();
-    if (!tileWidth || !tileHeight) {
-      throw new Error(
-        'GeoTIFF Error: The provided image is not tiled. '
-        + 'Please use "rio cogeo create --web-optimized" to fix this.',
-      );
-    }
-
     // --- STEP 1: CALCULATE BOUNDS IN METERS ---
 
     // 2. Get COG Metadata (image = COG)
@@ -264,35 +269,32 @@ class CogTiles {
     // If the tile is hanging off the edge, we need to manually reconstruct it.
     // We strictly compare against FETCH_SIZE because that is our target buffer dimension.
     if (missingLeft > 0 || missingTop > 0 || readWidth < FETCH_SIZE || readHeight < FETCH_SIZE) {
-      /// Initialize a temporary buffer for a single band (filled with NoData)
-      // We will reuse this buffer for each band to save memory allocations.
-      const tileBuffer = this.createTileBuffer(this.options.format, FETCH_SIZE);
-      tileBuffer.fill(this.options.noDataValue);
+      const numChannels = this.options.numOfChannels || 1;
+
+      // Initialize with a TypedArray of the full target size and correct data type
+      const validImageData = this.createTileBuffer(this.options.format as string, FETCH_SIZE, numChannels);
+      if (this.options.noDataValue !== undefined) {
+        validImageData.fill(this.options.noDataValue);
+      }
 
       // if the valid window is smaller than the tile size, it gets the image size width and height, thus validRasterData.width must be used as below
       const validRasterData = await targetImage.readRasters({ window });
-
-      // FOR MULTI-BAND - the result is one array with sequentially typed bands, firstly all data for the band 0, then for band 1
-      // I think this is less practical then the commented solution above, but I do it so it works with the code in GeoImage.ts in deck.gl-geoimage in function getColorValue.
-      const validImageData = Array((validRasterData as any).length * (validRasterData[0] as any).length);
-      validImageData.fill(this.options.noDataValue);
 
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
         // We must reset the buffer for each band, otherwise data from previous band persists in padding areas
         const tileBuffer = this.createTileBuffer(this.options.format, FETCH_SIZE);
         if (this.options.noDataValue !== undefined) {
-             tileBuffer.fill(this.options.noDataValue);
+          tileBuffer.fill(this.options.noDataValue);
         }
 
         for (let row = 0; row < readHeight; row += 1) {
           const destRow = missingTop + row;
           const destRowOffset = destRow * FETCH_SIZE;
-          const srcRowOffset = row * validRasterData.width;
+          const srcRowOffset = row * (validRasterData as any).width;
 
           for (let col = 0; col < readWidth; col += 1) {
             // Compute the destination position in the tile buffer.
-            // We shift by the number of missing pixels (if any) at the top/left.
             const destCol = missingLeft + col;
             // Bounds Check: Ensure we don't write outside the allocated buffer
             if (destRow < FETCH_SIZE && destCol < FETCH_SIZE) {
@@ -304,7 +306,7 @@ class CogTiles {
           }
         }
         for (let i = 0; i < tileBuffer.length; i += 1) {
-          validImageData[i * this.options.numOfChannels + band] = tileBuffer[i];
+          validImageData[i * numChannels + band] = tileBuffer[i];
         }
       }
       return [validImageData];
@@ -443,10 +445,11 @@ class CogTiles {
    *
    * @param {string} dataType - A string specifying the data type (e.g., "Int32", "Float64", "UInt16", etc.).
    * @param {number} tileSize - The width/height of the square tile.
-   * @returns {TypedArray} A typed array buffer of length tileSize * tileSize.
+   * @param {number} multiplier - Optional multiplier for interleaved buffers (e.g., numChannels).
+   * @returns {TypedArray} A typed array buffer of length (tileSize * tileSize * multiplier).
    */
-  createTileBuffer(dataType, tileSize) {
-    const length = tileSize * tileSize;
+  createTileBuffer(dataType: string, tileSize: number, multiplier = 1) {
+    const length = tileSize * tileSize * multiplier;
     switch (dataType) {
       case 'UInt8':
         return new Uint8Array(length);

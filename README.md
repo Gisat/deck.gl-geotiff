@@ -35,6 +35,7 @@ For more information, visit the [npm package page](https://www.npmjs.com/package
 
 * **[Layer Showcase](geoimage/docs/showcase-layers.md)** – Visual examples (RGB, Heatmaps, Terrain).
 * **[API Reference](geoimage/docs/api-reference.md)** – Detailed property configuration.
+* **[Internal Architecture](geoimage/docs/generators.md)** – Technical details about the core processing engines.
 
 ## Usage
 

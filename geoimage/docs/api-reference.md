@@ -1,6 +1,17 @@
 # API Reference
 
-This document outlines the configuration options for the core `GeoImage` processing engine used by both `CogBitmapLayer` and `CogTerrainLayer`.
+This document outlines the configuration options for the core processing engines. The library is split into two specialized generators that handle data decoding and preparation for WebGL.
+
+## Processing Overview
+
+The configuration options below define how the raw GeoTIFF data is interpreted by the internal processing engines. These options are handled by two specialized generators:
+
+- **`BitmapGenerator`**: Decodes and maps raster data into `ImageBitmap` textures.
+- **`TerrainGenerator`**: Converts elevation data into 3D meshes using `Martini` or `Delatin`.
+
+For a deep dive into the technical implementation and performance optimizations, see the **[Internal Architecture](generators.md)** guide.
+
+---
 
 ## Channel Selection (Common)
 
