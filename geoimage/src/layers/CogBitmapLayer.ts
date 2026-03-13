@@ -188,7 +188,11 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       const isTiled = rasterData
           && ((Array.isArray(rasterData)
               || (rasterData.includes('{x}') && rasterData.includes('{y}'))) || this.props.isTiled);
-      this.setState({ isTiled });
+      this.setState({ isTiled, initialized: false });
+
+      if (isTiled) {
+        this.init();
+      }
     }
 
     // Reloading for single terrain mesh
@@ -204,12 +208,10 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     }
 
     // Update the useChannel option for bitmapCogTiles when cogBitmapOptions.useChannel changes.
-    // This ensures that the correct channel is used for rendering, but directly modifying the state
-    // object in this way is not ideal and may need refactoring in the future to follow a more
-    // declarative state management approach. Consider revisiting this if additional properties
-    // need to be synchronized or if the state structure changes.
-    if (props?.cogBitmapOptions?.useChannel && (props.cogBitmapOptions?.useChannel !== oldProps.cogBitmapOptions?.useChannel)) {
+    if (props?.cogBitmapOptions?.useChannel !== oldProps.cogBitmapOptions?.useChannel) {
       this.state.bitmapCogTiles.options.useChannel = props.cogBitmapOptions.useChannel;
+      // Trigger a refresh of the tiles
+      this.state.bitmapCogTiles.options.useChannelIndex = null; // Clear cached index
     }
 
     if (props.workerUrl) {

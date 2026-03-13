@@ -16,7 +16,9 @@ export type GeoImageOptions = {
     useColorClasses? : boolean,
     useAutoRange?: boolean,
     useDataForOpacity?: boolean,
+    /** 1-based index of the channel to visualize (e.g. 1 for the first channel). */
     useChannel?: number | null, // Note: 0 is not a valid channel; this is enforced at runtime.
+    /** 0-based index of the channel to visualize (e.g. 0 for the first channel). Alternative to useChannel. */
     useChannelIndex?: number | null,
     useSingleColor?: boolean,
     blurredTexture? : boolean,

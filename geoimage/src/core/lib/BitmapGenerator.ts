@@ -28,7 +28,7 @@ export class BitmapGenerator {
     optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor, alpha255);
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor, alpha255);
     optionsLocal.color = this.getColorFromChromaType(optionsLocal.color, alpha255);
-    optionsLocal.useChannelIndex ??= options.useChannel === null ? null : options.useChannel - 1;
+    optionsLocal.useChannelIndex ??= optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
 
     // Derive channel count from data if not provided
     const numAvailableChannels = optionsLocal.numOfChannels ?? (rasters.length === 1 ? rasters[0].length / (width * height) : rasters.length);
@@ -129,8 +129,8 @@ export class BitmapGenerator {
   }
 
   static getMinMax(array: TypedArray, options: GeoImageOptions, samplesPerPixel = 1) {
-    let maxValue = Number.MIN_VALUE;
-    let minValue = Number.MAX_VALUE;
+    let maxValue = -Infinity;
+    let minValue = Infinity;
 
     let pixel: number = samplesPerPixel === 1 ? 0 : (options.useChannelIndex ?? 0);
     for (let idx = pixel; idx < array.length; idx += samplesPerPixel) {

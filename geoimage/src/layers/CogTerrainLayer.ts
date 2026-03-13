@@ -211,7 +211,11 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       const isTiled = elevationData
 		  && (Array.isArray(elevationData)
 			|| (elevationData.includes('{x}') && elevationData.includes('{y}'))) || this.props.isTiled;
-      this.setState({ isTiled });
+      this.setState({ isTiled, initialized: false });
+
+      if (isTiled) {
+        this.init();
+      }
 	  }
 
 	  // Reloading for single terrain mesh
@@ -225,6 +229,13 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       // const terrain = this.loadTerrain(props as TerrainLoadProps);
       // this.setState({ terrain });
 	  }
+
+    // Update the useChannel option for terrainCogTiles when terrainOptions.useChannel changes.
+    if (props?.terrainOptions?.useChannel !== oldProps.terrainOptions?.useChannel) {
+      this.state.terrainCogTiles.options.useChannel = props.terrainOptions.useChannel;
+      // Trigger a refresh of the tiles
+      this.state.terrainCogTiles.options.useChannelIndex = null; // Clear cached index
+    }
 
 	  if (props.workerUrl) {
       log.removed('workerUrl', 'loadOptions.terrain.workerUrl')();
