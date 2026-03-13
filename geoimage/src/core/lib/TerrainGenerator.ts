@@ -75,20 +75,21 @@ export class TerrainGenerator {
     const { width, height, rasters } = input;
     const optionsLocal = { ...options };
 
-    let channel = rasters[0];
-
     optionsLocal.useChannelIndex ??= optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
-    if (optionsLocal.useChannelIndex != null) {
-      if (rasters[optionsLocal.useChannelIndex]) {
-        channel = rasters[optionsLocal.useChannelIndex];
-      }
-    }
+
+    // Detect if data is planar (multiple arrays) or interleaved (one array with multiple samples per pixel)
+    const isPlanar = rasters.length > 1;
+    const channel = isPlanar
+      ? (rasters[optionsLocal.useChannelIndex ?? 0] ?? rasters[0])
+      : rasters[0];
 
     const terrain = new Float32Array((width === 257 ? width : width + 1) * (height === 257 ? height : height + 1));
 
-    const numOfChannels = channel.length / (width * height);
+    const samplesPerPixel = isPlanar ? 1 : (channel.length / (width * height));
 
-    let pixel: number = optionsLocal.useChannelIndex ?? 0;
+    // If planar, we already selected the correct array, so start at index 0.
+    // If interleaved, start at the index of the desired channel.
+    let pixel: number = isPlanar ? 0 : (optionsLocal.useChannelIndex ?? 0);
 
     const isStitched = width === 257;
     const fallbackValue = options.terrainMinValue ?? 0;
@@ -112,7 +113,7 @@ export class TerrainGenerator {
         // If stitched (257), fill linearly. If 256, fill with stride for padding.
         const index = isStitched ? (y * width + x) : (y * (width + 1) + x);
         terrain[index] = elevationValue;
-        pixel += numOfChannels;
+        pixel += samplesPerPixel;
       }
     }
 

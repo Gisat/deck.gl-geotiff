@@ -207,15 +207,11 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   updateState({ props, oldProps }: UpdateParameters<this>): void {
 	  const elevationDataChanged = props.elevationData !== oldProps.elevationData;
 	  if (elevationDataChanged) {
-      const { elevationData } = props;
-      const isTiled = elevationData
-		  && (Array.isArray(elevationData)
-			|| (elevationData.includes('{x}') && elevationData.includes('{y}'))) || this.props.isTiled;
-      this.setState({ isTiled, initialized: false });
-
-      if (isTiled) {
-        this.init();
-      }
+	  const { elevationData } = props;
+	  const isTiled = elevationData
+	  && (Array.isArray(elevationData)
+	  || (elevationData.includes('{x}') && elevationData.includes('{y}'))) || this.props.isTiled;
+	  this.setState({ isTiled });
 	  }
 
 	  // Reloading for single terrain mesh
@@ -417,26 +413,5 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 		  },
       );
 	  }
-
-	  // if (!elevationData) {
-    //   return null;
-	  // }
-
-	  // const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
-	  // return new SubLayerClass(
-    //   this.getSubLayerProps({
-    //   id: 'mesh',
-    //   }),
-    //   {
-    //   data: DUMMY_DATA,
-    //   mesh: this.state.terrain,
-    //   texture,
-    //   _instanced: false,
-    //   getPosition: (d) => [0, 0, 0],
-    //   getColor: color,
-    //   material,
-    //   wireframe,
-    //   },
-	  // );
   }
 }

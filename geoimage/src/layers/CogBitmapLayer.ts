@@ -188,11 +188,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       const isTiled = rasterData
           && ((Array.isArray(rasterData)
               || (rasterData.includes('{x}') && rasterData.includes('{y}'))) || this.props.isTiled);
-      this.setState({ isTiled, initialized: false });
-
-      if (isTiled) {
-        this.init();
-      }
+      this.setState({ isTiled });
     }
 
     // Reloading for single terrain mesh

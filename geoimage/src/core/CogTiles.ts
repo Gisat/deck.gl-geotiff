@@ -37,6 +37,8 @@ class CogTiles {
   }
 
   async initializeCog(url: string) {
+    if (this.cog) return; // Prevent re-initialization on the same instance
+
     try {
       this.cog = await fromUrl(url);
       const image = await this.cog.getImage();

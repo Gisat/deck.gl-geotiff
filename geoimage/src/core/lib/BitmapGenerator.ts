@@ -131,14 +131,21 @@ export class BitmapGenerator {
   static getMinMax(array: TypedArray, options: GeoImageOptions, samplesPerPixel = 1) {
     let maxValue = -Infinity;
     let minValue = Infinity;
+    let foundValid = false;
 
     let pixel: number = samplesPerPixel === 1 ? 0 : (options.useChannelIndex ?? 0);
     for (let idx = pixel; idx < array.length; idx += samplesPerPixel) {
       if (options.noDataValue === undefined || array[idx] !== options.noDataValue) {
         if (array[idx] > maxValue) maxValue = array[idx];
         if (array[idx] < minValue) minValue = array[idx];
+        foundValid = true;
       }
     }
+
+    if (!foundValid) {
+      return options.colorScaleValueRange || [0, 255];
+    }
+
     return [minValue, maxValue];
   }
 
@@ -147,16 +154,22 @@ export class BitmapGenerator {
     let pixel: number = samplesPerPixel === 1 ? 0 : (options.useChannelIndex ?? 0);
     const colorsArray = new Uint8ClampedArray(arrayLength);
 
-    const dataValues = options.colorsBasedOnValues ? options.colorsBasedOnValues.map(([first]) => first) : undefined;
-    const colorValues = options.colorsBasedOnValues ? options.colorsBasedOnValues.map(([, second]) => [...chroma(second).rgb(), Math.floor(options.alpha * 2.55)]) : undefined;
+    const cbvInput = options.colorsBasedOnValues ?? [];
+    const classesInput = options.colorClasses ?? [];
 
-    const colorClasses = options.useColorClasses ? options.colorClasses.map(([color]) => [...chroma(color).rgb(), Math.floor(options.alpha * 2.55)]) : undefined;
-    const dataIntervals = options.useColorClasses ? options.colorClasses.map(([, interval]) => interval) : undefined;
-    const dataIntervalBounds = options.useColorClasses ? options.colorClasses.map(([, , bounds], index) => {
+    const optUseColorsBasedOnValues = options.useColorsBasedOnValues && cbvInput.length > 0;
+    const optUseColorClasses = options.useColorClasses && classesInput.length > 0;
+
+    const dataValues = optUseColorsBasedOnValues ? cbvInput.map(([first]) => first) : [];
+    const colorValues = optUseColorsBasedOnValues ? cbvInput.map(([, second]) => [...chroma(second).rgb(), Math.floor(options.alpha * 2.55)]) : [];
+
+    const colorClasses = optUseColorClasses ? classesInput.map(([color]) => [...chroma(color).rgb(), Math.floor(options.alpha * 2.55)]) : [];
+    const dataIntervals = optUseColorClasses ? classesInput.map(([, interval]) => interval) : [];
+    const dataIntervalBounds = optUseColorClasses ? classesInput.map(([, , bounds], index) => {
       if (bounds !== undefined) return bounds;
-      if (index === options.colorClasses.length - 1) return [true, true];
+      if (index === classesInput.length - 1) return [true, true];
       return [true, false];
-    }) as [boolean, boolean][] : undefined;
+    }) as [boolean, boolean][] : [];
 
     // Pre-calculate Loop Variables to avoid object lookup in loop
     const optNoData = options.noDataValue;
@@ -164,8 +177,6 @@ export class BitmapGenerator {
     const optClipHigh = options.clipHigh;
     const optClippedColor = options.clippedColor;
     const optUseHeatMap = options.useHeatMap;
-    const optUseColorsBasedOnValues = options.useColorsBasedOnValues;
-    const optUseColorClasses = options.useColorClasses;
     const optUseSingleColor = options.useSingleColor;
     const optUseDataForOpacity = options.useDataForOpacity;
     const optColor = options.color;

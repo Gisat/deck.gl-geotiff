@@ -46,7 +46,7 @@ export type GeoImageOptions = {
 export const DefaultGeoImageOptions: GeoImageOptions = {
     type: 'image',
     tesselator: 'martini',
-    format: 'uint8',
+    format: undefined,
     useHeatMap: true,
     useColorsBasedOnValues: false,
     useAutoRange: false,
