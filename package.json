@@ -37,5 +37,9 @@
     "typescript": "^5.0.4",
     "typescript-eslint": "^8.0.0"
   },
+  "resolutions": {
+    "tar": "^7.5.11",
+    "@types/react": "^18.3.28"
+  },
   "packageManager": "yarn@4.12.0"
 }
