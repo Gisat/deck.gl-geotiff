@@ -9,10 +9,10 @@ const container = document.getElementById('root');
 const root = createRoot(container!);
 
 root.render(
-  <React.StrictMode>
-    {/* @ts-expect-error Known typing incompatibility between RecoilRoot and current React/TypeScript versions */}
-    <RecoilRoot>
-      <Routing />
-    </RecoilRoot>
-  </React.StrictMode>
+  // <React.StrictMode> is disabled because it causes WebGL context crashes in deck.gl v9 (maxTextureDimension2D error)
+  // due to double-initialization in React 18 development mode.
+  <RecoilRoot>
+    <Routing />
+  </RecoilRoot>
+  // </React.StrictMode>
 );
