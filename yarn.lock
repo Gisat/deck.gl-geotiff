@@ -765,8 +765,6 @@ __metadata:
     "@luma.gl/core": ">=9.0.0"
     "@luma.gl/engine": ">=9.0.0"
     "@luma.gl/shadertools": ">=9.0.0"
-    react: ">=16.8.0"
-    react-dom: ">=16.8.0"
   languageName: unknown
   linkType: soft
 
