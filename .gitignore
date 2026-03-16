@@ -48,3 +48,7 @@ pids
 *.seed
 *.pid.lock
 coverage/
+
+# --- Local Configs ---
+GEMINI.md
+.copilot-instructions.md
