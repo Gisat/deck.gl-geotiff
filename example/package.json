@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.9",
@@ -18,7 +19,7 @@
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "@fortawesome/react-fontawesome": "^3.2.0",
-    "@gisatcz/deckgl-geolib": "*",
+    "@gisatcz/deckgl-geolib": "workspace:*",
     "@loaders.gl/core": "^4.3.4",
     "@luma.gl/core": "^9.2.6",
     "@luma.gl/engine": "^9.2.6",

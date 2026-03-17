@@ -24,6 +24,9 @@ const external = [
   '@loaders.gl/core',
   '@loaders.gl/schema',
   '@loaders.gl/loader-utils',
+  '@luma.gl/core',
+  '@luma.gl/engine',
+  '@luma.gl/shadertools',
 ];
 
 // Reusable plugin stack

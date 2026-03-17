@@ -11,6 +11,13 @@ export default defineConfig({
       // Maps the package name directly to the source index file
       '@gisatcz/deckgl-geolib': path.resolve(__dirname, '../geoimage/src/index.ts'),
     },
+    dedupe: [
+      '@deck.gl/core',
+      '@luma.gl/core',
+      '@luma.gl/engine',
+      'react',
+      'react-dom'
+    ]
   },
   // Ensure Vite doesn't try to pre-bundle the library from node_modules
   optimizeDeps: {

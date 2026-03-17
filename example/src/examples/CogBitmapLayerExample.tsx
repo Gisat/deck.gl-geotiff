@@ -16,6 +16,7 @@ function CogBitmapLayerExample() {
   const cogBitmapOptions: GeoImageOptions = {
     useChannel: 1,
     ...(mainCog.defaultOptions as GeoImageOptions),
+    // Ensure the type is 'image' for this example, overriding any default.
     type: 'image',
   };
 

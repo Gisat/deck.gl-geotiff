@@ -207,11 +207,11 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   updateState({ props, oldProps }: UpdateParameters<this>): void {
 	  const elevationDataChanged = props.elevationData !== oldProps.elevationData;
 	  if (elevationDataChanged) {
-      const { elevationData } = props;
-      const isTiled = elevationData
-		  && (Array.isArray(elevationData)
-			|| (elevationData.includes('{x}') && elevationData.includes('{y}'))) || this.props.isTiled;
-      this.setState({ isTiled });
+	  const { elevationData } = props;
+	  const isTiled = elevationData
+	  && (Array.isArray(elevationData)
+	  || (elevationData.includes('{x}') && elevationData.includes('{y}'))) || this.props.isTiled;
+	  this.setState({ isTiled });
 	  }
 
 	  // Reloading for single terrain mesh
@@ -225,6 +225,13 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       // const terrain = this.loadTerrain(props as TerrainLoadProps);
       // this.setState({ terrain });
 	  }
+
+    // Update the useChannel option for terrainCogTiles when terrainOptions.useChannel changes.
+    if (props?.terrainOptions?.useChannel !== oldProps.terrainOptions?.useChannel) {
+      this.state.terrainCogTiles.options.useChannel = props.terrainOptions.useChannel;
+      // Trigger a refresh of the tiles
+      this.state.terrainCogTiles.options.useChannelIndex = null; // Clear cached index
+    }
 
 	  if (props.workerUrl) {
       log.removed('workerUrl', 'loadOptions.terrain.workerUrl')();
@@ -406,26 +413,5 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 		  },
       );
 	  }
-
-	  // if (!elevationData) {
-    //   return null;
-	  // }
-
-	  // const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
-	  // return new SubLayerClass(
-    //   this.getSubLayerProps({
-    //   id: 'mesh',
-    //   }),
-    //   {
-    //   data: DUMMY_DATA,
-    //   mesh: this.state.terrain,
-    //   texture,
-    //   _instanced: false,
-    //   getPosition: (d) => [0, 0, 0],
-    //   getColor: color,
-    //   material,
-    //   wireframe,
-    //   },
-	  // );
   }
 }
