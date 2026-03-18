@@ -13,7 +13,7 @@ import { BitmapLayer } from '@deck.gl/layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import type { MeshAttributes } from '@loaders.gl/schema';
 import CogTiles from '../core/CogTiles';
-import { GeoImageOptions } from '../core/GeoImage';
+import { GeoImageOptions, TileResult } from '../core/GeoImage';
 // import { TileBoundingBox, ZRange } from '../cogterrainlayer/CogTerrainLayer.js';
 
 interface TileBounds {
@@ -104,7 +104,7 @@ const defaultProps: DefaultProps<CogBitmapLayerProps> = {
 //   return template || '';
 // }
 
-type MeshAndTexture = [MeshAttributes | null, TextureSource | null];
+type MeshAndTexture = TileResult;
 
 /** Props added by the CogBitmapLayer */
 type _CogBitmapLayerProps = {
@@ -215,7 +215,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     }
   }
 
-  async getTiledBitmapData(tile: TileLoadProps): Promise<TextureSource> {
+  async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
     // TODO - pass signal to getTile
     // abort request if signal is aborted
     const tileData = await this.state.bitmapCogTiles.getTile(
@@ -225,14 +225,17 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       // bounds,
       // this.props.meshMaxError,
     );
+    if (tileData && !this.props.pickable) {
+      tileData.raw = null;
+    }
     return tileData;
   }
 
   renderSubLayers(
-    props: TileLayerProps<TextureSource> & {
+    props: TileLayerProps<TileResult> & {
         id: string;
-        data: TextureSource;
-        tile: Tile2DHeader<TextureSource>;
+        data: TileResult;
+        tile: Tile2DHeader<TileResult>;
       },
   ) {
     const SubLayerClass = this.getSubLayerClass('image', BitmapLayer);
@@ -254,9 +257,10 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     } = props.tile as { bbox: TileBounds };
 
     return new SubLayerClass({ ...props, tileSize: this.state.bitmapCogTiles.tileSize }, {
-      data: null,
-      image: data,
+      data: [1],
+      image: data.map,
       _instanced: false,
+      pickable: props.pickable,
       bounds: [west, south, east, north],
       textureParameters: {
         minFilter: blurredTexture ? 'linear' : 'nearest',
@@ -285,11 +289,13 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     if (this.state.isTiled && this.state.initialized) {
       const { tileSize } = this.state.bitmapCogTiles;
 
-      return new TileLayer(this.getSubLayerProps({
+      return new TileLayer<TileResult>(this.getSubLayerProps({
         id: 'tiles',
       }), {
         getTileData: this.getTiledBitmapData.bind(this),
         renderSubLayers: this.renderSubLayers.bind(this),
+        pickable: this.props.pickable,
+        onClick: this.props.onClick,
         updateTriggers: {
           getTileData: [
             // rasterData: urlTemplateToUpdateTrigger(rasterData),
