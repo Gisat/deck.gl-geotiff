@@ -90,6 +90,88 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 
 ---
 
+## Picking & Raw Value Access
+
+Both layers support deck.gl's picking system, giving access to the original raster values at the clicked or hovered location. The raw raster data is a byproduct of tile rendering and requires no additional network requests.
+
+> **Memory trade-off:** When `pickable: true`, the raw `TypedArray` for each loaded tile is kept in RAM alongside the visual output for the lifetime of the tile in deck.gl's cache (~64 KB per 8-bit tile, ~256 KB per Float32 tile). When `pickable: false` (the default), the raw data is discarded immediately after rendering — only the visual `ImageBitmap` or mesh is retained.
+
+### How it works
+
+When a tile is loaded, both generators bundle the raw raster data alongside the visual output into a `TileResult` object. This object is stored by deck.gl's `TileLayer` in `tile.content` and is available in `onClick` / `onHover` callbacks.
+
+### `TileResult`
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `map` | `ImageBitmap \| MeshAttributes` | The visual artifact sent to the GPU. |
+| `raw` | `TypedArray` | The original raster data, kept on the CPU. |
+| `width` | `number` | Tile width in pixels. |
+| `height` | `number` | Tile height in pixels. |
+
+### CogBitmapLayer picking
+
+Both layers default to `pickable: false` (deck.gl convention). Set `pickable: true` to enable picking. Use `info.uv` or `info.bitmap.uv` to get the local UV coordinate within the tile.
+
+```typescript
+const layer = new CogBitmapLayer({
+  id: 'bitmap',
+  rasterData: 'https://example.com/data.tif',
+  isTiled: true,
+  pickable: true, // default: false, opt-in required
+  onClick: (info) => {
+    const uv = info.uv || (info.bitmap && info.bitmap.uv);
+    if (info.tile && info.tile.content && info.tile.content.raw && uv) {
+      const { raw, width, height } = info.tile.content;
+      const [u, v] = uv;
+      const x = Math.floor(u * width);
+      const y = Math.floor(v * height);
+      const channels = raw.length / (width * height);
+      const pixelIndex = Math.floor((y * width + x) * channels);
+      const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
+      console.log('Raw values at click:', rawValues);
+    }
+  }
+});
+```
+
+### CogTerrainLayer picking
+
+Terrain tile content is a tuple `[TileResult | null, TextureSource | null]`. Use `info.uv` when available, or fall back to `info.coordinate` + tile bbox.
+
+```typescript
+const layer = new CogTerrainLayer({
+  id: 'terrain',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  pickable: true,
+  onClick: (info) => {
+    if (info.tile && info.tile.content && info.tile.content[0]) {
+      const { raw, width, height } = info.tile.content[0];
+
+      let u, v;
+      if (info.uv) {
+        [u, v] = info.uv;
+      } else if (info.coordinate && info.tile.bbox) {
+        const { west, south, east, north } = info.tile.bbox;
+        u = (info.coordinate[0] - west) / (east - west);
+        v = (north - info.coordinate[1]) / (north - south);
+      }
+
+      if (u !== undefined && v !== undefined) {
+        const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
+        const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
+        console.log('Elevation at click:', raw[y * width + x]);
+      }
+    }
+  }
+});
+```
+
+> **Known limitation:** Picking on `CogTerrainLayer` does **not** work when any overlay layer is rendered on top of it — this includes both OSM/XYZ tile layers using `TerrainExtension` and `CogBitmapLayer` with `clampToTerrain`. The overlay captures all picking events, preventing the terrain layer from receiving them.
+
+---
+
 ## Type Definitions
 
 ### `chroma.Color`
