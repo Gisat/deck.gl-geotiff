@@ -63,13 +63,14 @@ export class TerrainGenerator {
       attributes,
     };
 
-    const gridSize = width === 257 ? 257 : width + 1;
+    const gridWidth = width === 257 ? 257 : width + 1;
+    const gridHeight = height === 257 ? 257 : height + 1;
 
     return {
       map,
       raw: terrain,
-      width: gridSize,
-      height: gridSize
+      width: gridWidth,
+      height: gridHeight
     };
   }
 

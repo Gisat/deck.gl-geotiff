@@ -129,6 +129,9 @@ export class BitmapGenerator {
 
     return {
       map,
+      // rasters[0] is the interleaved buffer on the CogTiles path (primary use case).
+      // For planar multi-band GeoTIFFs via GeoImage.getBitmap(), only the first band is exposed here.
+      // Full multi-band raw picking support is tracked in https://github.com/Gisat/deck.gl-geotiff/issues/98
       raw: rasters[0],
       width,
       height

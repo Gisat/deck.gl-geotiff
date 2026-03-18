@@ -1,5 +1,6 @@
 // types.ts
 import chroma from 'chroma-js';
+import type { MeshAttributes } from '@loaders.gl/schema';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -89,8 +90,8 @@ export type TypedArray =
   | Float64Array;
 
 export interface TileResult {
-    map: ImageBitmap | any;
-    raw: TypedArray;
+    map: ImageBitmap | MeshAttributes;
+    raw: TypedArray | null;
     width: number;
     height: number;
 }

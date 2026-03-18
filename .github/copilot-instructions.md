@@ -52,7 +52,17 @@ Important design split:
 - Follow step-by-step execution for implementation/review tasks: one checklist item at a time, explain what changed, then wait for explicit user confirmation to continue.
 - Use hierarchical numbering (`1.1`, `1.2`, ...) in plans/checklists.
 - Keep plan/instruction artifacts in `.plan/` with `YYYY-MM-DD-kebab-case.md` naming.
+- **Always ask for explicit user confirmation before running `git commit`.** Never commit autonomously.
 - Before finalizing substantial work, prepare `PR_DESCRIPTION.md` using:
-    - Base branch logic: if current branch is `dev`, compare against `master`; otherwise compare against `dev`
-    - `git diff <base_branch> --stat`
-    - `git log <base_branch>..HEAD`
+    - Base branch logic: if current branch is `dev`, use `master` as base; for all other branches, use `dev` as base.
+    - `git diff <base_branch> --stat` and `git log <base_branch>..HEAD`
+    - `PR_DESCRIPTION.md` is a **temporary working file** — never stage or commit it.
+    - PR title format `Merge \`branch\` → \`target\`` is reserved for `dev → master` merges only. Feature branches use descriptive titles (e.g. `feat: ...`).
+
+## deck.gl picking patterns
+
+- To show hover tooltips with raw raster values, use `getTooltip` on the `DeckGL` component — **do not** use React `useState` inside `onHover`. State updates during hover trigger React re-renders that interfere with deck.gl tile initialization and cause `BitmapLayer` errors.
+- `pickable: true` enables both click and hover simultaneously; there is no separate flag.
+- `TileResult.raw` is `null` when `pickable: false` (the default) — all picking code must guard against null.
+- `CogBitmapLayer` tile content: `TileResult` directly (`tile.content.raw`).
+- `CogTerrainLayer` tile content: tuple `[TileResult | null, TextureSource | null]` (`tile.content[0].raw`).
