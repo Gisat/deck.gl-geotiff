@@ -82,6 +82,30 @@ function CogTerrainLayerExample() {
       // meshMaxError: 1,
       operation: 'terrain+draw',
       terrainOptions,
+      pickable: true,
+      onClick: (info) => {
+        if (info.tile && info.tile.content && info.tile.content[0]) {
+          const terrainResult = info.tile.content[0];
+          const { raw, width, height } = terrainResult;
+
+          let u, v;
+          if (info.uv) {
+            [u, v] = info.uv;
+          } else if (info.coordinate && info.tile.bbox) {
+            const { west, south, east, north } = info.tile.bbox as any;
+            u = (info.coordinate[0] - west) / (east - west);
+            v = (north - info.coordinate[1]) / (north - south);
+          }
+
+          if (u !== undefined && v !== undefined) {
+            const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
+            const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
+            const elevation = raw[y * width + x];
+            console.log("Raw elevation at click:", elevation);
+          }
+        }
+      }
+
     });
 
     const heatmap = new CogBitmapLayer({
@@ -96,11 +120,12 @@ function CogTerrainLayerExample() {
         colorScaleValueRange: [0, 800],
         useChannel: 1,
       },
+      pickable: false,
     });
 
     return [
       // tileLayer,
-      heatmap,
+      // heatmap,
       cogLayer,
     ];
   }, [viewState, initializedCog]);
