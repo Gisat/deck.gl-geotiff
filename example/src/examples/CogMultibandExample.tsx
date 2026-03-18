@@ -25,7 +25,7 @@ function CogMultibandExample() {
         useChannel: useChannel16 ? 16 : 15,
       },
       pickable: true,
-      onClick: (info) => {
+      onClick: (info: any) => {
         const uv = info.uv || (info.bitmap && info.bitmap.uv);
         if (info.tile && info.tile.content && info.tile.content.raw && uv) {
           const { raw, width, height } = info.tile.content;

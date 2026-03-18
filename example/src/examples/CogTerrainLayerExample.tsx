@@ -83,7 +83,7 @@ function CogTerrainLayerExample() {
       operation: 'terrain+draw',
       terrainOptions,
       pickable: true,
-      onClick: (info) => {
+      onClick: (info: any) => {
         if (info.tile && info.tile.content && info.tile.content[0]) {
           const terrainResult = info.tile.content[0];
           const { raw, width, height } = terrainResult;

@@ -114,15 +114,23 @@ const onClick = (info) => {
 ## Known Issues & Troubleshooting
 
 ### 1. Terrain Picking with Overlays
-When a `TileLayer` or `BitmapLayer` is draped over a `CogTerrainLayer` (using `TerrainExtension`), the overlay layer may capture or block the picking events, even if `pickable: false` is set.
+When a `TileLayer` or `BitmapLayer` is draped over a `CogTerrainLayer` (using `TerrainExtension`), the overlay captures all picking events. Terrain picking does not work when any overlay (OSM/XYZ or `CogBitmapLayer` with `clampToTerrain`) is active.
 
-**Current Observation:**
-Picking the `CogTerrainLayer` works perfectly when no visual overlays are present, but may stop responding when a base map (like OSM) is draped on top.
+**Status:** Confirmed broken with deck.gl 9.2.9 and still a type-system issue with 9.3.0-alpha.1.
 
-**Future Work / Potential Solutions:**
-- **Polygon Offset**: Apply a small `getPolygonOffset` to the overlay layers to ensure the terrain mesh remains "closer" to the camera in the picking buffer.
-- **Top-layer Data Sourcing**: Since visual overlays (Heatmaps, Base Maps) often share the same spatial grid as the terrain, they can be made `pickable: true` and used as the primary source for `onClick` events to retrieve elevation from their own `raw` buffer.
-- **Custom Picking Buffer**: Investigate deck.gl's internal picking buffer prioritization to ensure 3D meshes remain interactive when draped with 2D textures.
+**Fix planned in deck.gl 9.3.0:** PR [#10037](https://github.com/visgl/deck.gl/pull/10037) adds 3D picking support for `TerrainExtension`, which directly addresses this issue. It has been merged into the 9.3.0-alpha.1 release.
+
+### 2. Upgrade tasks for when deck.gl 9.3.0 stable is released
+
+When upgrading from 9.2.9 → 9.3.0:
+
+1. **Upgrade both `example` and `geoimage` devDependencies** — `geoimage` has its own `@deck.gl/core: ^9.2.9` in devDependencies which creates a dual-install conflict in the monorepo. Both must be upgraded together.
+
+2. **Update `PickingInfo` usage in examples** — In 9.3.0-alpha.1, `info.uv`, `info.bitmap`, and `info.tile` no longer exist on the base `PickingInfo` type. They have moved to specialized subtypes. The onClick handlers in all three examples currently use `(info: any)` as a workaround. These should be updated to use the proper typed picking info from the new API.
+
+3. **Verify terrain picking with overlays** — After upgrading, test `CogTerrainLayer` with an OSM overlay and a `CogBitmapLayer` with `clampToTerrain` to confirm PR #10037 resolves the issue.
+
+4. **Update `@luma.gl`** to `9.3.0-alpha.2` and `@loaders.gl/core` to `4.4.0-alpha.16` (or their stable equivalents) alongside the deck.gl upgrade.
 
 ---
 

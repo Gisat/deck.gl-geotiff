@@ -83,7 +83,7 @@ function CogBitmapLayerExample() {
              // console.log("Hovering over COG");
           }
         },
-        onClick: (info) => {
+        onClick: (info: any) => {
           const uv = info.uv || (info.bitmap && info.bitmap.uv);
           if (info.tile && info.tile.content && info.tile.content.raw && uv) {
             const { raw, width, height } = info.tile.content;
