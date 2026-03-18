@@ -170,6 +170,39 @@ const layer = new CogTerrainLayer({
 
 > **Known limitation:** Picking on `CogTerrainLayer` does **not** work when any overlay layer is rendered on top of it — this includes both OSM/XYZ tile layers using `TerrainExtension` and `CogBitmapLayer` with `clampToTerrain`. The overlay captures all picking events, preventing the terrain layer from receiving them.
 
+### Hover tooltips
+
+Since `pickable: true` enables both click and hover, you can show a live tooltip using deck.gl's `getTooltip` prop on the `DeckGL` component. This avoids React state updates on every mouse move (which would cause layer re-renders).
+
+```typescript
+<DeckGL
+  layers={layers}
+  getTooltip={(info: any) => {
+    // CogBitmapLayer — single value from first band
+    const uv = info.uv || (info.bitmap && info.bitmap.uv);
+    if (info.tile?.content?.raw && uv) {
+      const { raw, width, height } = info.tile.content;
+      const x = Math.floor(uv[0] * width);
+      const y = Math.floor(uv[1] * height);
+      const channels = raw.length / (width * height);
+      const pixelIndex = Math.floor((y * width + x) * channels);
+      return { text: `Value: ${raw[pixelIndex].toFixed(2)}` };
+    }
+    // CogTerrainLayer — elevation
+    const tileResult = info.tile?.content?.[0];
+    if (tileResult?.raw && info.uv) {
+      const { raw, width, height } = tileResult;
+      const x = Math.min(width - 1, Math.max(0, Math.floor(info.uv[0] * (width - 1))));
+      const y = Math.min(height - 1, Math.max(0, Math.floor(info.uv[1] * (height - 1))));
+      return { text: `Elevation: ${raw[y * width + x].toFixed(1)} m` };
+    }
+    return null;
+  }}
+/>
+```
+
+> **Note:** Do not use React state (`useState`) inside `onHover` to drive a tooltip — this triggers re-renders during tile initialization and can cause deck.gl errors. Use `getTooltip` on the `DeckGL` component instead.
+
 ---
 
 ## Type Definitions

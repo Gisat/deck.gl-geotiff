@@ -8,6 +8,26 @@ import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer } from '@deck.gl/layers';
 
+function getElevationAtInfo(info: any): number | null {
+  const tileResult = info.tile?.content?.[0];
+  if (!tileResult?.raw) return null;
+  const { raw, width, height } = tileResult;
+
+  let u: number | undefined, v: number | undefined;
+  if (info.uv) {
+    [u, v] = info.uv;
+  } else if (info.coordinate && info.tile?.bbox) {
+    const { west, south, east, north } = info.tile.bbox as any;
+    u = (info.coordinate[0] - west) / (east - west);
+    v = (north - info.coordinate[1]) / (north - south);
+  }
+  if (u === undefined || v === undefined) return null;
+
+  const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
+  const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
+  return raw[y * width + x];
+}
+
 function CogTerrainLayerExample() {
   const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_PHILIPPINES_DEM;
   const [viewState, setViewState] = useState<any>(null);
@@ -84,27 +104,9 @@ function CogTerrainLayerExample() {
       terrainOptions,
       pickable: true,
       onClick: (info: any) => {
-        if (info.tile && info.tile.content && info.tile.content[0]) {
-          const terrainResult = info.tile.content[0];
-          const { raw, width, height } = terrainResult;
-
-          let u, v;
-          if (info.uv) {
-            [u, v] = info.uv;
-          } else if (info.coordinate && info.tile.bbox) {
-            const { west, south, east, north } = info.tile.bbox as any;
-            u = (info.coordinate[0] - west) / (east - west);
-            v = (north - info.coordinate[1]) / (north - south);
-          }
-
-          if (u !== undefined && v !== undefined) {
-            const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
-            const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
-            const elevation = raw[y * width + x];
-            console.log("Raw elevation at click:", elevation);
-          }
-        }
-      }
+        const elevation = getElevationAtInfo(info);
+        if (elevation !== null) console.log('Raw elevation at click:', elevation);
+      },
 
     });
 
@@ -143,11 +145,15 @@ function CogTerrainLayerExample() {
 
   return (
     <DeckGL
-      getCursor={() => 'inherit'}
+      getCursor={() => 'crosshair'}
       viewState={viewState}
       onViewStateChange={({ viewState: newViewState }) => setViewState(newViewState as any)}
       controller
       layers={layers}
+      getTooltip={(info: any) => {
+        const elevation = getElevationAtInfo(info);
+        return elevation !== null ? { text: `Elevation: ${elevation.toFixed(1)} m` } : null;
+      }}
       views={[
         new MapView({
           controller: true,

@@ -7,9 +7,21 @@ import { CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { COG_BITMAP_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
+function getRawValueAtUv(info: any): number | null {
+  const uv = info.uv || (info.bitmap && info.bitmap.uv);
+  if (!info.tile?.content?.raw || !uv) return null;
+  const { raw, width, height } = info.tile.content;
+  const [u, v] = uv;
+  const x = Math.floor(u * width);
+  const y = Math.floor(v * height);
+  const channels = raw.length / (width * height);
+  const pixelIndex = Math.floor((y * width + x) * channels);
+  return raw[pixelIndex];
+}
+
 function CogBitmapLayerExample() {
   const mainCog = COG_BITMAP_EXAMPLES.NEPAL_SNOW;
-  const [viewState, setViewState] = useState<any>(null); // Start with null viewState
+  const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
 
   // Define GeoImageOptions outside to ensure consistency
@@ -78,24 +90,19 @@ function CogBitmapLayerExample() {
         cogTiles: initializedCog || undefined,
         cogBitmapOptions,
         pickable: true,
-        onHover: (info) => {
-          if (info.picked) {
-             // console.log("Hovering over COG");
-          }
-        },
         onClick: (info: any) => {
           const uv = info.uv || (info.bitmap && info.bitmap.uv);
-          if (info.tile && info.tile.content && info.tile.content.raw && uv) {
+          if (info.tile?.content?.raw && uv) {
             const { raw, width, height } = info.tile.content;
             const [u, v] = uv;
             const x = Math.floor(u * width);
             const y = Math.floor(v * height);
             const channels = raw.length / (width * height);
             const pixelIndex = Math.floor((y * width + x) * channels);
-            const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
-            console.log("Raw COG values at click:", rawValues);
+            const rawValues = Array.from(raw.slice(pixelIndex, pixelIndex + channels));
+            console.log('Raw COG values at click (all bands):', rawValues);
           }
-        }
+        },
       }),
     ];
   }, [viewState, initializedCog]);
@@ -110,11 +117,15 @@ function CogBitmapLayerExample() {
 
   return (
     <DeckGL
-      getCursor={() => 'inherit'}
+      getCursor={() => 'crosshair'}
       viewState={viewState}
       onViewStateChange={({ viewState }) => setViewState(viewState as any)}
       controller
       layers={layers}
+      getTooltip={(info: any) => {
+        const value = getRawValueAtUv(info);
+        return value !== null ? { text: `Value: ${value.toFixed(2)}` } : null;
+      }}
       views={[
         new MapView({
           controller: true,
