@@ -1,12 +1,12 @@
 import chroma from 'chroma-js';
-import { GeoImageOptions, TypedArray } from '../types';
+import { GeoImageOptions, TypedArray, TileResult } from '../types';
 import { scale } from './DataUtils';
 
 export class BitmapGenerator {
   static async generate(
     input: { width: number; height: number; rasters: TypedArray[] },
     options: GeoImageOptions
-  ) {
+  ): Promise<TileResult> {
     const optionsLocal = { ...options };
 
     const { rasters, width, height } = input;
@@ -125,7 +125,14 @@ export class BitmapGenerator {
     // Return raw GPU-ready ImageBitmap directly
     // Note: createImageBitmap(imageData) is cleaner, but using the canvas ensures broad compatibility
     c!.putImageData(imageData, 0, 0);
-    return createImageBitmap(canvas);
+    const map = await createImageBitmap(canvas);
+
+    return {
+      map,
+      raw: rasters[0],
+      width,
+      height
+    };
   }
 
   static getMinMax(array: TypedArray, options: GeoImageOptions, samplesPerPixel = 1) {

@@ -87,3 +87,10 @@ export type TypedArray =
   | Uint32Array
   | Float32Array
   | Float64Array;
+
+export interface TileResult {
+    map: ImageBitmap | any;
+    raw: TypedArray;
+    width: number;
+    height: number;
+}
