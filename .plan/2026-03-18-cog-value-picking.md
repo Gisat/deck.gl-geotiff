@@ -116,21 +116,34 @@ const onClick = (info) => {
 ### 1. Terrain Picking with Overlays
 When a `TileLayer` or `BitmapLayer` is draped over a `CogTerrainLayer` (using `TerrainExtension`), the overlay captures all picking events. Terrain picking does not work when any overlay (OSM/XYZ or `CogBitmapLayer` with `clampToTerrain`) is active.
 
-**Status:** Confirmed broken with deck.gl 9.2.9 and still a type-system issue with 9.3.0-alpha.1.
+**Status:** Confirmed broken with deck.gl 9.2.9. **✅ CONFIRMED FIXED in deck.gl 9.3.0-alpha.1** — terrain raw values are correctly returned in `onClick` even when an OSM overlay is present.
 
-**Fix planned in deck.gl 9.3.0:** PR [#10037](https://github.com/visgl/deck.gl/pull/10037) adds 3D picking support for `TerrainExtension`, which directly addresses this issue. It has been merged into the 9.3.0-alpha.1 release.
+**Fix:** PR [#10037](https://github.com/visgl/deck.gl/pull/10037) — 3D picking support for `TerrainExtension`. Merged in deck.gl 9.3.0-alpha.1.
 
 ### 2. Upgrade tasks for when deck.gl 9.3.0 stable is released
 
-When upgrading from 9.2.9 → 9.3.0:
+Tested and confirmed working with these exact alpha versions (2026-03-18):
 
-1. **Upgrade both `example` and `geoimage` devDependencies** — `geoimage` has its own `@deck.gl/core: ^9.2.9` in devDependencies which creates a dual-install conflict in the monorepo. Both must be upgraded together.
+| Package | Version used |
+|---|---|
+| `@deck.gl/*` | `9.3.0-alpha.1` |
+| `@luma.gl/*` | `9.3.0-alpha.6` (⚠️ alpha.2 is NOT enough — `@deck.gl/core` internally needs alpha.6) |
+| `@loaders.gl/core` | `4.4.0-alpha.16` |
+| `@floating-ui/dom` | `^1.7.6` (new peer dep of `@deck.gl/widgets`) |
 
-2. **Update `PickingInfo` usage in examples** — In 9.3.0-alpha.1, `info.uv`, `info.bitmap`, and `info.tile` no longer exist on the base `PickingInfo` type. They have moved to specialized subtypes. The onClick handlers in all three examples currently use `(info: any)` as a workaround. These should be updated to use the proper typed picking info from the new API.
+When upgrading from 9.2.9 → 9.3.0 stable:
 
-3. **Verify terrain picking with overlays** — After upgrading, test `CogTerrainLayer` with an OSM overlay and a `CogBitmapLayer` with `clampToTerrain` to confirm PR #10037 resolves the issue.
+1. **Upgrade BOTH `example/package.json` AND `geoimage/package.json` devDependencies simultaneously** — `geoimage` has its own `@deck.gl/core` in devDependencies which creates a dual-install conflict. Both workspaces must be upgraded in the same `yarn install` pass.
 
-4. **Update `@luma.gl`** to `9.3.0-alpha.2` and `@loaders.gl/core` to `4.4.0-alpha.16` (or their stable equivalents) alongside the deck.gl upgrade.
+2. **Add `@floating-ui/dom`** as a dependency in `example/package.json` — new required peer dep of `@deck.gl/widgets`.
+
+3. **Upgrade ALL `@luma.gl/*` packages to the same version** — `@deck.gl/core` internally requires a consistent luma.gl version. Upgrading only some packages causes `No matching export` build errors (e.g. `skin` from `@luma.gl/shadertools`).
+
+4. **After `yarn add`, restore `^` caret prefixes** — `yarn add` strips semver range prefixes. Manually re-add carets to all `@deck.gl/*` and `@luma.gl/*` entries in both package.json files before committing.
+
+5. **Update `PickingInfo` typing in examples** — `info.uv`, `info.bitmap`, and `info.tile` no longer exist on the base `PickingInfo` type in 9.3.0. They have moved to specialized subtypes. The three example onClick handlers currently use `(info: any)` as a workaround — update to the correct typed picking info from the new API once the stable types are available.
+
+6. **Verify terrain picking with overlays** — After upgrading, test `CogTerrainLayer` with an OSM overlay to confirm the fix is still present in the stable release.
 
 ---
 
