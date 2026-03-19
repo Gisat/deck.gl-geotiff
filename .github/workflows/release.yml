@@ -1,21 +1,33 @@
-name: Build & Publish NPM Package
+name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'          # prod releases, e.g. v1.2.3
-      - 'v*.*.*-dev.*'    # dev releases, e.g. v1.2.3-dev.4
+    branches:
+      - master
+      - dev
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-publish:
+  release:
+    name: Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write    # Required to create GitHub Releases
-      id-token: write    # Required for npm Trusted Publishers (OIDC)
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
 
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Configure git to use SSH
+        run: git config --global url."git@github.com:".insteadOf "https://github.com/"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -24,26 +36,12 @@ jobs:
           cache: 'yarn'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
-      - name: Build package
+      - name: Build
         run: yarn build
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
+      - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish dev tag to npm (Trusted Publishers)
-        if: contains(github.ref_name, '-dev.')
-        run: |
-          cd geoimage
-          npm publish --provenance --access public --tag dev
-
-      - name: Publish latest to npm (Trusted Publishers)
-        if: ${{ !contains(github.ref_name, '-dev.') }}
-        run: |
-          cd geoimage
-          npm publish --provenance --access public
+        run: npx semantic-release
