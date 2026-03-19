@@ -63,7 +63,10 @@
         }
       ],
       "@semantic-release/changelog",
-      "@semantic-release/npm",
+      ["@semantic-release/npm", {
+        "provenance": true,
+        "workspaces": ["geoimage"]
+      }],
       [
         "@semantic-release/git",
         {
