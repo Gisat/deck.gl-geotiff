@@ -19,7 +19,7 @@ jobs:
           cache: 'yarn'
 
       - name: Install Dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Fix Code Style
         run: yarn lintFix
@@ -27,7 +27,7 @@ jobs:
       - name: Commit Changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: "style: fix lint errors [skip ci]"
+          commit_message: "style: fix lint errors"
           branch: ${{ github.head_ref }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

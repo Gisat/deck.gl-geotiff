@@ -64,13 +64,21 @@
         }
       ],
       "@semantic-release/changelog",
-      ["@semantic-release/exec", {
-        "prepareCmd": "jq --arg v ${nextRelease.version} '.version = $v' geoimage/package.json > geoimage/package.json.tmp && mv geoimage/package.json.tmp geoimage/package.json"
-      }],
-      ["@semantic-release/npm", {
-        "provenance": true,
-        "workspaces": ["geoimage"]
-      }],
+      [
+        "@semantic-release/exec",
+        {
+          "prepareCmd": "jq --arg v ${nextRelease.version} '.version = $v' geoimage/package.json > geoimage/package.json.tmp && mv geoimage/package.json.tmp geoimage/package.json"
+        }
+      ],
+      [
+        "@semantic-release/npm",
+        {
+          "provenance": true,
+          "workspaces": [
+            "geoimage"
+          ]
+        }
+      ],
       [
         "@semantic-release/git",
         {
