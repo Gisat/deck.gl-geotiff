@@ -74,9 +74,7 @@
         "@semantic-release/npm",
         {
           "provenance": true,
-          "workspaces": [
-            "geoimage"
-          ]
+          "pkgRoot": "geoimage"
         }
       ],
       [
