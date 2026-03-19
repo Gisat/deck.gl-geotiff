@@ -7,7 +7,7 @@ import { CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { COG_BITMAP_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
-function getRawValueAtUv(info: any): number | null {
+function getRawValuesAtUv(info: any): number[] | null {
   const uv = info.uv || (info.bitmap && info.bitmap.uv);
   if (!info.tile?.content?.raw || !uv) return null;
   const { raw, width, height } = info.tile.content;
@@ -16,7 +16,7 @@ function getRawValueAtUv(info: any): number | null {
   const y = Math.floor(v * height);
   const channels = raw.length / (width * height);
   const pixelIndex = Math.floor((y * width + x) * channels);
-  return raw[pixelIndex];
+  return Array.from(raw.slice(pixelIndex, pixelIndex + channels));
 }
 
 function CogBitmapLayerExample() {
@@ -91,17 +91,8 @@ function CogBitmapLayerExample() {
         cogBitmapOptions,
         pickable: true,
         onClick: (info: any) => {
-          const uv = info.uv || (info.bitmap && info.bitmap.uv);
-          if (info.tile?.content?.raw && uv) {
-            const { raw, width, height } = info.tile.content;
-            const [u, v] = uv;
-            const x = Math.floor(u * width);
-            const y = Math.floor(v * height);
-            const channels = raw.length / (width * height);
-            const pixelIndex = Math.floor((y * width + x) * channels);
-            const rawValues = Array.from(raw.slice(pixelIndex, pixelIndex + channels));
-            console.log('Raw COG values at click (all bands):', rawValues);
-          }
+          const values = getRawValuesAtUv(info);
+          if (values !== null) console.log('Raw COG values at click (all bands):', values);
         },
       }),
     ];
@@ -123,8 +114,8 @@ function CogBitmapLayerExample() {
       controller
       layers={layers}
       getTooltip={(info: any) => {
-        const value = getRawValueAtUv(info);
-        return value !== null ? { text: `Value: ${value.toFixed(2)}` } : null;
+        const values = getRawValuesAtUv(info);
+        return values !== null ? { text: `Value: ${values[0].toFixed(2)}` } : null;
       }}
       views={[
         new MapView({
