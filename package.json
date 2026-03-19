@@ -32,6 +32,7 @@
     "@eslint/eslintrc": "^3.3.3",
     "@eslint/js": "^9.0.0",
     "@semantic-release/changelog": "^6.0.0",
+    "@semantic-release/exec": "^6.0.0",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/npm": "^10.0.0",
     "conventional-changelog-conventionalcommits": "^9.0.0",
@@ -63,6 +64,12 @@
         }
       ],
       "@semantic-release/changelog",
+      [
+        "@semantic-release/exec",
+        {
+          "prepareCmd": "jq --arg v ${nextRelease.version} '.version = $v' geoimage/package.json > geoimage/package.json.tmp && mv geoimage/package.json.tmp geoimage/package.json"
+        }
+      ],
       [
         "@semantic-release/npm",
         {
