@@ -2,16 +2,21 @@ name: PR Build Check
 
 on:
   pull_request:
-  workflow_dispatch: # Allows manual triggering if needed
+  workflow_run:
+    workflows: ["Code Style"]
+    types: [completed]
 
 jobs:
   build-check:
     name: Verify Build
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -25,5 +30,5 @@ jobs:
       - name: Run Build
         run: yarn build
         env:
-            CI: true
-            NODE_ENV: production
+          CI: true
+          NODE_ENV: production
