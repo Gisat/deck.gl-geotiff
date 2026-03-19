@@ -1,37 +1,33 @@
 name: Code Style
 
 on:
-  - pull_request
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
   code_style:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, 'ci skip') && !contains(github.event.head_commit.message, 'skip ci')"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GH_TOKEN }}
           fetch-depth: 0
 
-      # 1. Setup Node with Yarn Caching
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 'lts/*'
           cache: 'yarn'
 
-      # 2. Install using Yarn
       - name: Install Dependencies
         run: yarn install --frozen-lockfile
 
-      # 3. Lint Fix
       - name: Fix Code Style
         run: yarn lintFix
 
       - name: Commit Changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: Fix code style ${{ github.event.pull_request.head.sha }} [ci skip]
-          branch: ${{ github.event.pull_request.head.ref }}
+          commit_message: "style: fix lint errors [skip ci]"
+          branch: ${{ github.head_ref }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
