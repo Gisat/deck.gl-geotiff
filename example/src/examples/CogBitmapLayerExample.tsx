@@ -7,9 +7,21 @@ import { CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { COG_BITMAP_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
+function getRawValuesAtUv(info: any): number[] | null {
+  const uv = info.uv || (info.bitmap && info.bitmap.uv);
+  if (!info.tile?.content?.raw || !uv) return null;
+  const { raw, width, height } = info.tile.content;
+  const [u, v] = uv;
+  const x = Math.floor(u * width);
+  const y = Math.floor(v * height);
+  const channels = raw.length / (width * height);
+  const pixelIndex = Math.floor((y * width + x) * channels);
+  return Array.from(raw.slice(pixelIndex, pixelIndex + channels));
+}
+
 function CogBitmapLayerExample() {
   const mainCog = COG_BITMAP_EXAMPLES.NEPAL_SNOW;
-  const [viewState, setViewState] = useState<any>(null); // Start with null viewState
+  const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
 
   // Define GeoImageOptions outside to ensure consistency
@@ -58,6 +70,7 @@ function CogBitmapLayerExample() {
         minZoom: 0,
         maxZoom: 19,
         tileSize: 256,
+        pickable: false,
 
         renderSubLayers: (props) => {
           const { bbox } = props.tile as any;
@@ -76,9 +89,14 @@ function CogBitmapLayerExample() {
         isTiled: true,
         cogTiles: initializedCog || undefined,
         cogBitmapOptions,
+        pickable: true,
+        onClick: (info: any) => {
+          const values = getRawValuesAtUv(info);
+          if (values !== null) console.log('Raw COG values at click (all bands):', values);
+        },
       }),
     ];
-  }, [viewState]);
+  }, [viewState, initializedCog]);
 
   if (!viewState) {
     return (
@@ -90,11 +108,15 @@ function CogBitmapLayerExample() {
 
   return (
     <DeckGL
-      getCursor={() => 'inherit'}
+      getCursor={() => 'crosshair'}
       viewState={viewState}
       onViewStateChange={({ viewState }) => setViewState(viewState as any)}
       controller
       layers={layers}
+      getTooltip={(info: any) => {
+        const values = getRawValuesAtUv(info);
+        return values !== null ? { text: `Value: ${values[0].toFixed(2)}` } : null;
+      }}
       views={[
         new MapView({
           controller: true,

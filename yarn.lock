@@ -349,26 +349,26 @@ __metadata:
   linkType: hard
 
 "@deck.gl/react@npm:^9.2.9":
-  version: 9.2.9
-  resolution: "@deck.gl/react@npm:9.2.9"
+  version: 9.2.11
+  resolution: "@deck.gl/react@npm:9.2.11"
   peerDependencies:
     "@deck.gl/core": ~9.2.0
     "@deck.gl/widgets": ~9.2.0
     react: ">=16.3.0"
     react-dom: ">=16.3.0"
-  checksum: 10c0/b8b9b80037759ad04d4e16e430fc90ec7a97293d6554ec6b53225031d5e80ad055049cb79fb3e2d167d1e881a066d74dd29f148d588af7b5c71c6a06ea3531ef
+  checksum: 10c0/0e162ef1b5a21683021145c661b886b5cc94164436f9dff2844710fc98a5c3c5c9a3a5eebe109cd77ca10c9c7823b9f0accce7cd0086bfc2f36c78c945599ce0
   languageName: node
   linkType: hard
 
 "@deck.gl/widgets@npm:^9.2.9":
-  version: 9.2.9
-  resolution: "@deck.gl/widgets@npm:9.2.9"
+  version: 9.2.11
+  resolution: "@deck.gl/widgets@npm:9.2.11"
   dependencies:
     preact: "npm:^10.17.0"
   peerDependencies:
     "@deck.gl/core": ~9.2.0
     "@luma.gl/core": ~9.2.6
-  checksum: 10c0/c911977cfa79beb85f6cbc4b98c0f01d308f6932f026d25aea827fa6fd59739b13e7f428cdb2d4d54cbbed991c52e8ecd007c577a2c9b44f2652eb527d98addb
+  checksum: 10c0/f4123f4e93aa1f1519d61637a1994b27835bd6a66274b767b1f3665e4d459679aebd57a17fde0f7e56b3f0e6500725e6fd4c263873900a0760b61959da9b022a
   languageName: node
   linkType: hard
 
