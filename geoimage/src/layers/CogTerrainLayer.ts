@@ -335,7 +335,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  const [meshResult] = data;
 	  const tileTexture = (!this.props.disableTexture && meshResult?.texture) ? meshResult.texture : null;
 
-	  return new SubLayerClass({ ...props, tileSize: 256 }, {
+	  return new SubLayerClass({ ...props, tileSize: props.tileSize }, {
       data: DUMMY_DATA,
       mesh: meshResult?.map,
       texture: tileTexture,
