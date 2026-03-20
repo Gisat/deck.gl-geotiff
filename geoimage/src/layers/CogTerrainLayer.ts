@@ -13,13 +13,14 @@ import {
 } from '@deck.gl/core';
 import { SimpleMeshLayer } from '@deck.gl/mesh-layers';
 import type { MeshAttributes } from '@loaders.gl/schema';
+import type { TerrainMesh } from '../core/types';
 import {
   TileLayer, TileLayerProps, GeoBoundingBox, _TileLoadProps as TileLoadProps,
   _Tile2DHeader as Tile2DHeader, NonGeoBoundingBox,
 } from '@deck.gl/geo-layers';
 
 import CogTiles from '../core/CogTiles';
-import { GeoImageOptions } from '../core/GeoImage';
+import { GeoImageOptions, TileResult } from '../core/GeoImage';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -107,7 +108,7 @@ function urlTemplateToUpdateTrigger(template: URLTemplate): string {
 	signal?: AbortSignal;
   };
 
-  type MeshAndTexture = [MeshAttributes | null, TextureSource | null];
+  type MeshAndTexture = [TileResult | null, TextureSource | null];
 
 /** All properties supported by CogTerrainLayer */
 export type CogTerrainLayerProps = _CogTerrainLayerProps &
@@ -268,14 +269,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   }
 
   async getTiledTerrainData(tile: TileLoadProps): Promise<MeshAndTexture> {
-	  // const {
-    //   elevationData, fetch, texture, elevationDecoder, meshMaxError,
-    // } = this.props;
 	  const { viewport } = this.context;
-	  // const dataUrl = getURLFromTemplate(elevationData, tile);
-	  // const textureUrl = texture && getURLFromTemplate(texture, tile);
-
-	  // const { signal } = tile;
 	  let bottomLeft = [0, 0] as [number, number];
 	  let topRight = [0, 0] as [number, number];
 	  if (viewport.isGeospatial) {
@@ -300,6 +294,10 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       this.props.meshMaxError,
     );
 
+    if (terrain && !this.props.pickable) {
+      terrain.raw = null;
+    }
+
     return Promise.all([terrain, null]) as unknown as Promise<MeshAndTexture>;
   }
 
@@ -320,13 +318,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  }
 
 	  // const [mesh, texture] = data;
-	  const [mesh] = data;
+	  const [meshResult] = data;
 
 	  return new SubLayerClass({ ...props, tileSize: 256 }, {
       data: DUMMY_DATA,
-      mesh,
+      mesh: meshResult?.map,
       // texture,
       _instanced: false,
+      pickable: props.pickable,
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       // getPosition: (d) => [0, 0, 0],
       getColor: color,
@@ -346,8 +345,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       .map((tile) => tile.content)
       .filter((x) => x && x[0])
       .map((arr) => {
-        // @ts-expect-error: Tile content structure is not fully typed in the source layer
-		  const bounds = arr[0]?.header?.boundingBox;
+		  const bounds = (arr[0]?.map as TerrainMesh | undefined)?.header?.boundingBox;
 		  return bounds?.map((bound) => bound[2]);
       });
 	  if (ranges.length === 0) {
@@ -389,6 +387,8 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 		  {
           getTileData: this.getTiledTerrainData.bind(this),
           renderSubLayers: this.renderSubLayers.bind(this),
+          pickable: this.props.pickable,
+          onClick: this.props.onClick,
           updateTriggers: {
 			      getTileData: {
               elevationData: urlTemplateToUpdateTrigger(elevationData),

@@ -24,6 +24,20 @@ function CogMultibandExample() {
         ...(COG_BITMAP_EXAMPLES.UGANDA_MULTIBAND.defaultOptions as GeoImageOptions),
         useChannel: useChannel16 ? 16 : 15,
       },
+      pickable: true,
+      onClick: (info: any) => {
+        const uv = info.uv || (info.bitmap && info.bitmap.uv);
+        if (info.tile && info.tile.content && info.tile.content.raw && uv) {
+          const { raw, width, height } = info.tile.content;
+          const [u, v] = uv;
+          const x = Math.floor(u * width);
+          const y = Math.floor(v * height);
+          const channels = raw.length / (width * height);
+          const pixelIndex = Math.floor((y * width + x) * channels);
+          const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
+          console.log("Raw COG values at click:", rawValues);
+        }
+      }
     });
 
     const tileLayer = new TileLayer({
@@ -32,6 +46,7 @@ function CogMultibandExample() {
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
+      pickable: false,
 
       renderSubLayers: (props) => {
         const { bbox } = props.tile as any;

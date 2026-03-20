@@ -2,14 +2,14 @@ import Martini from '@mapbox/martini';
 import { getMeshBoundingBox } from '@loaders.gl/schema';
 import Delatin from '../delatin';
 import { addSkirt } from '../helpers/skirt';
-import { GeoImageOptions, Bounds, TypedArray } from '../types';
+import { GeoImageOptions, Bounds, TypedArray, TileResult } from '../types';
 
 export class TerrainGenerator {
   static generate(
     input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds},
     options: GeoImageOptions,
     meshMaxError: number
-  ) {
+  ): TileResult {
     const { width, height } = input;
 
     // 1. Compute Terrain Data (Extract Elevation)
@@ -49,7 +49,7 @@ export class TerrainGenerator {
       triangles = newTriangles;
     }
 
-    return {
+    const map = {
       // Data return by this loader implementation
       loaderData: {
         header: {},
@@ -61,6 +61,16 @@ export class TerrainGenerator {
       mode: 4, // TRIANGLES
       indices: { value: Uint32Array.from(triangles), size: 1 },
       attributes,
+    };
+
+    const gridWidth = width === 257 ? 257 : width + 1;
+    const gridHeight = height === 257 ? 257 : height + 1;
+
+    return {
+      map,
+      raw: terrain,
+      width: gridWidth,
+      height: gridHeight
     };
   }
 

@@ -2,7 +2,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
 
 // Bitmap styling
 import GeoImage from './GeoImage';
-import { GeoImageOptions } from './types';
+import { GeoImageOptions, TileResult } from './types';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -338,7 +338,7 @@ class CogTiles {
     return tileData;
   }
 
-  async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number) {
+  async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number): Promise<TileResult | null> {
     let requiredSize = this.tileSize; // Default 256 for image/bitmap
 
     if (this.options.type === 'terrain') {

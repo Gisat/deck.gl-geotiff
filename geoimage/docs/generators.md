@@ -13,7 +13,7 @@ The `BitmapGenerator` class is responsible for converting multi-band raster data
 
 ### Performance Optimizations
 - **LUT (Look-Up Table)**: For 8-bit (Uint8) data, color calculations are pre-computed into a 256-entry table. This allows processing millions of pixels with simple array lookups instead of expensive color scale calculations.
-- **Memory Efficiency**: Returns `ImageBitmap` directly, which is more memory-efficient and faster to upload to the GPU than standard `ImageData` or `Canvas` objects.
+- **Memory Efficiency**: Returns a `TileResult` object containing an `ImageBitmap` (GPU-ready) and the original `raw` raster `TypedArray` (CPU-side). The `ImageBitmap` is more memory-efficient and faster to upload to the GPU than standard `ImageData` or `Canvas` objects. The `raw` array is a byproduct of rendering — no extra network requests are needed. It is discarded immediately when `pickable: false` (the default), and retained in RAM only when `pickable: true`.
 - **Typed Traversal**: Uses typed arrays and minimized object lookups in the main pixel loops.
 
 ---
@@ -33,6 +33,7 @@ The `TerrainGenerator` class converts elevation raster data into 3D meshes (vert
 - **Skirt Generation**: Automatically adds "skirts" (vertical edges) to tiles. This prevents visible cracks between tiles of different detail levels.
 - **Safe Elevation Backfilling**: Handles NoData values and ensures consistent elevation at tile borders for seamless stitching.
 - **Bounding Box Calculation**: Automatically computes the 3D bounding box for each tile to enable accurate frustum culling.
+- **`TileResult` Output**: Returns a `TileResult` where `map` is the mesh geometry (vertices, indices, attributes) sent to the GPU, and `raw` is the source elevation `Float32Array`. The `raw` array is a byproduct of rendering — no extra network requests are needed. It is discarded immediately when `pickable: false` (the default), and retained in RAM only when `pickable: true`.
 
 ---
 

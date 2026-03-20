@@ -50,7 +50,7 @@ const heatmapLayer = new CogBitmapLayer({
   cogBitmapOptions: {
     type: 'image',
     useChannel: 1,
-    useHeatmap: true,
+    useHeatMap: true,
     colorScaleValueRange: [100, 200, 300],
     colorScale: ['yellow', '#20908d', [68, 1, 84]]
   }
@@ -206,3 +206,68 @@ const heatmapOverlay = new CogBitmapLayer({
   }
 });
 ```
+
+---
+
+## 4. Raw Value Picking
+
+**Use Case:** retrieving the original GeoTIFF raster values (elevation, band values, indices) at a clicked location, without extra network requests.
+
+### A. Bitmap Picking (single or multiband)
+
+```typescript
+const layer = new CogBitmapLayer({
+  id: 'picking-bitmap',
+  rasterData: 'https://example.com/data.tif',
+  isTiled: true,
+  pickable: true, // default: false, opt-in required
+  onClick: (info) => {
+    const uv = info.uv || (info.bitmap && info.bitmap.uv);
+    if (info.tile && info.tile.content && info.tile.content.raw && uv) {
+      const { raw, width, height } = info.tile.content;
+      const [u, v] = uv;
+      const x = Math.floor(u * width);
+      const y = Math.floor(v * height);
+      const channels = raw.length / (width * height);
+      const pixelIndex = Math.floor((y * width + x) * channels);
+      const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
+      console.log('Raw values:', rawValues); // e.g. [128, 200, 45] for 3 bands
+    }
+  }
+});
+```
+
+### B. Terrain Picking (elevation & multiband)
+
+```typescript
+const layer = new CogTerrainLayer({
+  id: 'picking-terrain',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  pickable: true,
+  operation: 'terrain+draw',
+  terrainOptions: { type: 'terrain' },
+  onClick: (info) => {
+    if (info.tile && info.tile.content && info.tile.content[0]) {
+      const { raw, width, height } = info.tile.content[0];
+
+      let u, v;
+      if (info.uv) {
+        [u, v] = info.uv;
+      } else if (info.coordinate && info.tile.bbox) {
+        const { west, south, east, north } = info.tile.bbox;
+        u = (info.coordinate[0] - west) / (east - west);
+        v = (north - info.coordinate[1]) / (north - south);
+      }
+
+      if (u !== undefined && v !== undefined) {
+        const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
+        const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
+        console.log('Elevation (m):', raw[y * width + x]);
+      }
+    }
+  }
+});
+```
+
+> **Known limitation:** Terrain picking does not work when an overlay (OSM/XYZ or `CogBitmapLayer` with `clampToTerrain`) is active. Fix planned for a future release.

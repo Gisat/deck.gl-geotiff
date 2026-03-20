@@ -1,5 +1,5 @@
 import { fromArrayBuffer, GeoTIFFImage, TypedArray } from 'geotiff';
-import { GeoImageOptions, DefaultGeoImageOptions, Bounds } from './types';
+import { GeoImageOptions, DefaultGeoImageOptions, Bounds, TileResult } from './types';
 import { TerrainGenerator } from './lib/TerrainGenerator';
 import { BitmapGenerator } from './lib/BitmapGenerator';
 
@@ -29,7 +29,7 @@ export default class GeoImage {
         },
     options: GeoImageOptions,
     meshMaxError,
-  ) {
+  ): Promise<TileResult | null> {
     const mergedOptions = { ...DefaultGeoImageOptions, ...options };
 
     switch (mergedOptions.type) {
@@ -51,7 +51,7 @@ export default class GeoImage {
         rasters: any[] },
     options: GeoImageOptions,
     meshMaxError,
-  ) {
+  ): Promise<TileResult> {
     let rasters = [];
     let width: number;
     let height: number;
@@ -83,7 +83,7 @@ export default class GeoImage {
         height: number,
         rasters: any[] },
     options: GeoImageOptions,
-  ) {
+  ): Promise<TileResult> {
     let rasters = [];
     let width: number;
     let height: number;

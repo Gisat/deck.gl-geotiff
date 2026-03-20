@@ -1,5 +1,6 @@
 // types.ts
 import chroma from 'chroma-js';
+import type { MeshAttributes } from '@loaders.gl/schema';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -87,3 +88,18 @@ export type TypedArray =
   | Uint32Array
   | Float32Array
   | Float64Array;
+
+export type TerrainMesh = {
+    loaderData?: Record<string, unknown>;
+    header?: { vertexCount: number; boundingBox?: [number[], number[]] };
+    mode: number;
+    indices?: { value: Uint32Array; size: number };
+    attributes: MeshAttributes;
+};
+
+export interface TileResult {
+    map: ImageBitmap | TerrainMesh;
+    raw: TypedArray | null;
+    width: number;
+    height: number;
+}

@@ -31,64 +31,17 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.3",
     "@eslint/js": "^9.0.0",
-    "@semantic-release/changelog": "^6.0.0",
-    "@semantic-release/exec": "^6.0.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
-    "@semantic-release/npm": "^10.0.0",
-    "conventional-changelog-conventionalcommits": "^9.0.0",
+    "@semantic-release/npm": "^13.1.5",
+    "conventional-changelog-conventionalcommits": "^9.3.0",
     "eslint": "^9.0.0",
     "eslint-plugin-react": "^7.35.0",
     "globals": "^15.0.0",
+    "semantic-release": "^25.0.3",
     "typescript": "^5.0.4",
     "typescript-eslint": "^8.0.0"
-  },
-  "release": {
-    "branches": [
-      "master",
-      {
-        "name": "dev",
-        "prerelease": true
-      }
-    ],
-    "plugins": [
-      [
-        "@semantic-release/commit-analyzer",
-        {
-          "preset": "conventionalcommits"
-        }
-      ],
-      [
-        "@semantic-release/release-notes-generator",
-        {
-          "preset": "conventionalcommits"
-        }
-      ],
-      "@semantic-release/changelog",
-      [
-        "@semantic-release/exec",
-        {
-          "prepareCmd": "jq --arg v ${nextRelease.version} '.version = $v' geoimage/package.json > geoimage/package.json.tmp && mv geoimage/package.json.tmp geoimage/package.json"
-        }
-      ],
-      [
-        "@semantic-release/npm",
-        {
-          "provenance": true,
-          "pkgRoot": "geoimage"
-        }
-      ],
-      [
-        "@semantic-release/git",
-        {
-          "assets": [
-            "package.json",
-            "geoimage/package.json"
-          ],
-          "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
-        }
-      ],
-      "@semantic-release/github"
-    ]
   },
   "resolutions": {
     "tar": "^7.5.11",
