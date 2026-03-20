@@ -47,6 +47,13 @@ export type GeoImageOptions = {
     unidentifiedColor?: Array<number> | chroma.Color,
     clippedColor?: Array<number> | chroma.Color,
     clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
+
+    // --- Kernel-specific (terrain only) ---
+    useSlope?: boolean,
+    useHillshade?: boolean,
+    hillshadeAzimuth?: number,
+    hillshadeAltitude?: number,
+    zFactor?: number,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -86,6 +93,13 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     nullColor: [0, 0, 0, 0],
     unidentifiedColor: [0, 0, 0, 0],
     clippedColor: [0, 0, 0, 0],
+
+    // --- Kernel-specific (terrain only) ---
+    useSlope: false,
+    useHillshade: false,
+    hillshadeAzimuth: 315,
+    hillshadeAltitude: 45,
+    zFactor: 1,
 };
 
 export type TypedArray =
@@ -110,6 +124,7 @@ export type TerrainMesh = {
 export interface TileResult {
     map: ImageBitmap | TerrainMesh;
     raw: TypedArray | null;
+    rawDerived?: TypedArray | null;
     width: number;
     height: number;
     texture?: ImageBitmap;

@@ -342,16 +342,24 @@ class CogTiles {
     let requiredSize = this.tileSize; // Default 256 for image/bitmap
 
     if (this.options.type === 'terrain') {
-      requiredSize = this.tileSize + 1; // 257 for stitching
+      const isKernel = this.options.useSlope || this.options.useHillshade;
+      requiredSize = this.tileSize + (isKernel ? 2 : 1); // 258 for kernel (3×3 border), 257 for normal stitching
     }
 
     const tileData = await this.getTileFromImage(x, y, z, requiredSize);
+
+    // Compute true ground cell size in meters from tile indices.
+    // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
+    const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
+    const cellSizeMeters = tileWidthMeters / this.tileSize;
 
     return this.geo.getMap({
       rasters: [tileData[0]],
       width: requiredSize,
       height: requiredSize,
       bounds,
+      cellSizeMeters,
     }, this.options, meshMaxError);
   }
 

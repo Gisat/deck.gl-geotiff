@@ -4,17 +4,26 @@ import Delatin from '../delatin';
 import { addSkirt } from '../helpers/skirt';
 import { GeoImageOptions, Bounds, TypedArray, TileResult } from '../types';
 import { BitmapGenerator } from './BitmapGenerator';
+import { KernelGenerator } from './KernelGenerator';
 
 export class TerrainGenerator {
   static async generate(
-    input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds},
+    input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds; cellSizeMeters?: number },
     options: GeoImageOptions,
     meshMaxError: number
   ): Promise<TileResult> {
     const { width, height } = input;
+    const isKernel = width === 258;
 
     // 1. Compute Terrain Data (Extract Elevation)
     const terrain = this.computeTerrainData(input, options);
+
+    // For kernel tiles, the mesh uses the inner 257×257 sub-grid (rows 1–257, cols 1–257)
+    // so that row 0 / col 0 (kernel padding) is dropped while the bottom/right stitching
+    // overlap is preserved.
+    const meshTerrain = isKernel ? this.extractMeshRaster(terrain) : terrain;
+    const meshWidth = isKernel ? 257 : width;
+    const meshHeight = isKernel ? 257 : height;
 
     // 2. Tesselate (Generate Mesh)
     const { terrainSkirtHeight } = options;
@@ -22,21 +31,21 @@ export class TerrainGenerator {
     let mesh;
     switch (options.tesselator) {
       case 'martini':
-        mesh = this.getMartiniTileMesh(meshMaxError, width, terrain);
+        mesh = this.getMartiniTileMesh(meshMaxError, meshWidth, meshTerrain);
         break;
       case 'delatin':
-        mesh = this.getDelatinTileMesh(meshMaxError, width, height, terrain);
+        mesh = this.getDelatinTileMesh(meshMaxError, meshWidth, meshHeight, meshTerrain);
         break;
 
       default:
         // Intentional: default to Martini for any unspecified or unrecognized tesselator.
-        mesh = this.getMartiniTileMesh(meshMaxError, width, terrain);
+        mesh = this.getMartiniTileMesh(meshMaxError, meshWidth, meshTerrain);
         break;
     }
 
     const { vertices } = mesh;
     let { triangles } = mesh;
-    let attributes = this.getMeshAttributes(vertices, terrain, width, height, input.bounds);
+    let attributes = this.getMeshAttributes(vertices, meshTerrain, meshWidth, meshHeight, input.bounds);
     // Compute bounding box before adding skirt so that z values are not skewed
     const boundingBox = getMeshBoundingBox(attributes);
 
@@ -64,19 +73,51 @@ export class TerrainGenerator {
       attributes,
     };
 
-    const gridWidth = width === 257 ? 257 : width + 1;
-    const gridHeight = height === 257 ? 257 : height + 1;
+    // For kernel tiles, raw holds the 257×257 mesh elevation (same as non-kernel).
+    // gridWidth/gridHeight reflect the mesh dimensions.
+    const gridWidth = meshWidth === 257 ? 257 : meshWidth + 1;
+    const gridHeight = meshHeight === 257 ? 257 : meshHeight + 1;
 
     const tileResult: TileResult = {
       map,
-      raw: terrain,
+      raw: meshTerrain,
       width: gridWidth,
       height: gridHeight,
     };
 
-    // 3. Generate texture if visualization options are present
-    if (this.hasVisualizationOptions(options)) {
-      const cropped = this.cropRaster(terrain, gridWidth, gridHeight, 256, 256);
+    // 3. Kernel path: compute slope or hillshade, store as rawDerived, generate texture
+    if (isKernel && (options.useSlope || options.useHillshade)) {
+      // Use pre-computed geographic cellSize (meters/pixel) from tile indices.
+      // Falls back to bounds-derived estimate if not provided.
+      const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
+      const zFactor = options.zFactor ?? 1;
+
+      let kernelOutput: Float32Array;
+      if (options.useSlope) {
+        kernelOutput = KernelGenerator.calculateSlope(terrain, cellSize, zFactor, options.noDataValue);
+      } else {
+        kernelOutput = KernelGenerator.calculateHillshade(
+          terrain,
+          options.hillshadeAzimuth ?? 315,
+          options.hillshadeAltitude ?? 45,
+          cellSize,
+          zFactor,
+          options.noDataValue,
+        );
+      }
+
+      tileResult.rawDerived = kernelOutput;
+
+      if (this.hasVisualizationOptions(options)) {
+        const bitmapResult = await BitmapGenerator.generate(
+          { width: 256, height: 256, rasters: [kernelOutput] },
+          { ...options, type: 'image' }
+        );
+        tileResult.texture = bitmapResult.map as ImageBitmap;
+      }
+    } else if (this.hasVisualizationOptions(options)) {
+      // 4. Non-kernel path: crop 257→256, generate texture from elevation
+      const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
       const bitmapResult = await BitmapGenerator.generate(
         { width: 256, height: 256, rasters: [cropped] },
         { ...options, type: 'image' }
@@ -87,8 +128,20 @@ export class TerrainGenerator {
     return tileResult;
   }
 
-  private static hasVisualizationOptions(options: GeoImageOptions): boolean {
-    return !!(
+  /** Extracts rows 1–257, cols 1–257 from a 258×258 terrain array → 257×257 for mesh generation. */
+  private static extractMeshRaster(terrain258: Float32Array): Float32Array {
+    const MESH = 257;
+    const IN = 258;
+    const out = new Float32Array(MESH * MESH);
+    for (let r = 0; r < MESH; r++) {
+      for (let c = 0; c < MESH; c++) {
+        out[r * MESH + c] = terrain258[(r + 1) * IN + (c + 1)];
+      }
+    }
+    return out;
+  }
+
+  private static hasVisualizationOptions(options: GeoImageOptions): boolean {    return !!(
       options.useHeatMap ||
       options.colorScale ||
       options.useSingleColor ||
@@ -132,7 +185,12 @@ export class TerrainGenerator {
       ? (rasters[optionsLocal.useChannelIndex ?? 0] ?? rasters[0])
       : rasters[0];
 
-    const terrain = new Float32Array((width === 257 ? width : width + 1) * (height === 257 ? height : height + 1));
+    const isKernel = width === 258;
+    const isStitched = width === 257;
+    // Kernel: 258×258 flat array. Stitched: 257×257. Default: (width+1)×(height+1) with backfill.
+    const outWidth = isKernel ? 258 : (isStitched ? 257 : width + 1);
+    const outHeight = isKernel ? 258 : (isStitched ? 257 : height + 1);
+    const terrain = new Float32Array(outWidth * outHeight);
 
     const samplesPerPixel = isPlanar ? 1 : (channel.length / (width * height));
 
@@ -140,9 +198,7 @@ export class TerrainGenerator {
     // If interleaved, start at the index of the desired channel.
     let pixel: number = isPlanar ? 0 : (optionsLocal.useChannelIndex ?? 0);
 
-    const isStitched = width === 257;
     const fallbackValue = options.terrainMinValue ?? 0;
-
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const multiplier = options.multiplier ?? 1;
@@ -159,14 +215,14 @@ export class TerrainGenerator {
           elevationValue = fallbackValue;
         }
 
-        // If stitched (257), fill linearly. If 256, fill with stride for padding.
-        const index = isStitched ? (y * width + x) : (y * (width + 1) + x);
+        // Kernel/Stitched: fill linearly. Default (256): fill with stride for padding.
+        const index = (isKernel || isStitched) ? (y * width + x) : (y * (width + 1) + x);
         terrain[index] = elevationValue;
         pixel += samplesPerPixel;
       }
     }
 
-    if (!isStitched) {
+    if (!isKernel && !isStitched) {
       // backfill bottom border
       for (let i = (width + 1) * width, x = 0; x < width; x++, i++) {
         terrain[i] = terrain[i - width - 1];
