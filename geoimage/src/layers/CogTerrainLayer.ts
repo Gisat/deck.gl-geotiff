@@ -13,6 +13,7 @@ import {
 } from '@deck.gl/core';
 import { SimpleMeshLayer } from '@deck.gl/mesh-layers';
 import type { MeshAttributes } from '@loaders.gl/schema';
+import type { TerrainMesh } from '../core/types';
 import {
   TileLayer, TileLayerProps, GeoBoundingBox, _TileLoadProps as TileLoadProps,
   _Tile2DHeader as Tile2DHeader, NonGeoBoundingBox,
@@ -344,7 +345,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       .map((tile) => tile.content)
       .filter((x) => x && x[0])
       .map((arr) => {
-		  const bounds = arr[0]?.map?.header?.boundingBox;
+		  const bounds = (arr[0]?.map as TerrainMesh | undefined)?.header?.boundingBox;
 		  return bounds?.map((bound) => bound[2]);
       });
 	  if (ranges.length === 0) {
