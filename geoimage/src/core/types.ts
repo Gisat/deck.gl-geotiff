@@ -89,8 +89,16 @@ export type TypedArray =
   | Float32Array
   | Float64Array;
 
+export type TerrainMesh = {
+    loaderData?: Record<string, unknown>;
+    header?: { vertexCount: number; boundingBox?: [number[], number[]] };
+    mode: number;
+    indices?: { value: Uint32Array; size: number };
+    attributes: MeshAttributes;
+};
+
 export interface TileResult {
-    map: ImageBitmap | MeshAttributes;
+    map: ImageBitmap | TerrainMesh;
     raw: TypedArray | null;
     width: number;
     height: number;
