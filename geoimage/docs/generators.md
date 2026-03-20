@@ -34,6 +34,7 @@ The `TerrainGenerator` class converts elevation raster data into 3D meshes (vert
 - **Safe Elevation Backfilling**: Handles NoData values and ensures consistent elevation at tile borders for seamless stitching.
 - **Bounding Box Calculation**: Automatically computes the 3D bounding box for each tile to enable accurate frustum culling.
 - **`TileResult` Output**: Returns a `TileResult` where `map` is the mesh geometry (vertices, indices, attributes) sent to the GPU, and `raw` is the source elevation `Float32Array`. The `raw` array is a byproduct of rendering — no extra network requests are needed. It is discarded immediately when `pickable: false` (the default), and retained in RAM only when `pickable: true`.
+- **Texture Generation**: `generate()` is async. When visualization options are present in `terrainOptions` (e.g. `useHeatMap`, `colorScale`, `useSingleColor`), it automatically generates a `texture` `ImageBitmap` by cropping the 257×257 elevation raster to 256×256 and passing it through `BitmapGenerator`. The texture is attached to `TileResult.texture` and cached by deck.gl's `TileLayer`. When no visualization options are set, no texture is generated and terrain renders with the flat `color` prop — zero extra cost.
 
 ---
 

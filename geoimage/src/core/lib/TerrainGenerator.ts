@@ -3,13 +3,14 @@ import { getMeshBoundingBox } from '@loaders.gl/schema';
 import Delatin from '../delatin';
 import { addSkirt } from '../helpers/skirt';
 import { GeoImageOptions, Bounds, TypedArray, TileResult } from '../types';
+import { BitmapGenerator } from './BitmapGenerator';
 
 export class TerrainGenerator {
-  static generate(
+  static async generate(
     input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds},
     options: GeoImageOptions,
     meshMaxError: number
-  ): TileResult {
+  ): Promise<TileResult> {
     const { width, height } = input;
 
     // 1. Compute Terrain Data (Extract Elevation)
@@ -66,12 +67,50 @@ export class TerrainGenerator {
     const gridWidth = width === 257 ? 257 : width + 1;
     const gridHeight = height === 257 ? 257 : height + 1;
 
-    return {
+    const tileResult: TileResult = {
       map,
       raw: terrain,
       width: gridWidth,
-      height: gridHeight
+      height: gridHeight,
     };
+
+    // 3. Generate texture if visualization options are present
+    if (this.hasVisualizationOptions(options)) {
+      const cropped = this.cropRaster(terrain, gridWidth, gridHeight, 256, 256);
+      const bitmapResult = await BitmapGenerator.generate(
+        { width: 256, height: 256, rasters: [cropped] },
+        { ...options, type: 'image' }
+      );
+      tileResult.texture = bitmapResult.map as ImageBitmap;
+    }
+
+    return tileResult;
+  }
+
+  private static hasVisualizationOptions(options: GeoImageOptions): boolean {
+    return !!(
+      options.useHeatMap ||
+      options.colorScale ||
+      options.useSingleColor ||
+      options.useColorsBasedOnValues ||
+      options.useColorClasses
+    );
+  }
+
+  private static cropRaster(
+    src: Float32Array,
+    srcWidth: number,
+    srcHeight: number,
+    dstWidth: number,
+    dstHeight: number
+  ): Float32Array {
+    const out = new Float32Array(dstWidth * dstHeight);
+    for (let y = 0; y < dstHeight; y++) {
+      for (let x = 0; x < dstWidth; x++) {
+        out[y * dstWidth + x] = src[y * srcWidth + x];
+      }
+    }
+    return out;
   }
 
   /**

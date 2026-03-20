@@ -24,7 +24,7 @@ These options select which band of the GeoTIFF to use. Shared by both Bitmap and
 
 ## Bitmap Specific Options
 
-These options apply specifically to `CogBitmapLayer` or when generating textures. **All parameters are optional.**
+These options apply to `CogBitmapLayer` (via `cogBitmapOptions`) and to `CogTerrainLayer` (via `terrainOptions`). When passed in `terrainOptions`, a texture is automatically generated from the elevation data and applied to the 3D mesh — no separate `CogBitmapLayer` needed. **All parameters are optional.**
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -108,6 +108,7 @@ When a tile is loaded, both generators bundle the raw raster data alongside the 
 | `raw` | `TypedArray` | The original raster data, kept on the CPU. |
 | `width` | `number` | Tile width in pixels. |
 | `height` | `number` | Tile height in pixels. |
+| `texture` | `ImageBitmap \| undefined` | *(Terrain only)* Generated texture bitmap from elevation data. Present when visualization options (e.g. `useHeatMap`, `colorScale`) are set in `terrainOptions`. `undefined` when no visualization options are set. |
 
 ### CogBitmapLayer picking
 

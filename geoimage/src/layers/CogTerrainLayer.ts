@@ -319,16 +319,17 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 
 	  // const [mesh, texture] = data;
 	  const [meshResult] = data;
+	  const tileTexture = meshResult?.texture ?? null;
 
 	  return new SubLayerClass({ ...props, tileSize: 256 }, {
       data: DUMMY_DATA,
       mesh: meshResult?.map,
-      // texture,
+      texture: tileTexture,
       _instanced: false,
       pickable: props.pickable,
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       // getPosition: (d) => [0, 0, 0],
-      getColor: color,
+      getColor: tileTexture ? [255, 255, 255] : color,
       wireframe,
       material,
 	  });

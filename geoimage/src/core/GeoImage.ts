@@ -74,7 +74,7 @@ export default class GeoImage {
     }
 
     // Delegate to TerrainGenerator
-    return TerrainGenerator.generate({ width, height, rasters, bounds }, options, meshMaxError);
+    return await TerrainGenerator.generate({ width, height, rasters, bounds }, options, meshMaxError);
   }
 
   async getBitmap(
