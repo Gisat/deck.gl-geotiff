@@ -3,7 +3,7 @@ import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-import { CogTerrainLayer, CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer } from '@deck.gl/layers';
@@ -36,6 +36,10 @@ function CogTerrainLayerExample() {
   const terrainOptions: GeoImageOptions = {
     ...mainCog.defaultOptions as GeoImageOptions,
     type: 'terrain',
+    useHeatMap: true,
+    colorScale: [[65, 182, 196], [254, 254, 191], [215, 25, 28]] as any,
+    colorScaleValueRange: [0, 255],
+    useChannel: 1,
   };
 
   useEffect(() => {
@@ -110,24 +114,8 @@ function CogTerrainLayerExample() {
 
     });
 
-    const heatmap = new CogBitmapLayer({
-      id: 'cog-bitmap-heatmap',
-      rasterData: mainCog.url,
-      isTiled: true,
-      clampToTerrain: true,
-      cogBitmapOptions: {
-        type: 'image',
-        useHeatMap: true,
-        colorScale: [[65, 182, 196], [254, 254, 191], [215, 25, 28]] as any,
-        colorScaleValueRange: [0, 800],
-        useChannel: 1,
-      },
-      pickable: false,
-    });
-
     return [
       // tileLayer,
-      // heatmap,
       cogLayer,
     ];
   }, [viewState, initializedCog]);

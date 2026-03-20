@@ -16,7 +16,10 @@ This library allows you to efficiently visualize high-resolution bitmap and terr
 
 - **COG Rendering**: Efficiently loads and displays COG files directly without a backend server.
 - **Bitmap and Terrain Layers**: Supports visualizing both raster and elevation data.
-- **Customizable Rendering**: Allows custom color scales, multichannel support, and opacity control.
+- **Customizable Rendering**: Custom color scales, multichannel support, heatmaps, categorical classification, and opacity control.
+- **Terrain Texturing**: Drape a styled visualization (elevation heatmap, external imagery) directly onto the 3D terrain mesh — no separate layer needed.
+- **Kernel Analysis**: Compute slope and hillshade directly from elevation data using 3×3 neighborhood kernels (Horn's method / ESRI algorithm).
+- **Raw Value Picking**: Access original raster values (elevation, band values, slope, hillshade) at hover/click locations with no extra network requests.
 
 
 ## Installation
@@ -33,7 +36,7 @@ For more information, visit the [npm package page](https://www.npmjs.com/package
 
 ## Documentation
 
-* **[Layer Showcase](docs/showcase-layers.md)** – Visual examples (RGB, Heatmaps, Terrain).
+* **[Layer Showcase](docs/showcase-layers.md)** – Visual examples (RGB, Heatmaps, Terrain, Slope/Hillshade, Picking).
 * **[API Reference](docs/api-reference.md)** – Detailed property configuration.
 * **[Internal Architecture](docs/generators.md)** – Technical details about the core processing engines.
 
@@ -58,21 +61,48 @@ const cogLayer = new CogBitmapLayer({
 
 ### 2. CogTerrainLayer
 
-Used for displaying 3D terrain from elevation data.
-
+Used for displaying 3D terrain from elevation data. Supports draping a styled texture derived from the elevation itself.
 
 ```typescript
 import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
 
 const cogLayer = new CogTerrainLayer({
   id: 'cog_terrain_name',
-  elevationData:  'cog_terrain_data_url.tif',
+  elevationData: 'cog_terrain_data_url.tif',
   isTiled: true,
   tileSize: 256,
   operation: 'terrain+draw',
   terrainOptions: {
     type: 'terrain',
+    useHeatMap: true,
+    useChannel: 1,
+    colorScale: ['#440154', '#20908d', '#fde725'],
+    colorScaleValueRange: [0, 3000],
   }
+});
+```
+
+### 3. Kernel Analysis (Slope & Hillshade)
+
+Compute slope or hillshade directly from elevation data and drape it as a texture on the terrain mesh.
+
+```typescript
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+
+const slopeLayer = new CogTerrainLayer({
+  id: 'cog_slope',
+  elevationData: 'cog_terrain_data_url.tif',
+  isTiled: true,
+  tileSize: 256,
+  operation: 'terrain+draw',
+  terrainOptions: {
+    type: 'terrain',
+    useChannel: 1,
+    useSlope: true,           // or useHillshade: true
+    useHeatMap: true,
+    colorScale: [[255, 255, 255], [235, 200, 150], [200, 80, 50], [100, 40, 30]],
+    colorScaleValueRange: [0, 90], // degrees
+  },
 });
 ```
 
