@@ -38,7 +38,7 @@ function CogTerrainLayerExample() {
     type: 'terrain',
     useHeatMap: true,
     colorScale: [[65, 182, 196], [254, 254, 191], [215, 25, 28]] as any,
-    colorScaleValueRange: [0, 800],
+    colorScaleValueRange: [0, 255],
     useChannel: 1,
   };
 
