@@ -69,9 +69,9 @@ export class KernelGenerator {
    */
   static calculateHillshade(
     src: Float32Array,
+    cellSize: number,
     azimuth: number = 315,
     altitude: number = 45,
-    cellSize: number,
     zFactor: number = 1,
     noDataValue?: number,
   ): Float32Array {
@@ -115,7 +115,7 @@ export class KernelGenerator {
           Math.sin(zenithRad) * Math.sin(slopeRad) * Math.cos(azimuthRad - aspectRad)
         );
 
-        out[r * OUT + c] = Math.max(0, hillshade);
+        out[r * OUT + c] = Math.max(0, Math.min(255, hillshade));
       }
     }
 

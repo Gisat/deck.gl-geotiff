@@ -92,15 +92,41 @@ export class TerrainGenerator {
       const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
       const zFactor = options.zFactor ?? 1;
 
+      if (options.useSlope && options.useHillshade) {
+        console.warn(
+          '[TerrainGenerator] useSlope and useHillshade are mutually exclusive; useSlope takes precedence.'
+        );
+      }
+
+      // Build a separate raster for kernel computation that preserves noData samples.
+      const kernelTerrain = new Float32Array(terrain.length);
+      const sourceRaster = input.rasters[0];
+      const noData = options.noDataValue;
+      if (
+        noData !== undefined &&
+        noData !== null &&
+        sourceRaster &&
+        sourceRaster.length === terrain.length
+      ) {
+        for (let i = 0; i < terrain.length; i++) {
+          // If the source raster marks this sample as noData, keep it as noData for the kernel.
+          // Otherwise, use the processed terrain elevation value.
+          // eslint-disable-next-line eqeqeq
+          kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
+        }
+      } else {
+        // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
+        kernelTerrain.set(terrain);
+      }
       let kernelOutput: Float32Array;
       if (options.useSlope) {
-        kernelOutput = KernelGenerator.calculateSlope(terrain, cellSize, zFactor, options.noDataValue);
+        kernelOutput = KernelGenerator.calculateSlope(kernelTerrain, cellSize, zFactor, options.noDataValue);
       } else {
         kernelOutput = KernelGenerator.calculateHillshade(
-          terrain,
+          kernelTerrain,
+          cellSize,
           options.hillshadeAzimuth ?? 315,
           options.hillshadeAltitude ?? 45,
-          cellSize,
           zFactor,
           options.noDataValue,
         );
@@ -143,7 +169,6 @@ export class TerrainGenerator {
 
   private static hasVisualizationOptions(options: GeoImageOptions): boolean {    return !!(
       options.useHeatMap ||
-      options.colorScale ||
       options.useSingleColor ||
       options.useColorsBasedOnValues ||
       options.useColorClasses
@@ -153,7 +178,7 @@ export class TerrainGenerator {
   private static cropRaster(
     src: Float32Array,
     srcWidth: number,
-    srcHeight: number,
+    _srcHeight: number,
     dstWidth: number,
     dstHeight: number
   ): Float32Array {

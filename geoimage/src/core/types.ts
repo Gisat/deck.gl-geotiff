@@ -11,7 +11,7 @@ export type ClampToTerrainOptions = {
 export type GeoImageOptions = {
     // --- Shared / Data ---
     type: 'image' | 'terrain',
-    format?: 'uint8' | 'uint16' | 'uint32' |'int8' | 'int16' | 'int32' | 'float32' | 'float64'
+    format?: 'uint8' | 'uint16' | 'uint32' |'int8' | 'int16' | 'int32' | 'float32' | 'float64',
     /** 1-based index of the channel to visualize (e.g. 1 for the first channel). */
     useChannel?: number | null, // Note: 0 is not a valid channel; this is enforced at runtime.
     /** 0-based index of the channel to visualize (e.g. 0 for the first channel). Alternative to useChannel. */
