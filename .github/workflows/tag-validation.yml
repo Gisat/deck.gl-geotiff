@@ -1,17 +1,29 @@
-name: Tag validation
+name: PR Title Validation
 
 on:
   pull_request:
-    types: [opened, labeled, unlabeled, synchronize]
+    types: [opened, synchronize]
 
 jobs:
-  tag_validation:
-    name: Tag validation
+  pr_title_validation:
+    name: Validate PR title
     runs-on: ubuntu-latest
     steps:
-      - name: Require Labels
-        uses: mheap/github-action-required-labels@v5
+      - name: Validate PR title
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          mode: exactly
-          count: 1
-          labels: 'major, minor, patch, skip-release'
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
