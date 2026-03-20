@@ -44,4 +44,4 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: yarn node node_modules/semantic-release/bin/semantic-release.js --config .releaserc.json
+        run: npx semantic-release

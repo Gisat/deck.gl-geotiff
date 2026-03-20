@@ -21,15 +21,8 @@
     ],
     "@semantic-release/changelog",
     [
-      "@semantic-release/exec",
-      {
-        "prepareCmd": "jq --arg v ${nextRelease.version} '.version = $v' geoimage/package.json > geoimage/package.json.tmp && mv geoimage/package.json.tmp geoimage/package.json"
-      }
-    ],
-    [
       "@semantic-release/npm",
       {
-        "provenance": true,
         "pkgRoot": "geoimage"
       }
     ],
@@ -37,8 +30,8 @@
       "@semantic-release/git",
       {
         "assets": [
-          "package.json",
-          "geoimage/package.json"
+          "geoimage/package.json",
+          "CHANGELOG.md"
         ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
