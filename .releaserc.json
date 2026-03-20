@@ -1,0 +1,48 @@
+{
+  "branches": [
+    "master",
+    {
+      "name": "dev",
+      "prerelease": true
+    }
+  ],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    "@semantic-release/changelog",
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "jq --arg v ${nextRelease.version} '.version = $v' geoimage/package.json > geoimage/package.json.tmp && mv geoimage/package.json.tmp geoimage/package.json"
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "provenance": true,
+        "pkgRoot": "geoimage"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "package.json",
+          "geoimage/package.json"
+        ],
+        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}
