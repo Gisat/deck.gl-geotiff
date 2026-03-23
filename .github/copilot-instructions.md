@@ -59,6 +59,55 @@ Important design split:
     - `PR_DESCRIPTION.md` is a **temporary working file** — never stage or commit it.
     - PR title format `Merge \`branch\` → \`target\`` is reserved for `dev → master` merges only. Feature branches use descriptive titles (e.g. `feat: ...`).
 
+## Public API
+
+Exports from `@gisatcz/deckgl-geolib`:
+```ts
+import { CogBitmapLayer, CogTerrainLayer, CogTiles, GeoImage } from '@gisatcz/deckgl-geolib';
+import type { GeoImageOptions } from '@gisatcz/deckgl-geolib';
+```
+
+### Layer props quick-reference
+
+**`CogBitmapLayer`**
+| Prop | Type | Notes |
+|---|---|---|
+| `rasterData` | `string \| string[] \| null` | COG URL |
+| `cogBitmapOptions` | `GeoImageOptions` | Must have `type: 'image'` |
+| `isTiled` | `boolean` | Set to `true` for COG tiles |
+| `cogTiles` | `CogTiles` (optional) | Pre-initialized instance (see below) |
+| `pickable` | `boolean` | Enables click + hover |
+
+**`CogTerrainLayer`**
+| Prop | Type | Notes |
+|---|---|---|
+| `elevationData` | `string \| string[] \| null` | COG URL |
+| `terrainOptions` | `GeoImageOptions` | Must have `type: 'terrain'` |
+| `isTiled` | `boolean` | Set to `true` for COG tiles |
+| `cogTiles` | `CogTiles` (optional) | Pre-initialized instance |
+| `meshMaxError` | `number` | Default `4.0` m, smaller = more detail |
+
+### `GeoImageOptions` key fields
+
+- `type`: **required** — `'image'` for bitmap, `'terrain'` for terrain mesh.
+- `useChannel`: 1-based; `useChannelIndex` is 0-based alternative (derived if omitted).
+- `tesselator`: `'martini'` (default) or `'delatin'` for terrain.
+- `noDataValue`, `format`, `numOfChannels`, `planarConfig`: auto-detected by `CogTiles.initializeCog()` — only override when the COG metadata is incorrect.
+- `terrainMinValue`: fallback elevation for nodata pixels — **must be tuned per dataset**.
+
+## CogTiles pre-initialization pattern
+
+Pre-initialize `CogTiles` before passing to the layer to obtain COG bounds for viewport fitting and to avoid a double-initialization race:
+
+```ts
+const cog = new CogTiles(cogBitmapOptions);
+await cog.initializeCog(url);           // idempotent — safe to call again
+const bounds = cog.getBoundsAsLatLon(); // [minLon, minLat, maxLon, maxLat]
+// then pass: cogTiles={cog}  to CogBitmapLayer / CogTerrainLayer
+```
+
+`initializeCog()` is guarded — if called again on the same instance it returns immediately.
+
 ## deck.gl picking patterns
 
 - To show hover tooltips with raw raster values, use `getTooltip` on the `DeckGL` component — **do not** use React `useState` inside `onHover`. State updates during hover trigger React re-renders that interfere with deck.gl tile initialization and cause `BitmapLayer` errors.
@@ -66,3 +115,25 @@ Important design split:
 - `TileResult.raw` is `null` when `pickable: false` (the default) — all picking code must guard against null.
 - `CogBitmapLayer` tile content: `TileResult` directly (`tile.content.raw`).
 - `CogTerrainLayer` tile content: tuple `[TileResult | null, TextureSource | null]` (`tile.content[0].raw`).
+
+### Canonical `getRawValuesAtUv` helper
+
+```ts
+function getRawValuesAtUv(info: any): number[] | null {
+  const uv = info.uv || (info.bitmap && info.bitmap.uv);
+  if (!info.tile?.content?.raw || !uv) return null;
+  const { raw, width, height } = info.tile.content;
+  const [u, v] = uv;
+  const x = Math.floor(u * width);
+  const y = Math.floor(v * height);
+  const channels = raw.length / (width * height);
+  const pixelIndex = Math.floor((y * width + x) * channels);
+  return Array.from(raw.slice(pixelIndex, pixelIndex + channels));
+}
+```
+
+Use in both `onClick` and `getTooltip`. For `CogTerrainLayer`, read from `info.tile.content[0]` instead of `info.tile.content`.
+
+## Dynamic channel switching
+
+Changing `cogBitmapOptions.useChannel` (or `terrainOptions.useChannel`) as a prop triggers `updateState`, which syncs the value into the internal `CogTiles` instance and clears the derived `useChannelIndex`. No manual `CogTiles` mutation needed.
