@@ -39,6 +39,8 @@ These options apply to `CogBitmapLayer` (via `cogBitmapOptions`) and to `CogTerr
 #### Continuous & Single Color
 Used for visualizing continuous data (elevation, temperature) or simple single-color styling.
 
+> **Performance Note:** For float and 16-bit rasters with `useHeatMap`, a 1024-entry LUT is used for color mapping. This reduces per-pixel chroma.js calls and has no impact on memory usage for the output tile or picking performance.
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`useHeatMap`** | `boolean` | `true` | Renders single-channel data as a color heatmap using `colorScale`. |

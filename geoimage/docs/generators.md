@@ -12,7 +12,7 @@ The `BitmapGenerator` class is responsible for converting multi-band raster data
 - **Dynamic Opacity**: Can map pixel values directly to alpha transparency.
 
 ### Performance Optimizations
-- **LUT (Look-Up Table)**: For 8-bit (Uint8) data, color calculations are pre-computed into a 256-entry table. This allows processing millions of pixels with simple array lookups instead of expensive color scale calculations.
+- **LUT (Look-Up Table)**: For 8-bit (Uint8) data, color calculations are pre-computed into a 256-entry table. For float and 16-bit data in heatmap mode, a 1024-entry LUT is used, reducing chroma.js calls from 65,536 to 1,024 per tile. This allows processing millions of pixels with simple array lookups instead of expensive color scale calculations.
 - **Memory Efficiency**: Returns a `TileResult` object containing an `ImageBitmap` (GPU-ready) and the original `raw` raster `TypedArray` (CPU-side). The `ImageBitmap` is more memory-efficient and faster to upload to the GPU than standard `ImageData` or `Canvas` objects. The `raw` array is a byproduct of rendering — no extra network requests are needed. It is discarded immediately when `pickable: false` (the default), and retained in RAM only when `pickable: true`.
 - **Typed Traversal**: Uses typed arrays and minimized object lookups in the main pixel loops.
 
