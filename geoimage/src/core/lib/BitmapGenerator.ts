@@ -130,7 +130,7 @@ const colorScale = chroma.scale(
           lut.set(this.calculateSingleColor(i, colorScale, options, optAlpha), i * 4);
         }
       }
-      for (let i = 0, sampleIndex = 0; i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
+      for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
         const lutIdx = dataArray[sampleIndex] * 4;
         colorsArray[i] = lut[lutIdx];
         colorsArray[i+1] = lut[lutIdx+1];
