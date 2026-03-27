@@ -120,14 +120,15 @@ const colorScale = chroma.scale(
     if (is8Bit && !options.useDataForOpacity) {
       
       const lut = new Uint8ClampedArray(256 * 4);
-      let heatmapLogShown = false;
       for (let i = 0; i < 256; i++) {
-        lut.set(this.calculateSingleColor(i, colorScale, options, optAlpha, (logType) => {
-          if (logType === 'heatmap' && !heatmapLogShown) {
-            
-            heatmapLogShown = true;
-          }
-        }), i * 4);
+        if (
+          (options.clipLow != null && i <= options.clipLow) ||
+          (options.clipHigh != null && i >= options.clipHigh)
+        ) {
+          lut.set(options.clippedColor as number[], i * 4);
+        } else {
+          lut.set(this.calculateSingleColor(i, colorScale, options, optAlpha), i * 4);
+        }
       }
       for (let i = 0, sampleIndex = 0; i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
         const lutIdx = dataArray[sampleIndex] * 4;
@@ -147,7 +148,18 @@ const colorScale = chroma.scale(
       const rangeSpan = (rangeMax - rangeMin) || 1;
       for (let i = 0; i < LUT_SIZE; i++) {
         const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
-        lut.set([...colorScale(domainVal).rgb(), optAlpha], i * 4);
+        if (
+          (options.clipLow != null && domainVal <= options.clipLow) ||
+          (options.clipHigh != null && domainVal >= options.clipHigh)
+        ) {
+          lut.set(options.clippedColor as number[], i * 4);
+        } else {
+          const rgb = colorScale(domainVal).rgb();
+          lut[i * 4] = rgb[0];
+          lut[i * 4 + 1] = rgb[1];
+          lut[i * 4 + 2] = rgb[2];
+          lut[i * 4 + 3] = optAlpha;
+        }
       }
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
         const val = dataArray[sampleIndex];
@@ -168,15 +180,14 @@ const colorScale = chroma.scale(
     // 3. FALLBACK LOOP (Categorical Float, Opacity, or Single Color)
     
     let sampleIndex = options.useChannelIndex ?? 0;
-    let nullColorLogShown = false;
     for (let i = 0; i < arrayLength; i += 4) {
       const val = dataArray[sampleIndex];
-      const color = this.calculateSingleColor(val, colorScale, options, optAlpha, (logType) => {
-        if (logType === 'null' && !nullColorLogShown) {
-          
-          nullColorLogShown = true;
-        }
-      });
+      let color;
+      if ((options.clipLow != null && val <= options.clipLow) || (options.clipHigh != null && val >= options.clipHigh)) {
+        color = options.clippedColor as number[];
+      } else {
+        color = this.calculateSingleColor(val, colorScale, options, optAlpha);
+      }
       if (options.useDataForOpacity && !this.isInvalid(val, options)) {
         color[3] = scale(val, rangeMin, rangeMax, 0, 255);
       }
@@ -186,15 +197,11 @@ const colorScale = chroma.scale(
     return colorsArray;
   }
 
-  private static calculateSingleColor(val: number, colorScale: any, options: GeoImageOptions, alpha: number, logCallback?: (logType: string) => void): number[] {
+  private static calculateSingleColor(val: number, colorScale: any, options: GeoImageOptions, alpha: number): number[] {
     if (this.isInvalid(val, options)) {
-      if (logCallback) logCallback('null');
       return options.nullColor as number[];
     }
-    if ((options.clipLow != null && val <= options.clipLow) || (options.clipHigh != null && val >= options.clipHigh)) {
-      
-      return options.clippedColor as number[];
-    }
+    
     // Color mode priority (most specific wins):
     // 1. useSingleColor
     // 2. useColorClasses
@@ -211,26 +218,8 @@ const colorScale = chroma.scale(
       const match = options.colorsBasedOnValues?.find(([v]) => v === val);
       return match ? [...chroma(Array.isArray(match[1]) ? chroma(match[1]) : match[1]).rgb(), alpha] : (options.unidentifiedColor as number[]);
     } else if (options.useHeatMap) {
-      if (logCallback) logCallback('heatmap');
       return [...colorScale(val).rgb(), alpha];
     }
-    if (options.useColorsBasedOnValues) {
-      
-
-      const match = options.colorsBasedOnValues?.find(([v]) => v === val);
-      // Normalize color for chroma.js compatibility
-return match ? [...chroma(Array.isArray(match[1]) ? chroma(match[1]) : match[1]).rgb(), alpha] : (options.unidentifiedColor as number[]);
-    }
-    if (options.useColorClasses) {
-
-      const index = this.findClassIndex(val, options);
-      // Normalize color for chroma.js compatibility
-return index > -1 ? [...chroma(Array.isArray(options.colorClasses![index][0]) ? chroma(options.colorClasses![index][0]) : options.colorClasses![index][0]).rgb(), alpha] : (options.unidentifiedColor as number[]);
-    }
-    if (options.useSingleColor) {
-      return options.color as number[];
-    }
-    
     return options.unidentifiedColor as number[];
   }
 
@@ -257,8 +246,6 @@ return index > -1 ? [...chroma(Array.isArray(options.colorClasses![index][0]) ? 
   }
 
   private static getInvalidColor(val: number, options: GeoImageOptions): number[] {
-    if (options.clipLow != null && val <= options.clipLow) return options.clippedColor as number[];
-    if (options.clipHigh != null && val >= options.clipHigh) return options.clippedColor as number[];
     return options.nullColor as number[];
   }
 
