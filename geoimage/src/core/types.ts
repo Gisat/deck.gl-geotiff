@@ -1,5 +1,7 @@
 // types.ts
 import chroma from 'chroma-js';
+
+export type ChromaColorInput = string | number[] | chroma.Color;
 import type { MeshAttributes } from '@loaders.gl/schema';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
@@ -37,15 +39,15 @@ export type GeoImageOptions = {
     blurredTexture? : boolean,
     clipLow?: number | null,
     clipHigh?: number | null,
-    color?: string | number[] | chroma.Color,
-    colorScale?: Array<string | number[] | chroma.Color>,
+    color?: ChromaColorInput,
+    colorScale?: ChromaColorInput[],
     colorScaleValueRange?: number[],
-    colorsBasedOnValues?: Array<[number, string | number[] | chroma.Color]>,
-    colorClasses?: Array<[string | number[] | chroma.Color, [number, number], [boolean?, boolean?]?]>,
+    colorsBasedOnValues?: Array<[number, ChromaColorInput]>,
+    colorClasses?: Array<[ChromaColorInput, [number, number], [boolean?, boolean?]?]>,
     alpha?: number,
-    nullColor?: string | number[] | chroma.Color,
-    unidentifiedColor?: string | number[] | chroma.Color,
-    clippedColor?: string | number[] | chroma.Color,
+    nullColor?: ChromaColorInput,
+    unidentifiedColor?: ChromaColorInput,
+    clippedColor?: ChromaColorInput,
     clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
 
     // --- Kernel-specific (terrain only) ---
