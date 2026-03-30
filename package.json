@@ -54,5 +54,5 @@
     "brace-expansion": "2.0.3",
     "serialize-javascript": ">=7.0.5"
   },
-  "packageManager": "yarn@4.13.0"
+  "packageManager": "yarn@4.12.0"
 }
