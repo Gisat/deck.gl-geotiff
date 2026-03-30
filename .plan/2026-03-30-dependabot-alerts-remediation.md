@@ -18,6 +18,7 @@ Three open Dependabot alerts require attention. All are transitive dependencies 
 - **Recommended solution**: Upgrade `handlebars` to version 4.7.9 or later. As this is a transitive dependency, add a resolution in the root `package.json` and ensure all upstreams are compatible.
 - **Workarounds**: Apply `Object.freeze(Object.prototype)` early in startup (may break other libraries). Use the runtime-only build to reduce attack surface.
 - **References**: https://github.com/Gisat/deck.gl-geotiff/security/dependabot/202
+- **Note**: Upgrading to handlebars ≥4.7.9 also remediates related alerts including #204 (Critical: JavaScript Injection via AST Type Confusion), #205 (JavaScript Injection via AST Type Confusion by tampering @partial-block), #207 (JavaScript Injection via AST Type Confusion with dynamic partial), #208 (JavaScript Injection in CLI Precompiler), #210 (Prototype Method Access Control Gap via Missing __lookupSetter__ Blocklist Entry), #211 (Property Access Validation Bypass in container.lookup), and other recent Handlebars vulnerabilities reported by Dependabot.
 
 ### Alert #200 — `picomatch` (Method Injection in POSIX Character Classes)
 
@@ -67,6 +68,28 @@ Three open Dependabot alerts require attention. All are transitive dependencies 
 - **Current version**: `4.5.4`
 - **Fixed in**: `5.5.6` (but `5.5.7` required to also cover alert #195)
 - **Risk**: Same as #195 above.
+
+### Alert #212 — `serialize-javascript` (CPU Exhaustion DoS via crafted array-like objects)
+
+- **CVE**: CPU Exhaustion Denial of Service via crafted array-like objects
+- **Dependency chain**: (transitive, see yarn.lock)
+- **Affected versions**: < 7.0.5
+- **Fixed in**: 7.0.5
+- **Risk**: Serializing a specially crafted array-like object (with a very large length property) causes serialize-javascript to enter an intensive loop, consuming 100% CPU and hanging indefinitely. This is a DoS risk, especially if the app is also vulnerable to Prototype Pollution or YAML Deserialization.
+- **Remediation**: Added a root-level Yarn resolution for `serialize-javascript@7.0.5`. Ran `yarn install` to enforce the fix. Lint, build, and example app build all succeeded post-upgrade.
+- **Workarounds**: Validate and sanitize all input before passing to serialize(). Ensure the environment is protected against Prototype Pollution. Upgrade as soon as possible.
+- **References**: https://github.com/yahoo/serialize-javascript/security/advisories
+
+### Alert #209 — `brace-expansion` (Zero-step sequence DoS)
+
+- **CVE**: Zero-step sequence causes process hang and memory exhaustion
+- **Dependency chain**: (transitive, see yarn.lock)
+- **Affected versions**: >= 2.0.0, < 2.0.3
+- **Fixed in**: 2.0.3
+- **Risk**: A brace pattern with a zero step value (e.g., {1..2..0}) causes the sequence generation loop to run indefinitely, hanging the process and allocating large amounts of memory. This can be triggered by untrusted input passed to expand(), or by error.
+- **Remediation**: Added a root-level Yarn resolution for `brace-expansion@2.0.3` (not 5.x, to maintain compatibility with minimatch/eslint). Ran `yarn install` to enforce the fix. Lint, build, and example app build all succeeded post-upgrade.
+- **Workarounds**: Sanitize strings passed to expand() to ensure a step value of 0 is not used.
+- **References**: https://github.com/juliangruber/brace-expansion/security/advisories
 
 ### Alert #188 — `@tootallnate/once` (Incorrect Control Flow Scoping)
 

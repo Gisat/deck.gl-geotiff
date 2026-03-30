@@ -50,7 +50,9 @@
     "picomatch": ">=4.0.4",
     "flatted": ">=3.4.2",
     "fast-xml-parser": ">=5.5.7",
-    "@tootallnate/once": ">=2.0.1"
+    "@tootallnate/once": ">=2.0.1",
+    "brace-expansion": "2.0.3",
+    "serialize-javascript": ">=7.0.5"
   },
   "packageManager": "yarn@4.13.0"
 }
