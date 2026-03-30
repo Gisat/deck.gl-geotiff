@@ -1,3 +1,10 @@
+## [2.4.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0-dev.1...v2.4.0-dev.2) (2026-03-30)
+
+### Bug Fixes
+
+* **bitmap:** respect useChannelIndex in 8-bit LUT loop for future multi-band support ([78ea36c](https://github.com/Gisat/deck.gl-geotiff/commit/78ea36c77cc7e4c9c1781eb34fb1600f249b9aef))
+* **bitmap:** unify invalid/clipped value handling and remove obsolete debug logs ([1700e58](https://github.com/Gisat/deck.gl-geotiff/commit/1700e587cebe02eb98f4de03a26195f7c1904870))
+
 ## [2.4.0-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.3.1-dev.1...v2.4.0-dev.1) (2026-03-23)
 
 ### Features
