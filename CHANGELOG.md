@@ -1,3 +1,10 @@
+## [2.4.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0-dev.2...v2.4.0-dev.3) (2026-03-31)
+
+### Bug Fixes
+
+* remediate alerts 209 and 212 (brace-expansion@2.0.3, serialize-javascript@>=7.0.5) via root-level Yarn resolutions; update plan and lockfile ([d0ef4e6](https://github.com/Gisat/deck.gl-geotiff/commit/d0ef4e6e8439ccf98a9c10069dff9916e0934be5))
+* update dependency resolutions for security ([c71ee17](https://github.com/Gisat/deck.gl-geotiff/commit/c71ee171cd7c7928bd343b42f1876e2f9e425c61))
+
 ## [2.4.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0-dev.1...v2.4.0-dev.2) (2026-03-30)
 
 ### Bug Fixes
