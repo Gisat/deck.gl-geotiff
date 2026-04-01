@@ -121,4 +121,70 @@ export class KernelGenerator {
 
     return out;
   }
+
+  /**
+   * Calculates a weighted multi-directional hillshade (0–255).
+   * Combines three light sources to reveal structure in shadows.
+   */
+  static calculateMultiHillshade(
+    src: Float32Array,
+    cellSize: number,
+    zFactor: number = 1,
+    noDataValue?: number,
+  ): Float32Array {
+    const OUT = 256;
+    const IN = 258;
+    const out = new Float32Array(OUT * OUT);
+
+    // Setup 3 light sources: NW (Main), W (Fill), N (Fill)
+    const lights = [
+      { az: 315, alt: 45, weight: 0.60 }, // Primary NW
+      { az: 225, alt: 35, weight: 0.25 }, // Secondary West/SW
+      { az: 0,   alt: 35, weight: 0.15 }  // Secondary North
+    ].map(l => {
+      const zenithRad = (90 - l.alt) * (Math.PI / 180);
+      let azMath = 360 - l.az + 90;
+      if (azMath >= 360) azMath -= 360;
+      return { 
+        zCos: Math.cos(zenithRad), 
+        zSin: Math.sin(zenithRad), 
+        aRad: azMath * (Math.PI / 180),
+        w: l.weight 
+      };
+    });
+
+    for (let r = 0; r < OUT; r++) {
+      for (let c = 0; c < OUT; c++) {
+        const base = r * IN + c;
+        if (noDataValue !== undefined && src[base + IN + 1] === noDataValue) {
+          out[r * OUT + c] = NaN;
+          continue;
+        }
+
+        // Neighbors
+        const z1 = src[base], z2 = src[base + 1], z3 = src[base + 2];
+        const z4 = src[base + IN], z6 = src[base + IN + 2];
+        const z7 = src[base + 2 * IN], z8 = src[base + 2 * IN + 1], z9 = src[base + 2 * IN + 2];
+
+        const dzdx = ((z3 + 2 * z6 + z9) - (z1 + 2 * z4 + z7)) / (8 * cellSize);
+        const dzdy = ((z1 + 2 * z2 + z3) - (z7 + 2 * z8 + z9)) / (8 * cellSize);
+
+        const slopeRad = Math.atan(zFactor * Math.sqrt(dzdx * dzdx + dzdy * dzdy));
+        const aspectRad = Math.atan2(dzdy, -dzdx);
+        
+        const cosSlope = Math.cos(slopeRad);
+        const sinSlope = Math.sin(slopeRad);
+
+        // Accumulate light from all three directions
+        let multiHillshade = 0;
+        for (const L of lights) {
+          const intensity = L.zCos * cosSlope + L.zSin * sinSlope * Math.cos(L.aRad - aspectRad);
+          multiHillshade += Math.max(0, intensity) * L.w;
+        }
+
+        out[r * OUT + c] = Math.min(255, multiHillshade * 255);
+      }
+    }
+    return out;
+  }
 }

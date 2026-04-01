@@ -57,12 +57,14 @@ export type GeoImageOptions = {
     clippedColor?: ChromaColorInput,
     clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
 
-    // --- Kernel-specific (terrain only) ---
+    // --- Kernel-specific (terrain only + swiss relief) ---
     useSlope?: boolean,
     useHillshade?: boolean,
     hillshadeAzimuth?: number,
     hillshadeAltitude?: number,
     zFactor?: number,
+    useSwissRelief?: boolean,
+    swissSlopeWeight?: number,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -97,6 +99,19 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     color: [255, 0, 255, 255],
     colorScale: chroma.brewer.YlOrRd,
     colorScaleValueRange: [0, 255],
+    //     colorScale: [
+    //     [75, 120, 90],    // Brightened forest green
+    //     [100, 145, 100],  // Soft meadow green
+    //     [130, 170, 110],  // Bright moss
+    //     [185, 210, 145],  // Sunny sage
+    //     [235, 235, 185],  // Pale primrose (transitional)
+    //     [225, 195, 160],  // Sand / light terracotta (matches slope)
+    //     [195, 160, 130],  // Warm clay brown
+    //     [170, 155, 150],  // Warm slate grey
+    //     [245, 245, 240],  // Bright mist
+    //     [255, 255, 255],  // Pure peak white
+    // ],
+    // colorScaleValueRange: [0, 6500],
     colorsBasedOnValues: undefined,
     colorClasses: undefined,
     alpha: 100,
@@ -110,6 +125,8 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     hillshadeAzimuth: 315,
     hillshadeAltitude: 45,
     zFactor: 1,
+    useSwissRelief: false,
+    swissSlopeWeight: 0.5,
 };
 
 export type TypedArray =
@@ -138,4 +155,6 @@ export interface TileResult {
     width: number;
     height: number;
     texture?: ImageBitmap;
+    /** Optional: grayscale or color bitmap for Swiss relief or other overlays */
+    bitmap?: Uint8ClampedArray | ImageBitmap;
 }
