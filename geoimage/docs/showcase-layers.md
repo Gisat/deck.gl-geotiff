@@ -147,6 +147,7 @@ const terrainLayer = new CogTerrainLayer({
   operation: 'terrain+draw',
   terrainOptions: {
     type: 'terrain',
+    useSingleColor: true,
     multiplier: 1.0, // Vertical exaggeration
     terrainSkirtHeight: 100 // Hides gaps between tiles
   }
