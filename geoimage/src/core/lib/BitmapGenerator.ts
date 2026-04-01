@@ -36,10 +36,23 @@ export class BitmapGenerator {
 
     // Derive channel count from data if not provided
     // If planar support is added, this logic must be updated to handle both layouts correctly.
-const numAvailableChannels = optionsLocal.numOfChannels ?? 
+    const numAvailableChannels = optionsLocal.numOfChannels ?? 
       (rasters.length === 1 ? rasters[0].length / (width * height) : rasters.length);
 
-    if (optionsLocal.useChannelIndex == null) {
+    if (optionsLocal.useSwissRelief) {
+      if (rasters.length === 2) {
+        // Normal Swiss relief renderinghould be the 0-255 Hillshade*Slope mask we generated in TerrainGenerator
+        imageData.data.set(
+          this.getColorValue(rasters, optionsLocal, size)
+        );
+      } else {// Missing mask: fill with null color (fully transparent or a fallback)
+        const defaultColorData = this.getDefaultColor(size, optionsLocal.nullColor);
+        defaultColorData.forEach((value, index) => {
+          imageData.data[index] = value;
+        });
+      }
+    }  
+    else if (optionsLocal.useChannelIndex == null) {
       if (isInterleaved) {
         const ratio = rasters[0].length / (width * height);
         if (ratio === 1) {
@@ -101,20 +114,63 @@ const numAvailableChannels = optionsLocal.numOfChannels ??
     return { map, raw: rasters[0], width, height };
   }
 
-  static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
-     // Normalize all colorScale entries for chroma.js compatibility
-const colorScale = chroma.scale(
-  options.colorScale?.map(c => Array.isArray(c) ? chroma(c as [number, number, number]) : c)
-).domain(options.colorScaleValueRange ?? [0, 255]);
-     const colorsArray = new Uint8ClampedArray(arrayLength);
-    const optAlpha = Math.floor((options.alpha ?? 100) * 2.55);
-    const rangeMin = options.colorScaleValueRange?.[0] ?? 0;
-    const rangeMax = options.colorScaleValueRange?.[1] ?? 255;
+  static getColorValue(dataArray: TypedArray | TypedArray[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
+    // Normalize all colorScale entries for chroma.js compatibility
+    const colorScale = chroma.scale(
+      options.colorScale?.map(c => Array.isArray(c) ? chroma(c) : c)
+    ).domain(options.colorScaleValueRange);
+    const colorsArray = new Uint8ClampedArray(arrayLength);
+    const optAlpha = Math.floor(options.alpha * 2.55);
+    const rangeMin = options.colorScaleValueRange[0]!;
+    const rangeMax = options.colorScaleValueRange.slice(-1)[0]!;
 
-    const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
-    const isFloatOrWide = !is8Bit && (dataArray instanceof Float32Array || dataArray instanceof Uint16Array || dataArray instanceof Int16Array);
+    const isMultiRaster = Array.isArray(dataArray);
+    const primaryBuffer = isMultiRaster ? dataArray[0] : dataArray as TypedArray;
 
-    // 1. 8-BIT COMPREHENSIVE LUT
+    const isSwiss = options.useSwissRelief && isMultiRaster && dataArray.length >= 2;
+    const is8Bit = primaryBuffer instanceof Uint8Array || primaryBuffer instanceof Uint8ClampedArray;
+    const isFloatOrWide = !is8Bit && (primaryBuffer instanceof Float32Array || primaryBuffer instanceof Uint16Array || primaryBuffer instanceof Int16Array);
+
+    // 1. SWISS MODE BRANCH
+    if (isSwiss) {
+      const reliefMask = (dataArray as TypedArray[])[1];
+      const rangeSpan = (rangeMax - rangeMin) || 1;
+
+      const LUT_SIZE = 1024;
+      const lut = new Uint8ClampedArray(LUT_SIZE * 4);
+      for (let i = 0; i < LUT_SIZE; i++) {
+        const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
+        const rgb = colorScale(domainVal).rgb();
+        lut[i * 4] = rgb[0];
+        lut[i * 4 + 1] = rgb[1];
+        lut[i * 4 + 2] = rgb[2];
+        lut[i * 4 + 3] = optAlpha;
+      }
+
+      for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
+        const elevationVal = primaryBuffer[sampleIndex];
+        
+        // Inline the "isInvalid" check for speed
+        if (Number.isNaN(elevationVal) || (options.noDataValue !== undefined && elevationVal === options.noDataValue)) {
+          colorsArray.set(options.nullColor as number[], i);
+          continue;
+        }
+
+        const t = (elevationVal - rangeMin) / rangeSpan;
+        const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.floor(t * (LUT_SIZE - 1)))) * 4;
+        
+        const maskVal = reliefMask[sampleIndex];
+        const multiplier = 0.4 + 0.6 * (maskVal / 255); // The "Ambient Fill"
+
+        colorsArray[i]     = lut[lutIdx]     * multiplier;
+        colorsArray[i + 1] = lut[lutIdx + 1] * multiplier;
+        colorsArray[i + 2] = lut[lutIdx + 2] * multiplier;
+        colorsArray[i + 3] = lut[lutIdx + 3];
+      }
+      return colorsArray;
+    }
+
+    // 2. 8-BIT COMPREHENSIVE LUT
 
     // Single-band 8-bit (grayscale or indexed): use LUT for fast mapping
     if (is8Bit && !options.useDataForOpacity) {
@@ -131,7 +187,7 @@ const colorScale = chroma.scale(
         }
       }
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
-        const lutIdx = dataArray[sampleIndex] * 4;
+        const lutIdx = primaryBuffer[sampleIndex] * 4;
         colorsArray[i] = lut[lutIdx];
         colorsArray[i+1] = lut[lutIdx+1];
         colorsArray[i+2] = lut[lutIdx+2];
@@ -140,7 +196,7 @@ const colorScale = chroma.scale(
       return colorsArray;
     }
 
-    // 2. FLOAT / 16-BIT LUT (HEATMAP ONLY)
+    // 3. FLOAT / 16-BIT LUT (HEATMAP ONLY)
     if (isFloatOrWide && options.useHeatMap && !options.useDataForOpacity) {
       
       const LUT_SIZE = 1024;
@@ -162,7 +218,7 @@ const colorScale = chroma.scale(
         }
       }
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
-        const val = dataArray[sampleIndex];
+        const val = primaryBuffer[sampleIndex];
         if (this.isInvalid(val, options)) {
           colorsArray.set(this.getInvalidColor(val, options), i);
         } else {
@@ -177,11 +233,11 @@ const colorScale = chroma.scale(
       return colorsArray;
     }
 
-    // 3. FALLBACK LOOP (Categorical Float, Opacity, or Single Color)
+    // 4. FALLBACK LOOP (Categorical Float, Opacity, or Single Color)
     
     let sampleIndex = options.useChannelIndex ?? 0;
     for (let i = 0; i < arrayLength; i += 4) {
-      const val = dataArray[sampleIndex];
+      const val = primaryBuffer[sampleIndex];
       let color;
       if ((options.clipLow != null && val <= options.clipLow) || (options.clipHigh != null && val >= options.clipHigh)) {
         color = options.clippedColor as number[];

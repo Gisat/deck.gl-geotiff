@@ -7,6 +7,47 @@ import { BitmapGenerator } from './BitmapGenerator';
 import { KernelGenerator } from './KernelGenerator';
 
 export class TerrainGenerator {
+  /**
+   * Precompute and cache a 256x256 LUT for Swiss relief compositing.
+   * LUT[hillshade][slope] = (hillshade * (1.0 - (slope * weight)))
+   * All values normalized to [0,1].
+   * Only computed on first use of Swiss relief mode.
+   */
+
+
+  private static _swissReliefLUT: Float32Array | null = null;
+  private static _lastWeight: number | null = null;
+
+  static getSwissReliefLUT(weight: number = 0.5): Float32Array {
+    // Check if LUT exists AND if the weight matches the previous calculation
+    if (this._swissReliefLUT && this._lastWeight === weight) {
+      return this._swissReliefLUT;
+    }
+
+    const ambient = 0.010; // 20% fill light to prevent pitch black northwest slopes
+
+    const lut = new Float32Array(256 * 256); // 65536 values
+    
+    for (let h = 0; h < 256; h++) {
+      const hillshade = h / 255;
+      for (let s = 0; s < 256; s++) {
+        const slope = s / 255;
+
+        // 1. Calculate the 'Swiss Contrast'
+        const contrast = 1.0 - (slope * weight);
+        
+        // Swiss Formula: (Hillshade) * (1.0 - (Slope * Weight))
+        // This results in 0.0 to 1.0 multiplier
+        // lut[(h << 8) | s] = hillshade * (1.0 - (slope * weight));
+        lut[(h << 8) | s] = Math.max(ambient, hillshade * contrast);
+      }
+    }
+
+    this._swissReliefLUT = lut;
+    this._lastWeight = weight;
+    return lut;
+  }
+
   static async generate(
     input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds; cellSizeMeters?: number },
     options: GeoImageOptions,
@@ -86,7 +127,64 @@ export class TerrainGenerator {
     };
 
     // 3. Kernel path: compute slope or hillshade, store as rawDerived, generate texture
-    if (isKernel && (options.useSlope || options.useHillshade)) {
+    if (isKernel && options.useSwissRelief) {
+     // Pre-fetch LUT (should be a 1D Float32Array of 65536 values)
+      const lut = TerrainGenerator.getSwissReliefLUT();
+      // --- Swiss relief compositing logic ---
+      const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
+      const zFactor = options.zFactor ?? 1;
+      
+      // 1. Compute slope and hillshade using KernelGenerator
+      // Build a separate raster for kernel computation that preserves noData samples.
+      const kernelTerrain = new Float32Array(terrain.length);
+      const sourceRaster = input.rasters[0];
+      const noData = options.noDataValue;
+      if (
+        noData !== undefined &&
+        noData !== null &&
+        sourceRaster &&
+        sourceRaster.length === terrain.length
+      ) {
+        for (let i = 0; i < terrain.length; i++) {
+          // If the source raster marks this sample as noData, keep it as noData for the kernel.
+          // Otherwise, use the processed terrain elevation value.
+          // eslint-disable-next-line eqeqeq
+          kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
+        }
+      } else {
+        // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
+        kernelTerrain.set(terrain);
+      }
+      const rawSlope = KernelGenerator.calculateSlope(kernelTerrain, cellSize, zFactor, noData);
+      const rawHillshade = KernelGenerator.calculateMultiHillshade(kernelTerrain, cellSize, zFactor, noData);
+
+      const swissReliefResult = new Uint8ClampedArray(256 * 256);
+
+      for (let i = 0; i < 65536; i++) {
+        // 1. Quantize Slope: Normalize 0-90° to 0-255 integer
+        // Using bitwise OR 0 for faster rounding than Math.round
+        const sIdx = ((Math.max(0, Math.min(90, rawSlope[i])) / 90) * 255) | 0;
+
+        // 2. Quantize Hillshade: Ensure 0-255 integer
+        const hIdx = Math.max(0, Math.min(255, rawHillshade[i])) | 0;
+
+        // 3. LUT Lookup: Result is 0.0 - 1.0 (float)
+        // Map the multiplier back to 0-255 for the "Draft" texture
+        swissReliefResult[i] = (lut[(hIdx << 8) | sIdx] * 255) | 0;
+      }
+      tileResult.rawDerived = swissReliefResult;
+
+      if (this.hasVisualizationOptions(options)) {
+        const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
+        const bitmapResult = await BitmapGenerator.generate(
+          { width: 256, height: 256, rasters: [cropped, swissReliefResult] },
+          { ...options, type: 'image' }
+        );
+        tileResult.texture = bitmapResult.map as ImageBitmap;
+      }
+    }
+    else if (isKernel && (options.useSlope || options.useHillshade)) {
+      console.log('[TerrainGenerator] Kernel mode with slope or hillshade enabled; computing kernel and generating texture.')
       // Use pre-computed geographic cellSize (meters/pixel) from tile indices.
       // Falls back to bounds-derived estimate if not provided.
       const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
@@ -155,7 +253,6 @@ export class TerrainGenerator {
     return tileResult;
   }
 
-  /** Extracts rows 1–257, cols 1–257 from a 258×258 terrain array → 257×257 for mesh generation. */
   private static extractMeshRaster(terrain258: Float32Array): Float32Array {
     const MESH = 257;
     const IN = 258;
@@ -168,13 +265,15 @@ export class TerrainGenerator {
     return out;
   }
 
-  private static hasVisualizationOptions(options: GeoImageOptions): boolean {    return !!(
-      options.useHeatMap ||
-      options.useSingleColor ||
-      options.useColorsBasedOnValues ||
-      options.useColorClasses
-    );
-  }
+  private static hasVisualizationOptions(options: GeoImageOptions): boolean {
+   if (options.useSingleColor) return false;
+   return !!(
+     options.useHeatMap ||
+     options.useSwissRelief||
+     options.useColorsBasedOnValues ||
+     options.useColorClasses
+   );
+ }
 
   private static cropRaster(
     src: Float32Array,

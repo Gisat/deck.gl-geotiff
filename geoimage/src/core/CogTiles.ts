@@ -372,7 +372,7 @@ class CogTiles {
     let requiredSize = this.tileSize; // Default 256 for image/bitmap
 
     if (this.options.type === 'terrain') {
-      const isKernel = this.options.useSlope || this.options.useHillshade;
+      const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
       requiredSize = this.tileSize + (isKernel ? 2 : 1); // 258 for kernel (3×3 border), 257 for normal stitching
     }
 

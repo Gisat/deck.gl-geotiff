@@ -333,18 +333,34 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   ) {
 	  const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
 
-	  const { color, wireframe, material } = this.props;
+	  const { color, wireframe, terrainOptions } = this.props;
 	  const { data } = props;
 
 	  if (!data) {
       return null;
 	  }
 
-	  // const [mesh, texture] = data;
-	  const [meshResult] = data;
+    const [meshResult] = data;
 	  const tileTexture = (!this.props.disableTexture && meshResult?.texture) ? meshResult.texture : null;
 
+    const isSwiss = terrainOptions?.useSwissRelief;
+
+    const lightingProps = isSwiss ? {
+      _lighting: 'none',
+      material: {
+        ambient: 1.0,
+        diffuse: 0.0,
+        shininess: 0.0,
+        specularColor: [0, 0, 0]
+      }
+    } : {
+      // Fallback to standard deck.gl lighting for other modes
+      _lighting: undefined,
+      material: this.props.material 
+    };
+      
 	  return new SubLayerClass({ ...props, tileSize: props.tileSize }, {
+      ...lightingProps,
       data: DUMMY_DATA,
       mesh: meshResult?.map,
       texture: tileTexture,
@@ -354,7 +370,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       // getPosition: (d) => [0, 0, 0],
       getColor: tileTexture ? [255, 255, 255] : color,
       wireframe,
-      material,
 	  });
   }
 
