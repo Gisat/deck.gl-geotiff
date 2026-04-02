@@ -111,7 +111,7 @@ export class TerrainGenerator {
         for (let i = 0; i < terrain.length; i++) {
           // If the source raster marks this sample as noData, keep it as noData for the kernel.
           // Otherwise, use the processed terrain elevation value.
-          // eslint-disable-next-line eqeqeq
+           
           kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
         }
       } else {
