@@ -1,3 +1,9 @@
+## [2.4.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0-dev.3...v2.4.0-dev.4) (2026-04-02)
+
+### Bug Fixes
+
+* remove security resolutions to debug npm publish failure ([d11e50d](https://github.com/Gisat/deck.gl-geotiff/commit/d11e50d9bfdc7b28a2f634648307a7b70f3dd01d))
+
 ## [2.4.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0-dev.2...v2.4.0-dev.3) (2026-03-31)
 
 ### Bug Fixes
