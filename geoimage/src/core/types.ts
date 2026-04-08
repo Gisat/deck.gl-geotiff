@@ -51,7 +51,10 @@ export type GeoImageOptions = {
     colorScaleValueRange?: number[],
     colorsBasedOnValues?: Array<[number, ChromaColorInput]>,
     colorClasses?: Array<[ChromaColorInput, [number, number], [boolean?, boolean?]?]>,
+    /** General layer opacity (0-100). Used for all rendering modes except glaze. */
     alpha?: number,
+    /** Intensity ceiling for the relief glaze (0-255). 0 is fully transparent; 255 is maximum theoretical opacity. Recommended range for satellite overlays: 120-160. Only used with useReliefGlaze. */
+    maxGlazeAlpha?: number,
     nullColor?: ChromaColorInput,
     unidentifiedColor?: ChromaColorInput,
     clippedColor?: ChromaColorInput,
@@ -65,6 +68,10 @@ export type GeoImageOptions = {
     zFactor?: number,
     useSwissRelief?: boolean,
     swissSlopeWeight?: number,
+    useReliefGlaze?: boolean,
+
+    // --- Lighting control ---
+    disableLighting?: boolean,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -115,6 +122,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     colorsBasedOnValues: undefined,
     colorClasses: undefined,
     alpha: 100,
+    maxGlazeAlpha: 128,
     nullColor: [0, 0, 0, 0],
     unidentifiedColor: [0, 0, 0, 0],
     clippedColor: [0, 0, 0, 0],
@@ -127,6 +135,10 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     zFactor: 1,
     useSwissRelief: false,
     swissSlopeWeight: 0.5,
+    useReliefGlaze: false,
+
+    // --- Lighting control ---
+    disableLighting: false,
 };
 
 export type TypedArray =

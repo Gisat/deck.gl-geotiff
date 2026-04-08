@@ -344,8 +344,10 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  const tileTexture = (!this.props.disableTexture && meshResult?.texture) ? meshResult.texture : null;
 
     const isSwiss = terrainOptions?.useSwissRelief;
+    const disableLighting = terrainOptions?.disableLighting;
+    const shouldDisableLighting = isSwiss || disableLighting;
 
-    const lightingProps = isSwiss ? {
+    const lightingProps = shouldDisableLighting ? {
       _lighting: 'none',
       material: {
         ambient: 1.0,
@@ -354,7 +356,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         specularColor: [0, 0, 0]
       }
     } : {
-      // Fallback to standard deck.gl lighting for other modes
+      // Standard deck.gl lighting
       _lighting: undefined,
       material: this.props.material 
     };
@@ -433,13 +435,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
           updateTriggers: {
 			      getTileData: {
               elevationData: urlTemplateToUpdateTrigger(elevationData),
-              // texture: urlTemplateToUpdateTrigger(texture),
               meshMaxError,
               elevationDecoder,
-              // When cogTiles instance is swapped (e.g. mode switch), refetch tiles.
-              // deck.gl keeps old tile content visible until new tiles are ready.
               terrainCogTiles: this.state.terrainCogTiles,
 			      },
+              renderSubLayers: {
+                disableTexture: this.props.disableTexture,
+                terrainOptions: this.props.terrainOptions,
+              },
           },
           onViewportLoad: this.onViewportLoad.bind(this),
           zRange: this.state.zRange || null,
