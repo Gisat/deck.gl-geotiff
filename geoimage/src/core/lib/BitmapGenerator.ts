@@ -39,9 +39,22 @@ export class BitmapGenerator {
     const numAvailableChannels = optionsLocal.numOfChannels ?? 
       (rasters.length === 1 ? rasters[0].length / (width * height) : rasters.length);
 
-    if (optionsLocal.useSwissRelief) {
+    if (optionsLocal.useReliefGlaze) {
+      if (rasters.length >= 1) {
+        // Relief glaze: pure black/white overlay with variable alpha
+        imageData.data.set(
+          this.getReliefGlazeRGBA(rasters, optionsLocal, size)
+        );
+      } else {
+        // Missing relief mask: fill with transparent
+        const transparentData = new Uint8ClampedArray(size);
+        transparentData.fill(0);
+        imageData.data.set(transparentData);
+      }
+    }
+    else if (optionsLocal.useSwissRelief) {
       if (rasters.length === 2) {
-        // Normal Swiss relief renderinghould be the 0-255 Hillshade*Slope mask we generated in TerrainGenerator
+        // Normal Swiss relief rendering: hypsometric color × relief mask
         imageData.data.set(
           this.getColorValue(rasters, optionsLocal, size)
         );
@@ -251,6 +264,64 @@ export class BitmapGenerator {
       sampleIndex += samplesPerPixel;
     }
     return colorsArray;
+  }
+
+  /**
+   * Generate relief glaze RGBA output.
+   * Maps relief mask (0-255) to pure black/white glaze with variable alpha.
+   * - reliefValue < 128: Pure black (0,0,0) darkens shadows
+   * - reliefValue > 128: Pure white (255,255,255) brightens highlights
+   * - reliefValue == 128: Transparent (no effect)
+   * 
+   * High-performance implementation using pre-computed alpha LUT to avoid 65k Math.pow calls.
+   *
+   * @param rasters Array of [relief mask raster] (single raster expected)
+   * @param options GeoImageOptions (alpha used for opacity scaling)
+   * @param arrayLength Total RGBA array length
+   * @returns Uint8ClampedArray of RGBA values
+   */
+  static getReliefGlazeRGBA(
+    rasters: TypedArray[],
+    options: GeoImageOptions,
+    arrayLength: number,
+  ): Uint8ClampedArray {
+    const reliefMask = rasters[0];
+    const opacityFactor = (options.maxGlazeAlpha ?? 128) / 255;
+    
+    // Pre-compute alpha lookup table (256 entries, one per relief value 0-255)
+    const alphaLookup = new Uint8Array(256);
+    for (let v = 0; v < 256; v++) {
+      if (v === 0) {
+        alphaLookup[v] = 0; // noData: fully transparent
+      } else {
+        const alphaDist = Math.abs(v - 128) / 128;
+        const bias = v < 128 ? 0.6 : 0.8;
+        alphaLookup[v] = Math.floor(Math.pow(alphaDist, bias) * 255 * opacityFactor);
+      }
+    }
+    
+    const glazeArray = new Uint8ClampedArray(arrayLength);
+
+    let maskIndex = 0;
+    const samples: Array<{reliefValue: number, glaze: number, alpha: number}> = [];
+    for (let i = 0; i < arrayLength; i += 4) {
+      const reliefValue = reliefMask[maskIndex];
+      
+      // Pure black for shadows, pure white for highlights (no muddy grays)
+      const glaze = reliefValue < 128 ? 0 : 255;
+      const alpha = alphaLookup[reliefValue];
+
+      glazeArray[i] = glaze;        // R
+      glazeArray[i + 1] = glaze;    // G
+      glazeArray[i + 2] = glaze;    // B
+      glazeArray[i + 3] = alpha;    // A
+
+      if (maskIndex < 20) {
+        samples.push({ reliefValue, glaze, alpha });
+      }
+      maskIndex++;
+    }
+    return glazeArray;
   }
 
   private static calculateSingleColor(val: number, colorScale: any, options: GeoImageOptions, alpha: number): number[] {

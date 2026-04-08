@@ -3,6 +3,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geoti
 // Bitmap styling
 import GeoImage from './GeoImage';
 import { GeoImageOptions, TileResult } from './types';
+import { ReliefCompositor } from './lib/ReliefCompositor';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -374,6 +375,9 @@ class CogTiles {
     if (this.options.type === 'terrain') {
       const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
       requiredSize = this.tileSize + (isKernel ? 2 : 1); // 258 for kernel (3×3 border), 257 for normal stitching
+    } else if (this.options.type === 'image' && this.options.useReliefGlaze) {
+      // Bitmap layer with relief glaze mode needs kernel padding for slope/hillshade computation
+      requiredSize = this.tileSize + 2; // 258 for kernel
     }
 
     const tileData = await this.getTileFromImage(x, y, z, requiredSize);
@@ -384,10 +388,32 @@ class CogTiles {
     const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
     const cellSizeMeters = tileWidthMeters / this.tileSize;
 
+    let rasters = [tileData[0]];
+    let tileWidth = requiredSize;
+    let tileHeight = requiredSize;
+
+    // Relief glaze computation for bitmap layers
+    if (this.options.type === 'image' && this.options.useReliefGlaze) {
+      const elevation = tileData[0] as Float32Array;
+      
+      // Pass full 258×258 padded elevation directly — KernelGenerator expects IN=258 and outputs 256×256
+      const reliefMask = ReliefCompositor.composeSwissRelief(
+        elevation,
+        this.options,
+        cellSizeMeters,
+        this.tileSize,
+        this.tileSize,
+      );
+      // For glaze-only mode, pass ONLY the 256×256 relief mask
+      rasters = [reliefMask as any];
+      tileWidth = this.tileSize;
+      tileHeight = this.tileSize;
+    }
+
     return this.geo.getMap({
-      rasters: [tileData[0]],
-      width: requiredSize,
-      height: requiredSize,
+      rasters,
+      width: tileWidth,
+      height: tileHeight,
       bounds,
       cellSizeMeters,
     }, this.options, meshMaxError);
@@ -509,6 +535,25 @@ class CogTiles {
         console.warn(`Unsupported data type: ${dataType}, defaulting to Float32`);
         return new Float32Array(length);
     }
+  }
+
+  /**
+   * Crop a padded raster from (srcW × srcH) to (dstW × dstH), extracting rows/cols 1 to dstH/dstW.
+   * Used to extract the 256×256 core data from a 258×258 kernel-padded array.
+   */
+  private cropRaster(src: Float32Array, srcW: number, srcH: number, dstW: number, dstH: number): Float32Array {
+    const out = new Float32Array(dstW * dstH);
+    const row_offset = (srcH - dstH) / 2; // 1 for 258→256
+    const col_offset = (srcW - dstW) / 2;
+
+    for (let r = 0; r < dstH; r++) {
+      for (let c = 0; c < dstW; c++) {
+        const srcIdx = (row_offset + r) * srcW + (col_offset + c);
+        const dstIdx = r * dstW + c;
+        out[dstIdx] = src[srcIdx];
+      }
+    }
+    return out;
   }
 }
 
