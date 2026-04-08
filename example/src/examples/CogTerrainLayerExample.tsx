@@ -29,23 +29,27 @@ function getElevationAtInfo(info: any): number | null {
 }
 
 function CogTerrainLayerExample() {
-  const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_NEPAL_DEM;
+  const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_PHILIPPINES_DEM;
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
 
   const terrainOptions: GeoImageOptions = {
     ...mainCog.defaultOptions as GeoImageOptions,
     type: 'terrain',
-    noDataValue: 0,
-    useSwissRelief: true,
-    useHeatMap: false,
-    colorScale: [[20, 30, 40], [255, 255, 255]],
-    // colorScale: [[0, 0, 0],[255, 255, 255]] as any,
-    colorScaleValueRange: [0, 6500],
-    // swissSlopeWeight: 0.5,
-    swissSlopeWeight: 1,
-    // zFactor: 2,
-    zFactor: 20,
+    useHeatMap: true,
+    colorScale: [
+        [75, 120, 90],    // Brightened forest green
+        [100, 145, 100],  // Soft meadow green
+        [130, 170, 110],  // Bright moss
+        [185, 210, 145],  // Sunny sage
+        [235, 235, 185],  // Pale primrose (transitional)
+        [225, 195, 160],  // Sand / light terracotta (matches slope)
+        [195, 160, 130],  // Warm clay brown
+        [170, 155, 150],  // Warm slate grey
+        [245, 245, 240],  // Bright mist
+        [255, 255, 255],  // Pure peak white
+      ] as any,
+    colorScaleValueRange: [0, 4000],
     useChannel: 1,
   };
 
@@ -85,13 +89,11 @@ function CogTerrainLayerExample() {
     if (!viewState || !initializedCog) return [];
 
     const tileLayer = new TileLayer({
-      // data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      data: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
       id: 'standard-tile-layer',
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
-      opacity: 0.4,
       extensions: [new TerrainExtension()],
 
       renderSubLayers: (props) => {
@@ -120,11 +122,12 @@ function CogTerrainLayerExample() {
         const elevation = getElevationAtInfo(info);
         if (elevation !== null) console.log('Raw elevation at click:', elevation);
       },
+
     });
 
     return [
       // tileLayer,
-      cogLayer
+      cogLayer,
     ];
   }, [viewState, initializedCog]);
 

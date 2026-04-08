@@ -1,4 +1,5 @@
 export { CogBitmapLayerExample } from './CogBitmapLayerExample'
 export { CogTerrainLayerExample } from './CogTerrainLayerExample'
+export { CogTerrainGlazeExample } from './CogTerrainGlazeExample'
 export { CogMultibandExample } from './CogMultibandExample'
 export { CogTerrainKernelExample } from './CogTerrainKernelExample'
