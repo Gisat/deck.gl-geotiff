@@ -1,5 +1,5 @@
 import {
-  CompositeLayer, CompositeLayerProps, DefaultProps, log, TextureSource, UpdateParameters,
+  CompositeLayer, CompositeLayerProps, DefaultProps, log, UpdateParameters,
 } from '@deck.gl/core';
 import {
   _Tile2DHeader as Tile2DHeader,
@@ -14,7 +14,6 @@ import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import type { MeshAttributes } from '@loaders.gl/schema';
 import CogTiles from '../core/CogTiles';
 import { GeoImageOptions, TileResult } from '../core/GeoImage';
-// import { TileBoundingBox, ZRange } from '../cogterrainlayer/CogTerrainLayer.js';
 
 interface TileBounds {
   west: number;
@@ -36,10 +35,10 @@ export type URLTemplate = string | string[] | null;
 export const urlType = {
   type: 'object' as const,
   value: null as URLTemplate,
-  validate: (value, propType) => (propType.optional && value === null)
+  validate: (value: any, propType: any) => (propType.optional && value === null)
       || typeof value === 'string'
       || (Array.isArray(value) && value.every((url) => typeof url === 'string')),
-  equal: (value1, value2) => {
+  equal: (value1: any, value2: any) => {
     if (value1 === value2) {
       return true;
     }

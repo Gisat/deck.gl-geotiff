@@ -16,7 +16,7 @@ const CogTilesGeoImageOptionsDefaults = {
 };
 
 class CogTiles {
-  cog: GeoTIFF;
+  cog!: GeoTIFF;
 
   cogZoomLookup: number[] = [];
   cogResolutionLookup: number[] = [];
@@ -25,9 +25,9 @@ class CogTiles {
 
   zoomRange: number[] = [0, 0];
 
-  tileSize: number;
+  tileSize: number = 256;
 
-  bounds: [number, number, number, number]; // Or your Bounds type
+  bounds: [number, number, number, number] = [0, 0, 0, 0];
 
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
@@ -180,7 +180,7 @@ class CogTiles {
    * @param {number} zoom - The target zoom level for which the image index is sought.
    * @returns {number} The index of the image in the COG that best matches the specified zoom level.
    */
-  getImageIndexForZoomLevel(zoom) {
+  getImageIndexForZoomLevel(zoom: number): number {
     // Retrieve the minimum and maximum zoom levels from the lookup table.
     const minZoom = this.cogZoomLookup[this.cogZoomLookup.length - 1];
     const maxZoom = this.cogZoomLookup[0];
@@ -197,7 +197,7 @@ class CogTiles {
     return exactMatchIndex;
   }
 
-  async getTileFromImage(tileX, tileY, zoom, fetchSize?: number) {
+  async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number) {
     const imageIndex = this.getImageIndexForZoomLevel(zoom);
     const targetImage = await this.cog.getImage(imageIndex);
 
@@ -272,7 +272,7 @@ class CogTiles {
       const numChannels = this.options.numOfChannels || 1;
 
       // Initialize with a TypedArray of the full target size and correct data type
-      const validImageData = this.createTileBuffer(this.options.format as string, FETCH_SIZE, numChannels);
+      const validImageData = this.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE, numChannels);
       if (this.options.noDataValue !== undefined) {
         validImageData.fill(this.options.noDataValue);
       }
@@ -283,7 +283,7 @@ class CogTiles {
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
         // We must reset the buffer for each band, otherwise data from previous band persists in padding areas
-        const tileBuffer = this.createTileBuffer(this.options.format, FETCH_SIZE);
+        const tileBuffer = this.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE);
         if (this.options.noDataValue !== undefined) {
           tileBuffer.fill(this.options.noDataValue);
         }

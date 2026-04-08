@@ -29,7 +29,7 @@ export default class GeoImage {
         cellSizeMeters?: number,
         },
     options: GeoImageOptions,
-    meshMaxError,
+    meshMaxError: number,
   ): Promise<TileResult | null> {
     const mergedOptions = { ...DefaultGeoImageOptions, ...options };
 
@@ -43,7 +43,7 @@ export default class GeoImage {
     }
   }
 
-  // GetHeightmap uses only "useChannel" and "multiplier" options
+   // GetHeightmap uses only "useChannel" and "multiplier" options
   async getHeightmap(
     input: string | {
         bounds: Bounds,
@@ -53,7 +53,7 @@ export default class GeoImage {
         cellSizeMeters?: number,
         },
     options: GeoImageOptions,
-    meshMaxError,
+    meshMaxError: number,
   ): Promise<TileResult> {
     let rasters = [];
     let width: number;

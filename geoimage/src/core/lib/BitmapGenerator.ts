@@ -102,14 +102,14 @@ const numAvailableChannels = optionsLocal.numOfChannels ??
   }
 
   static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
-    // Normalize all colorScale entries for chroma.js compatibility
+     // Normalize all colorScale entries for chroma.js compatibility
 const colorScale = chroma.scale(
   options.colorScale?.map(c => Array.isArray(c) ? chroma(c as [number, number, number]) : c)
-).domain(options.colorScaleValueRange);
-    const colorsArray = new Uint8ClampedArray(arrayLength);
-    const optAlpha = Math.floor(options.alpha * 2.55);
-    const rangeMin = options.colorScaleValueRange[0]!;
-    const rangeMax = options.colorScaleValueRange.slice(-1)[0]!;
+).domain(options.colorScaleValueRange ?? [0, 255]);
+     const colorsArray = new Uint8ClampedArray(arrayLength);
+    const optAlpha = Math.floor((options.alpha ?? 100) * 2.55);
+    const rangeMin = options.colorScaleValueRange?.[0] ?? 0;
+    const rangeMax = options.colorScaleValueRange?.[1] ?? 255;
 
     const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
     const isFloatOrWide = !is8Bit && (dataArray instanceof Float32Array || dataArray instanceof Uint16Array || dataArray instanceof Int16Array);
