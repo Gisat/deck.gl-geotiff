@@ -93,6 +93,7 @@ export class TerrainGenerator {
       const zFactor = options.zFactor ?? 1;
 
       if (options.useSlope && options.useHillshade) {
+        // eslint-disable-next-line no-console
         console.warn(
           '[TerrainGenerator] useSlope and useHillshade are mutually exclusive; useSlope takes precedence.'
         );
