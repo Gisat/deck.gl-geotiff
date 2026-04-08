@@ -12,8 +12,9 @@ Used when hypsometric colors and shading are calculated together in a single pas
 $$\text{Final Pixel} = (\text{HypsoColor} \times \text{Hillshade}) \times (1.0 - (\text{Slope} \times \text{Weight}))$$
 
 ### 2.2 Use Case 2: The "Universal Glaze" (Variable Alpha)
-Used when overlaying shading on top of external imagery (Satellite/OSM). To prevent "muddying" flat terrain, neutral gray (128) is mapped to transparency.
-$$\text{Alpha} = \text{clamp}(|\text{ReliefValue} - 128| \times \text{UserOpacity}, 0, 255)$$
+Used when overlaying shading on top of external imagery (Satellite/OSM). To prevent "muddying" flat terrain, neutral gray (128) is mapped to transparency. Alpha is scaled by `maxGlazeAlpha` (0-255 ceiling):
+$$\text{Alpha} = \text{clamp}(\text{pow}(|\text{ReliefValue} - 128| / 128, \text{bias}) \times 255 \times \text{maxGlazeAlpha} / 255, 0, 255)$$
+where bias = 0.6 for shadows, 0.8 for highlights.
 
 ---
 
@@ -30,7 +31,7 @@ $$\text{Alpha} = \text{clamp}(|\text{ReliefValue} - 128| \times \text{UserOpacit
     1. **Bottom**: `CogTerrainLayer` (Geometry only, `operation: 'terrain'`).
     2. **Middle**: Any `TileLayer` (Satellite, OSM, Vector).
     3. **Top**: `CogBitmapLayer` (The Glaze).
-* **Logic**: `{ useSwissRelief: true, glazeOnly: true, alpha: UserSetting }`.
+* **Logic**: `{ useReliefGlaze: true, maxGlazeAlpha: UserSetting (0-255) }`.
 * **Benefit**: Complete flexibility to add 3D Swiss shading to any existing 2D map imagery.
 
 ---
@@ -38,15 +39,15 @@ $$\text{Alpha} = \text{clamp}(|\text{ReliefValue} - 128| \times \text{UserOpacit
 ## 4. Implementation Roadmap
 
 ### Phase 1: Core Infrastructure
-* **1.1** Add `swiss-relief` and `glazeOnly` modes to `GeoImageOptions`.
+* **1.1** Add `useSwissRelief`, `useReliefGlaze` modes and `maxGlazeAlpha` parameter to `GeoImageOptions`.
 * **1.2** Implement a **2D Lookup Table (LUT)** ($256 \times 256$) to optimize the Swiss formula.
 * **1.3** Integrate the `hypsoColor` palette as a standard registry within `GeoImage` options.
-* **1.4** Update `hasVisualizationOptions` to include `useSwissRelief` as a valid execution trigger.
+* **1.4** Update `hasVisualizationOptions` to include `useSwissRelief` and `useReliefGlaze` as valid execution triggers.
 
 ### Phase 2: Prototype Generation (Draft Mode)
 * **1.5 Implement the Pixel Loop**:
     * **Step A**: Basic multiplication (`Color * Hillshade`) for initial debugging.
-    * **Step B**: Implement the "Sandwich" logic. If `glazeOnly` is true, populate `Uint8ClampedArray` with `RGB = ReliefValue` and `A = VariableAlpha`.
+    * **Step B**: Implement the "Sandwich" logic. If `useReliefGlaze` is true, populate `Uint8ClampedArray` with `RGB = ReliefValue` (black/white glaze) and `A = VariableAlpha` scaled by `maxGlazeAlpha`.
 * **1.6 Data Normalization**: Map Elevation to RGB and normalize Hillshade/Slope results to $[0, 1]$.
 * **1.7 Single-Raster Support**: Modify `generate()` to support Swiss relief even when only a single elevation raster is provided.
 
@@ -56,8 +57,8 @@ $$\text{Alpha} = \text{clamp}(|\text{ReliefValue} - 128| \times \text{UserOpacit
 * **1.10** Integrate a 3x3 Gaussian smoothing step before kernel operations to generalize features.
 
 ### Phase 4: Integration & Documentation
-* **1.11 Example App**: Expose the `swiss-relief` and `glaze-only` toggles.
-* **1.12 Documentation**: Document LUT performance, vertical exaggeration (`zFactor`), and "Sandwich" architecture in the README.
+* **1.11 Example App**: Expose the `useSwissRelief` and `useReliefGlaze` toggles with UI controls.
+* **1.12 Documentation**: Document LUT performance, vertical exaggeration (`zFactor`), `maxGlazeAlpha` intensity scaling (0-255 8-bit ceiling), and "Sandwich" architecture in the README.
 
 ---
 

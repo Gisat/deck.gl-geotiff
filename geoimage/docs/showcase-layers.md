@@ -329,6 +329,171 @@ getTooltip={(info) => {
 
 ---
 
+## 3.4 Swiss Relief Shading (Baked Mode)
+
+**Use Case:** Combining hypsometric color, hillshade, and slope into a single terrain texture for superior relief perception. The Swiss relief formula produces a natural, cartography-quality shading effect without visible Z-fighting.
+
+<div style="display: flex; gap: 12px; align-items: flex-start;">
+  <img src="images/no-swiss-relief.jpeg" width="48%" alt="Terrain with Default Lighting" />
+  <img src="images/baked-swiss-relief.jpeg" width="48%" alt="Terrain with Swiss Relief Baked In" />
+</div>
+
+*Left: Standard terrain with default lighting. Right: Terrain with Swiss relief shading baked into the texture.*
+
+This example shows a single `CogTerrainLayer` with relief shading baked directly into the terrain texture using hypsometric color scales.
+
+```typescript
+const swissReliefTerrainLayer = new CogTerrainLayer({
+  id: 'swiss-relief-baked',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  cogTiles: demCogTiles,
+  tileSize: 256,
+  terrainOptions: {
+    type: 'terrain',
+    useSwissRelief: true,
+    useHeatMap: false,
+    colorScale: [
+      [20, 30, 40],      // Deep blue (water/low)
+      [34, 139, 34],     // Forest green (foothills)
+      [139, 90, 43],     // Brown (slopes)
+      [192, 192, 192],   // Gray (rocky peaks)
+      [255, 255, 255]    // White (snow/high)
+    ],
+    colorScaleValueRange: [0, 6500],
+    swissSlopeWeight: 0.5,  // Balance between slope and hillshade (0.3–1.0)
+    zFactor: 20,            // Vertical exaggeration for better depth perception
+    noDataValue: 0,
+    useChannel: 1,
+  },
+  operation: 'terrain+draw',
+  pickable: true,
+});
+```
+
+**Key parameters:**
+- `useSwissRelief: true` — Enables Swiss relief compositing (slope + hillshade blending).
+- `colorScale` — Hypsometric color palette mapped to elevation values.
+- `swissSlopeWeight` — Controls the influence of slope on the final appearance (lower = more hillshade, higher = more slope contrast).
+- `zFactor` — Vertical exaggeration factor (affects slope steepness calculation, typically 1–30).
+
+> **Performance Note:** The Swiss relief computation uses a pre-computed LUT and kernel operations to combine slope and hillshade at 65,536 pixels per tile. Automatic lighting is disabled when `useSwissRelief: true` to avoid visual conflicts.
+
+---
+
+## 3.5 Swiss Relief Shading (Glaze Mode – Layer Sandwich)
+
+**Use Case:** Overlaying transparent Swiss relief shading on top of satellite or OSM imagery, combined with a terrain mesh. Perfect for adding 3D relief perception to any base map without replacing it.
+
+<div style="display: flex; gap: 12px; align-items: flex-start;">
+  <img src="images/sandwich-built-in-lighting.jpeg" width="48%" alt="Satellite with Built-in Lighting" />
+  <img src="images/sandwich-swiss-relief-glaze.jpeg" width="48%" alt="Sandwich: Swiss Relief Glaze Overlay" />
+</div>
+
+*Left: Satellite imagery with standard lighting. Right: Swiss relief glaze overlay (sandwich approach) adds 3D relief perception without obscuring the base map.*
+
+This example demonstrates the "Sandwich" architecture:
+1. **Bottom layer**: Terrain mesh (`CogTerrainLayer` with no texture).
+2. **Middle layer**: Base map imagery (`TileLayer` – satellite or OSM).
+3. **Top layer**: Transparent glaze overlay (`CogBitmapLayer` with `useReliefGlaze: true`).
+
+```typescript
+// Initialize separate CogTiles for terrain and glaze
+const terrainCog = new CogTiles({
+  type: 'terrain',
+  disableLighting: true,
+  useSingleColor: true,
+  noDataValue: 0,
+  useChannel: 1,
+});
+await terrainCog.initializeCog('https://example.com/dem.tif');
+
+const glazeCog = new CogTiles({
+  type: 'image',
+  useReliefGlaze: true,
+  swissSlopeWeight: 0.3,
+  zFactor: 20,
+  maxGlazeAlpha: 130,  // 0–255 intensity ceiling for glaze opacity
+  noDataValue: 0,
+  useChannel: 1,
+});
+await glazeCog.initializeCog('https://example.com/dem.tif');
+
+// Layer 1: Base terrain mesh (geometry only, no texture)
+const terrainLayer = new CogTerrainLayer({
+  id: 'terrain-geometry',
+  elevationData: 'https://example.com/dem.tif',
+  cogTiles: terrainCog,
+  isTiled: true,
+  tileSize: 256,
+  operation: 'terrain',  // Render mesh only, no texture
+  terrainOptions: {
+    type: 'terrain',
+    disableLighting: true,
+    useSingleColor: true,
+    noDataValue: 0,
+    useChannel: 1,
+  },
+  pickable: true,
+});
+
+// Layer 2: Satellite or OSM base map
+const satelliteLayer = new TileLayer({
+  data: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  id: 'satellite-base',
+  minZoom: 0,
+  maxZoom: 19,
+  tileSize: 256,
+  extensions: [new TerrainExtension()],
+  renderSubLayers: (props) => {
+    const { bbox } = props.tile;
+    const { west, south, east, north } = bbox;
+    return new BitmapLayer(props, {
+      data: undefined,
+      image: props.data,
+      bounds: [west, south, east, north],
+    });
+  },
+});
+
+// Layer 3: Swiss relief glaze overlay (transparent, variable alpha)
+const glazeLayer = new CogBitmapLayer({
+  id: 'relief-glaze-overlay',
+  rasterData: 'https://example.com/dem.tif',
+  cogTiles: glazeCog,
+  isTiled: true,
+  tileSize: 256,
+  clampToTerrain: true,
+  extensions: [new TerrainExtension()],
+  cogBitmapOptions: {
+    type: 'image',
+    useReliefGlaze: true,
+    noDataValue: 0,
+    swissSlopeWeight: 0.3,      // Slope contribution (0.2–0.5 recommended for overlays)
+    zFactor: 20,                 // Vertical exaggeration
+    maxGlazeAlpha: 130,          // 0–255 intensity ceiling; 120–160 recommended for overlays
+    useChannel: 1,
+  },
+});
+
+// Render layers in order: terrain → satellite → glaze
+const layers = [terrainLayer, satelliteLayer, glazeLayer];
+```
+
+**Key parameters for glaze mode:**
+- `useReliefGlaze: true` — Enables relief glaze computation (pure black/white overlays with variable alpha).
+- `maxGlazeAlpha` — Intensity ceiling (0–255). Controls how opaque the glaze can be at extreme slope/aspect values. Recommended range: 120–160 for balanced overlays.
+- `swissSlopeWeight` — Slope influence on glaze appearance (0.2–0.5 for natural-looking overlays; higher values emphasize slope contrast).
+- `clampToTerrain: true` — Ensures the glaze layer correctly follows the terrain mesh surface.
+
+**Advantages of Glaze Mode:**
+- Preserves satellite/OSM imagery detail (no color replacement).
+- Zero Z-fighting or flickering.
+- Flexible: swap satellite for OSM, add vector overlays, etc.
+- Per-pixel variable alpha prevents muddy neutral-gray regions.
+
+---
+
 ## 4. Raw Value Picking
 
 **Use Case:** retrieving the original GeoTIFF raster values (elevation, band values, indices) at a clicked location, without extra network requests.

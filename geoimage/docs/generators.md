@@ -13,6 +13,7 @@ The `BitmapGenerator` class is responsible for converting multi-band raster data
 
 ### Performance Optimizations
 - **LUT (Look-Up Table)**: For 8-bit (Uint8) data, color calculations are pre-computed into a 256-entry table. For float and 16-bit data in heatmap mode, a 1024-entry LUT is used, reducing chroma.js calls from 65,536 to 1,024 per tile. This allows processing millions of pixels with simple array lookups instead of expensive color scale calculations.
+- **Relief Glaze LUT**: When `useReliefGlaze` is active, a 256-entry alpha lookup table is pre-computed once per tile to avoid repeated `Math.pow` calls in the pixel loop. This maps relief mask values (0-255) to per-pixel alpha values using an asymmetric bias formula (0.6 for shadows, 0.8 for highlights), scaled by `maxGlazeAlpha` (0-255 ceiling).
 - **Memory Efficiency**: Returns a `TileResult` object containing an `ImageBitmap` (GPU-ready) and the original `raw` raster `TypedArray` (CPU-side). The `ImageBitmap` is more memory-efficient and faster to upload to the GPU than standard `ImageData` or `Canvas` objects. The `raw` array is a byproduct of rendering — no extra network requests are needed. It is discarded immediately when `pickable: false` (the default), and retained in RAM only when `pickable: true`.
 - **Typed Traversal**: Uses typed arrays and minimized object lookups in the main pixel loops.
 
