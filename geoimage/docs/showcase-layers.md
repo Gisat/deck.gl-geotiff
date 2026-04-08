@@ -398,32 +398,10 @@ This example demonstrates the "Sandwich" architecture:
 3. **Top layer**: Transparent glaze overlay (`CogBitmapLayer` with `useReliefGlaze: true`).
 
 ```typescript
-// Initialize separate CogTiles for terrain and glaze
-const terrainCog = new CogTiles({
-  type: 'terrain',
-  disableLighting: true,
-  useSingleColor: true,
-  noDataValue: 0,
-  useChannel: 1,
-});
-await terrainCog.initializeCog('https://example.com/dem.tif');
-
-const glazeCog = new CogTiles({
-  type: 'image',
-  useReliefGlaze: true,
-  swissSlopeWeight: 0.3,
-  zFactor: 20,
-  maxGlazeAlpha: 130,  // 0–255 intensity ceiling for glaze opacity
-  noDataValue: 0,
-  useChannel: 1,
-});
-await glazeCog.initializeCog('https://example.com/dem.tif');
-
 // Layer 1: Base terrain mesh (geometry only, no texture)
 const terrainLayer = new CogTerrainLayer({
   id: 'terrain-geometry',
   elevationData: 'https://example.com/dem.tif',
-  cogTiles: terrainCog,
   isTiled: true,
   tileSize: 256,
   operation: 'terrain',  // Render mesh only, no texture
@@ -434,7 +412,6 @@ const terrainLayer = new CogTerrainLayer({
     noDataValue: 0,
     useChannel: 1,
   },
-  pickable: true,
 });
 
 // Layer 2: Satellite or OSM base map
@@ -460,7 +437,6 @@ const satelliteLayer = new TileLayer({
 const glazeLayer = new CogBitmapLayer({
   id: 'relief-glaze-overlay',
   rasterData: 'https://example.com/dem.tif',
-  cogTiles: glazeCog,
   isTiled: true,
   tileSize: 256,
   clampToTerrain: true,
@@ -469,7 +445,7 @@ const glazeLayer = new CogBitmapLayer({
     type: 'image',
     useReliefGlaze: true,
     noDataValue: 0,
-    swissSlopeWeight: 0.3,      // Slope contribution (0.2–0.5 recommended for overlays)
+    swissSlopeWeight: 0.3,       // Slope contribution (0.2–0.5 recommended for overlays)
     zFactor: 20,                 // Vertical exaggeration
     maxGlazeAlpha: 130,          // 0–255 intensity ceiling; 120–160 recommended for overlays
     useChannel: 1,
