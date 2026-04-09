@@ -536,25 +536,6 @@ class CogTiles {
         return new Float32Array(length);
     }
   }
-
-  /**
-   * Crop a padded raster from (srcW × srcH) to (dstW × dstH), extracting rows/cols 1 to dstH/dstW.
-   * Used to extract the 256×256 core data from a 258×258 kernel-padded array.
-   */
-  private cropRaster(src: Float32Array, srcW: number, srcH: number, dstW: number, dstH: number): Float32Array {
-    const out = new Float32Array(dstW * dstH);
-    const row_offset = (srcH - dstH) / 2; // 1 for 258→256
-    const col_offset = (srcW - dstW) / 2;
-
-    for (let r = 0; r < dstH; r++) {
-      for (let c = 0; c < dstW; c++) {
-        const srcIdx = (row_offset + r) * srcW + (col_offset + c);
-        const dstIdx = r * dstW + c;
-        out[dstIdx] = src[srcIdx];
-      }
-    }
-    return out;
-  }
 }
 
 export default CogTiles;
