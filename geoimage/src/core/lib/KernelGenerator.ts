@@ -8,6 +8,30 @@
  */
 export class KernelGenerator {
   /**
+   * Compute terrain gradients (dzdx, dzdy) using Horn's method.
+   * @param z1-z9 - 3×3 neighborhood elevation values (z5 is center)
+   * @param cellSizeFactor - Pre-computed 1 / (8 * cellSize)
+   * @param geographicConvention - If true, use north-minus-south for dzdy (hillshade). If false, use south-minus-north (slope).
+   */
+  private static computeGradients(
+    z1: number, z2: number, z3: number,
+    z4: number, /* z5 not needed */ z6: number,
+    z7: number, z8: number, z9: number,
+    cellSizeFactor: number,
+    geographicConvention: boolean = true
+  ): { dzdx: number; dzdy: number } {
+    const dzdx = ((z3 + 2 * z6 + z9) - (z1 + 2 * z4 + z7)) * cellSizeFactor;
+    
+    // Geographic convention (hillshade): north minus south (top rows minus bottom rows)
+    // Slope convention: south minus north (reversed)
+    const dzdy = geographicConvention
+      ? ((z1 + 2 * z2 + z3) - (z7 + 2 * z8 + z9)) * cellSizeFactor
+      : ((z7 + 2 * z8 + z9) - (z1 + 2 * z2 + z3)) * cellSizeFactor;
+    
+    return { dzdx, dzdy };
+  }
+
+  /**
    * Calculates slope (0–90 degrees) for each pixel using Horn's method.
    *
    * @param src         Float32Array of 258×258 elevation values (row-major)
@@ -24,6 +48,11 @@ export class KernelGenerator {
     const OUT = 256;
     const IN = 258;
     const out = new Float32Array(OUT * OUT);
+    
+    // Hoist division out of loop: multiplication is ~2-3x faster than division
+    const cellSizeFactor = 1 / (8 * cellSize);
+    // Cache constant for radians to degrees conversion
+    const RAD_TO_DEG = 180 / Math.PI;
 
     for (let r = 0; r < OUT; r++) {
       for (let c = 0; c < OUT; c++) {
@@ -45,11 +74,10 @@ export class KernelGenerator {
         const z8 = src[base + 2 * IN + 1];  // s
         const z9 = src[base + 2 * IN + 2];  // se
 
-        const dzdx = ((z3 + 2 * z6 + z9) - (z1 + 2 * z4 + z7)) / (8 * cellSize);
-        const dzdy = ((z7 + 2 * z8 + z9) - (z1 + 2 * z2 + z3)) / (8 * cellSize);
+        const { dzdx, dzdy } = this.computeGradients(z1, z2, z3, z4, z6, z7, z8, z9, cellSizeFactor, false);
 
         const slopeRad = Math.atan(zFactor * Math.sqrt(dzdx * dzdx + dzdy * dzdy));
-        out[r * OUT + c] = slopeRad * (180 / Math.PI);
+        out[r * OUT + c] = slopeRad * RAD_TO_DEG;
       }
     }
 
@@ -83,6 +111,9 @@ export class KernelGenerator {
     let azimuthMath = 360 - azimuth + 90;
     if (azimuthMath >= 360) azimuthMath -= 360;
     const azimuthRad = azimuthMath * (Math.PI / 180);
+    
+    // Hoist division out of loop: multiplication is ~2-3x faster than division
+    const cellSizeFactor = 1 / (8 * cellSize);
 
     for (let r = 0; r < OUT; r++) {
       for (let c = 0; c < OUT; c++) {
@@ -103,9 +134,7 @@ export class KernelGenerator {
         const z8 = src[base + 2 * IN + 1];  // s
         const z9 = src[base + 2 * IN + 2];  // se
 
-        const dzdx = ((z3 + 2 * z6 + z9) - (z1 + 2 * z4 + z7)) / (8 * cellSize);
-        // dzdy: north minus south (geographic convention — top rows minus bottom rows in raster)
-        const dzdy = ((z1 + 2 * z2 + z3) - (z7 + 2 * z8 + z9)) / (8 * cellSize);
+        const { dzdx, dzdy } = this.computeGradients(z1, z2, z3, z4, z6, z7, z8, z9, cellSizeFactor, true);
 
         const slopeRad = Math.atan(zFactor * Math.sqrt(dzdx * dzdx + dzdy * dzdy));
         const aspectRad = Math.atan2(dzdy, -dzdx);
@@ -135,6 +164,9 @@ export class KernelGenerator {
     const OUT = 256;
     const IN = 258;
     const out = new Float32Array(OUT * OUT);
+    
+    // Hoist division out of loop: multiplication is ~2-3x faster than division
+    const cellSizeFactor = 1 / (8 * cellSize);
 
     // Setup 3 light sources: NW (Main), W (Fill), N (Fill)
     const lights = [
@@ -166,8 +198,7 @@ export class KernelGenerator {
         const z4 = src[base + IN], z6 = src[base + IN + 2];
         const z7 = src[base + 2 * IN], z8 = src[base + 2 * IN + 1], z9 = src[base + 2 * IN + 2];
 
-        const dzdx = ((z3 + 2 * z6 + z9) - (z1 + 2 * z4 + z7)) / (8 * cellSize);
-        const dzdy = ((z1 + 2 * z2 + z3) - (z7 + 2 * z8 + z9)) / (8 * cellSize);
+        const { dzdx, dzdy } = this.computeGradients(z1, z2, z3, z4, z6, z7, z8, z9, cellSizeFactor, true);
 
         const slopeRad = Math.atan(zFactor * Math.sqrt(dzdx * dzdx + dzdy * dzdy));
         const aspectRad = Math.atan2(dzdy, -dzdx);
