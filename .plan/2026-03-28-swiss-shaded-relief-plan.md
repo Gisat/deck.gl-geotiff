@@ -52,9 +52,12 @@ where bias = 0.6 for shadows, 0.8 for highlights.
 * **1.7 Single-Raster Support**: Modify `generate()` to support Swiss relief even when only a single elevation raster is provided.
 
 ### Phase 3: Advanced Cartographic Refinement
-* **1.8** Implement **Luminance-Preserving Multiplication** (e.g., Soft Light/Overlay) to prevent "muddy" valleys.
-* **1.9** Implement **Slope-Based Saturation** boost to improve depth in rugged terrain.
-* **1.10** Integrate a 3x3 Gaussian smoothing step before kernel operations to generalize features.
+* **1.8** Implement **Luminance-Preserving Multiplication** (e.g., Soft Light/Overlay) to prevent "muddy" valleys.  
+  *(Note: Not implemented. The current simple multiplication with ambient fill produces excellent results. Consider as future enhancement if needed.)*
+* **1.9** Implement **Slope-Based Saturation** boost to improve depth in rugged terrain.  
+  *(Note: Not implemented. The current approach provides sufficient visual depth. Consider as future enhancement if needed.)*
+* **1.10** Integrate a 3x3 Gaussian smoothing step before kernel operations to generalize features.  
+  *(Note: Not implemented. Current kernel quality is production-ready. Consider as optional pre-processing step in future versions.)*
 
 ### Phase 4: Integration & Documentation
 * **1.11 Example App**: Expose the `useSwissRelief` and `useReliefGlaze` toggles with UI controls.

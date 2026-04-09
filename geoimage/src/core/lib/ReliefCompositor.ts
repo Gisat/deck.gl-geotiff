@@ -22,7 +22,7 @@ export class ReliefCompositor {
       return this._swissReliefLUT;
     }
 
-    const ambient = 0.010; // 20% fill light to prevent pitch black northwest slopes
+    const ambient = 0.010; // 1% minimum brightness to prevent pitch black northwest slopes
 
     const lut = new Float32Array(256 * 256); // 65536 values
     
@@ -74,6 +74,9 @@ export class ReliefCompositor {
     // 3. Compose relief mask: quantize slope/hillshade, apply LUT
     // reliefMask = 0 is reserved as noData sentinel → fully transparent in glaze output
     const reliefMask = new Uint8ClampedArray(width * height);
+    
+    // Hoist division out of loop: multiplication is faster than division
+    const SLOPE_SCALE = 255 / 90; // ~2.833...
 
     for (let i = 0; i < width * height; i++) {
       // noData pixels: slope is NaN (set by KernelGenerator when z5 === noDataValue)
@@ -82,8 +85,8 @@ export class ReliefCompositor {
         continue;
       }
 
-      // Quantize Slope: Normalize 0-90° to 0-255 integer
-      const sIdx = ((Math.max(0, Math.min(90, rawSlope[i])) / 90) * 255) | 0;
+      // Quantize Slope: Normalize 0-90° to 0-255 integer (avoid division in loop)
+      const sIdx = Math.max(0, Math.min(255, (rawSlope[i] * SLOPE_SCALE) | 0));
 
       // Quantize Hillshade: Ensure 0-255 integer
       const hIdx = Math.max(0, Math.min(255, rawHillshade[i])) | 0;

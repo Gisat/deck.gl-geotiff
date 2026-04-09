@@ -77,7 +77,7 @@ Used for categorical data (land cover, classification).
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **`alpha`** | `number` | `100` | Global opacity (0-100) if `useDataForOpacity` is false. Only used for non-glaze rendering. |
+| **`alpha`** | `number` | `100` | Global opacity (0-100) if `useDataForOpacity` is false. **Note:** Ignored when `useReliefGlaze: true` (glaze mode uses `maxGlazeAlpha` instead). |
 | **`useDataForOpacity`** | `boolean` | `false` | Maps pixel intensity to opacity (0=transparent, max=opaque). |
 
 ---
