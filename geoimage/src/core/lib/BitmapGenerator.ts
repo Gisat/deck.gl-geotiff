@@ -4,6 +4,12 @@ import { scale } from './DataUtils';
 
 export class BitmapGenerator {
   /**
+   * Cache for Swiss relief color LUTs to avoid regenerating on every tile.
+   * Key: colorScale config + range, Value: pre-computed RGBA LUT
+   */
+  private static _swissColorLUTCache: Map<string, Uint8ClampedArray> = new Map();
+
+  /**
    * Main entry point: Generates an ImageBitmap from raw raster data.
    */
   static async generate(
@@ -58,7 +64,7 @@ export class BitmapGenerator {
         imageData.data.set(
           this.getColorValue(rasters, optionsLocal, size)
         );
-      } else {// Missing mask: fill with null color (fully transparent or a fallback)
+      } else { // Missing mask: fill with null color (fully transparent or a fallback)
         const defaultColorData = this.getDefaultColor(size, optionsLocal.nullColor);
         defaultColorData.forEach((value, index) => {
           imageData.data[index] = value;
@@ -150,14 +156,23 @@ export class BitmapGenerator {
       const rangeSpan = (rangeMax - rangeMin) || 1;
 
       const LUT_SIZE = 1024;
-      const lut = new Uint8ClampedArray(LUT_SIZE * 4);
-      for (let i = 0; i < LUT_SIZE; i++) {
-        const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
-        const rgb = colorScale(domainVal).rgb();
-        lut[i * 4] = rgb[0];
-        lut[i * 4 + 1] = rgb[1];
-        lut[i * 4 + 2] = rgb[2];
-        lut[i * 4 + 3] = optAlpha;
+      
+      // Cache LUT: generate key from colorScale config + range + alpha
+      const cacheKey = `${rangeMin}_${rangeMax}_${optAlpha}_${JSON.stringify(options.colorScale)}`;
+      let lut = this._swissColorLUTCache.get(cacheKey);
+      
+      if (!lut) {
+        // LUT not cached, generate it
+        lut = new Uint8ClampedArray(LUT_SIZE * 4);
+        for (let i = 0; i < LUT_SIZE; i++) {
+          const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
+          const rgb = colorScale(domainVal).rgb();
+          lut[i * 4] = rgb[0];
+          lut[i * 4 + 1] = rgb[1];
+          lut[i * 4 + 2] = rgb[2];
+          lut[i * 4 + 3] = optAlpha;
+        }
+        this._swissColorLUTCache.set(cacheKey, lut);
       }
 
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
@@ -303,7 +318,6 @@ export class BitmapGenerator {
     const glazeArray = new Uint8ClampedArray(arrayLength);
 
     let maskIndex = 0;
-    const samples: Array<{reliefValue: number, glaze: number, alpha: number}> = [];
     for (let i = 0; i < arrayLength; i += 4) {
       const reliefValue = reliefMask[maskIndex];
       
@@ -316,9 +330,6 @@ export class BitmapGenerator {
       glazeArray[i + 2] = glaze;    // B
       glazeArray[i + 3] = alpha;    // A
 
-      if (maskIndex < 20) {
-        samples.push({ reliefValue, glaze, alpha });
-      }
       maskIndex++;
     }
     return glazeArray;
