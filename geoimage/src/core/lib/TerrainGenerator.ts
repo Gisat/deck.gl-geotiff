@@ -91,25 +91,11 @@ export class TerrainGenerator {
       const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
       
       // Build a separate raster for kernel computation that preserves noData samples.
-      const kernelTerrain = new Float32Array(terrain.length);
-      const sourceRaster = input.rasters[0];
-      const noData = options.noDataValue;
-      if (
-        noData !== undefined &&
-        noData !== null &&
-        sourceRaster &&
-        sourceRaster.length === terrain.length
-      ) {
-        for (let i = 0; i < terrain.length; i++) {
-          // If the source raster marks this sample as noData, keep it as noData for the kernel.
-          // Otherwise, use the processed terrain elevation value.
-          // eslint-disable-next-line eqeqeq
-          kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
-        }
-      } else {
-        // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
-        kernelTerrain.set(terrain);
-      }
+      const kernelTerrain = this.preserveNoDataForKernel(
+        terrain,
+        input.rasters[0],
+        options.noDataValue
+      );
 
       // Compose Swiss relief using ReliefCompositor
       const swissReliefResult = ReliefCompositor.composeSwissRelief(
@@ -144,25 +130,11 @@ export class TerrainGenerator {
       }
 
       // Build a separate raster for kernel computation that preserves noData samples.
-      const kernelTerrain = new Float32Array(terrain.length);
-      const sourceRaster = input.rasters[0];
-      const noData = options.noDataValue;
-      if (
-        noData !== undefined &&
-        noData !== null &&
-        sourceRaster &&
-        sourceRaster.length === terrain.length
-      ) {
-        for (let i = 0; i < terrain.length; i++) {
-          // If the source raster marks this sample as noData, keep it as noData for the kernel.
-          // Otherwise, use the processed terrain elevation value.
-           
-          kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
-        }
-      } else {
-        // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
-        kernelTerrain.set(terrain);
-      }
+      const kernelTerrain = this.preserveNoDataForKernel(
+        terrain,
+        input.rasters[0],
+        options.noDataValue
+      );
       let kernelOutput: Float32Array;
       if (options.useSlope) {
         kernelOutput = KernelGenerator.calculateSlope(kernelTerrain, cellSize, zFactor, options.noDataValue);
@@ -220,6 +192,36 @@ export class TerrainGenerator {
      options.useColorClasses
    );
  }
+
+  /**
+   * Preserve noData values in a separate raster for kernel computation.
+   * If the source raster marks a sample as noData, keep it as noData.
+   * Otherwise, use the processed terrain elevation value.
+   */
+  private static preserveNoDataForKernel(
+    terrain: Float32Array,
+    sourceRaster: TypedArray | undefined,
+    noDataValue: number | undefined
+  ): Float32Array {
+    const kernelTerrain = new Float32Array(terrain.length);
+
+    if (
+      noDataValue !== undefined &&
+      noDataValue !== null &&
+      sourceRaster &&
+      sourceRaster.length === terrain.length
+    ) {
+      for (let i = 0; i < terrain.length; i++) {
+        // eslint-disable-next-line eqeqeq -- Loose equality handles null/undefined and numeric type coercion
+        kernelTerrain[i] = (sourceRaster as any)[i] == noDataValue ? (noDataValue as number) : terrain[i];
+      }
+    } else {
+      // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
+      kernelTerrain.set(terrain);
+    }
+
+    return kernelTerrain;
+  }
 
   private static cropRaster(
     src: Float32Array,
