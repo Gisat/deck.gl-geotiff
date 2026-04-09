@@ -1,3 +1,14 @@
+## [2.4.0-dev.5](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0-dev.4...v2.4.0-dev.5) (2026-04-09)
+
+### Features
+
+* add type declarations for @mapbox/martini ([e007e53](https://github.com/Gisat/deck.gl-geotiff/commit/e007e534056b4f08ae181906b03287089973f651))
+
+### Bug Fixes
+
+* add TypeScript type annotations and property initialization ([e6d6037](https://github.com/Gisat/deck.gl-geotiff/commit/e6d603722f2b1611a2f830da81936ccfb5b9f7f7))
+* suppress intentional console.warn in TerrainGenerator ([65a7b44](https://github.com/Gisat/deck.gl-geotiff/commit/65a7b449fa12b4b98687eec88828fb38daa0066a))
+
 ## [2.4.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0-dev.3...v2.4.0-dev.4) (2026-04-02)
 
 ### Bug Fixes
