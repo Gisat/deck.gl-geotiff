@@ -136,12 +136,12 @@ export class BitmapGenerator {
   static getColorValue(dataArray: TypedArray | TypedArray[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
     // Normalize all colorScale entries for chroma.js compatibility
     const colorScale = chroma.scale(
-      options.colorScale?.map(c => Array.isArray(c) ? chroma(c) : c)
-    ).domain(options.colorScaleValueRange);
+      options.colorScale?.map(c => Array.isArray(c) ? chroma(c as [number, number, number]) : c)
+    ).domain(options.colorScaleValueRange ?? [0, 255]);
     const colorsArray = new Uint8ClampedArray(arrayLength);
-    const optAlpha = Math.floor(options.alpha * 2.55);
-    const rangeMin = options.colorScaleValueRange[0]!;
-    const rangeMax = options.colorScaleValueRange[1]!;
+    const optAlpha = Math.floor((options.alpha ?? 100) * 2.55);
+    const rangeMin = options.colorScaleValueRange?.[0] ?? 0;
+    const rangeMax = options.colorScaleValueRange?.[1] ?? 255;
 
     const isMultiRaster = Array.isArray(dataArray);
     const primaryBuffer = isMultiRaster ? dataArray[0] : dataArray as TypedArray;
