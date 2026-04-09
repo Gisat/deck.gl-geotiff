@@ -141,7 +141,7 @@ export class BitmapGenerator {
     const colorsArray = new Uint8ClampedArray(arrayLength);
     const optAlpha = Math.floor(options.alpha * 2.55);
     const rangeMin = options.colorScaleValueRange[0]!;
-    const rangeMax = options.colorScaleValueRange.slice(-1)[0]!;
+    const rangeMax = options.colorScaleValueRange[1]!;
 
     const isMultiRaster = Array.isArray(dataArray);
     const primaryBuffer = isMultiRaster ? dataArray[0] : dataArray as TypedArray;
