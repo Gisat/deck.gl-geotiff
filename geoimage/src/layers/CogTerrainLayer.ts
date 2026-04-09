@@ -33,10 +33,10 @@ export type URLTemplate = string | string[] | null;
 export const urlType = {
   type: 'object' as const,
   value: null as URLTemplate,
-  validate: (value, propType) => (propType.optional && value === null)
+  validate: (value: any, propType: any) => (propType.optional && value === null)
     || typeof value === 'string'
     || (Array.isArray(value) && value.every((url) => typeof url === 'string')),
-  equal: (value1, value2) => {
+  equal: (value1: any, value2: any) => {
     if (value1 === value2) {
       return true;
     }
@@ -178,7 +178,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 
   // terrainCogTiles: CogTiles;
 
-  terrainUrl: string;
+  terrainUrl: string = '';
 
   declare state: {
 	  isTiled?: boolean;
@@ -358,16 +358,18 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  const { zRange } = this.state;
 	  const ranges = tiles
       .map((tile) => tile.content)
-      .filter((x) => x && x[0])
+      .filter((x) => !!x && !!x[0])
       .map((arr) => {
+		  if (!arr || !arr[0]) return undefined;
 		  const bounds = (arr[0]?.map as TerrainMesh | undefined)?.header?.boundingBox;
 		  return bounds?.map((bound) => bound[2]);
-      });
+      })
+      .filter((x) => x !== undefined) as (number[] | undefined)[];
 	  if (ranges.length === 0) {
       return;
 	  }
-	  const minZ = Math.min(...ranges.map((x) => x[0]));
-	  const maxZ = Math.max(...ranges.map((x) => x[1]));
+	  const minZ = Math.min(...ranges.map((x) => x?.[0] ?? 0).filter((n) => Number.isFinite(n)));
+	  const maxZ = Math.max(...ranges.map((x) => x?.[1] ?? 0).filter((n) => Number.isFinite(n)));
 
 	  if (!zRange || minZ < zRange[0] || maxZ > zRange[1]) {
       this.setState({ zRange: [Number.isFinite(minZ) ? minZ : 0, Number.isFinite(maxZ) ? maxZ : 0] });
@@ -431,5 +433,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 		  },
       );
 	  }
+    return null;
   }
 }

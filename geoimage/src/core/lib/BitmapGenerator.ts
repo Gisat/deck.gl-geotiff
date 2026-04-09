@@ -102,14 +102,14 @@ const numAvailableChannels = optionsLocal.numOfChannels ??
   }
 
   static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
-    // Normalize all colorScale entries for chroma.js compatibility
+     // Normalize all colorScale entries for chroma.js compatibility
 const colorScale = chroma.scale(
-  options.colorScale?.map(c => Array.isArray(c) ? chroma(c) : c)
-).domain(options.colorScaleValueRange);
-    const colorsArray = new Uint8ClampedArray(arrayLength);
-    const optAlpha = Math.floor(options.alpha * 2.55);
-    const rangeMin = options.colorScaleValueRange[0]!;
-    const rangeMax = options.colorScaleValueRange.slice(-1)[0]!;
+  options.colorScale?.map(c => Array.isArray(c) ? chroma(c as [number, number, number]) : c)
+).domain(options.colorScaleValueRange ?? [0, 255]);
+     const colorsArray = new Uint8ClampedArray(arrayLength);
+    const optAlpha = Math.floor((options.alpha ?? 100) * 2.55);
+    const rangeMin = options.colorScaleValueRange?.[0] ?? 0;
+    const rangeMax = options.colorScaleValueRange?.[1] ?? 255;
 
     const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
     const isFloatOrWide = !is8Bit && (dataArray instanceof Float32Array || dataArray instanceof Uint16Array || dataArray instanceof Int16Array);
@@ -212,11 +212,11 @@ const colorScale = chroma.scale(
       return options.color as number[];
     } else if (options.useColorClasses) {
       const index = this.findClassIndex(val, options);
-      return index > -1 ? [...chroma(Array.isArray(options.colorClasses![index][0]) ? chroma(options.colorClasses![index][0]) : options.colorClasses![index][0]).rgb(), alpha] : (options.unidentifiedColor as number[]);
+      return index > -1 ? [...chroma(Array.isArray(options.colorClasses![index][0]) ? chroma(options.colorClasses![index][0] as [number, number, number]) : options.colorClasses![index][0]).rgb(), alpha] : (options.unidentifiedColor as number[]);
     } else if (options.useColorsBasedOnValues) {
       
       const match = options.colorsBasedOnValues?.find(([v]) => v === val);
-      return match ? [...chroma(Array.isArray(match[1]) ? chroma(match[1]) : match[1]).rgb(), alpha] : (options.unidentifiedColor as number[]);
+      return match ? [...chroma(Array.isArray(match[1]) ? chroma(match[1] as [number, number, number]) : match[1]).rgb(), alpha] : (options.unidentifiedColor as number[]);
     } else if (options.useHeatMap) {
       return [...colorScale(val).rgb(), alpha];
     }

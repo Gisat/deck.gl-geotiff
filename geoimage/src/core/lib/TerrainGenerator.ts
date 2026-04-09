@@ -93,6 +93,7 @@ export class TerrainGenerator {
       const zFactor = options.zFactor ?? 1;
 
       if (options.useSlope && options.useHillshade) {
+        // eslint-disable-next-line no-console
         console.warn(
           '[TerrainGenerator] useSlope and useHillshade are mutually exclusive; useSlope takes precedence.'
         );
@@ -111,7 +112,7 @@ export class TerrainGenerator {
         for (let i = 0; i < terrain.length; i++) {
           // If the source raster marks this sample as noData, keep it as noData for the kernel.
           // Otherwise, use the processed terrain elevation value.
-          // eslint-disable-next-line eqeqeq
+           
           kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
         }
       } else {
