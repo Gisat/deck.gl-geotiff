@@ -47,8 +47,42 @@ Important design split:
 - Library output is dual-format (ESM + CJS) via Rollup; keep external dependency handling aligned with `geoimage/rollup.config.mjs`.
 - Workspace-level scripts are the source of truth; prefer running commands from repo root using `yarn workspace ...`.
 
+## PR Description Structure
+
+When creating a pull request, use the following structure for the PR description (adapted from PR #137):
+
+---
+# PR Title (see workflow rules)
+
+## Summary
+Briefly describe the purpose and scope of the PR, referencing the baseline (e.g., previous release or PR).
+
+## Major Features / Changes
+1. **Feature/Change 1**: Short description and impact
+2. **Feature/Change 2**: ...
+
+## Security & Maintenance
+- List any dependency/security updates, infra changes, or maintenance tasks
+
+## Changes Summary
+- Number of files changed, insertions/deletions, and key PRs merged (if relevant)
+
+## Key Files Modified
+- List of most important files or directories changed
+
+## Testing
+- How the changes were validated (lint, build, manual, etc.)
+
+## Notes
+- Any extra context, caveats, or follow-up actions
+---
+
 ## Existing repository-specific workflow rules
 
+- All PR titles and commit messages must follow the rules enforced by repository workflows:
+    - **PR titles** must use the [Conventional Commits](https://www.conventionalcommits.org/) format (e.g., `feat: ...`, `fix: ...`, etc.), except for `dev → master` merges, which use `Merge \`dev\` → \`master\``.
+    - **Commit messages** (especially for release and automation) must also follow the Conventional Commits standard. Automated commits (e.g., lint fixes) use `style: fix lint errors`.
+    - These rules are enforced by GitHub Actions (semantic PR title validation, semantic-release, etc.).
 - Follow step-by-step execution for implementation/review tasks: one checklist item at a time, explain what changed, then wait for explicit user confirmation to continue.
 - Use hierarchical numbering (`1.1`, `1.2`, ...) in plans/checklists.
 - Keep plan/instruction artifacts in `.plan/` with `YYYY-MM-DD-kebab-case.md` naming.
