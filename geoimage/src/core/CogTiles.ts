@@ -1,4 +1,4 @@
-import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
+import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geotiff';
 
 // Bitmap styling
 import GeoImage from './GeoImage';
@@ -40,7 +40,13 @@ class CogTiles {
     if (this.cog) return; // Prevent re-initialization on the same instance
 
     try {
-      this.cog = await fromUrl(url);
+      // fromUrl's type declaration only exposes RemoteSourceOptions, but the implementation
+      // also accepts BlockedSourceOptions (forwarded to makeFetchSource internally).
+      // Explicitly enabling BlockedSource restores the block-level LRU cache that was
+      // accidentally active in geotiff 3.0.3 (due to a null vs undefined bug there).
+      // blockSize defaults to 65536 (64KB) and can be tuned via GeoImageOptions.
+      const blockSize = this.options.blockSize ?? 65536;
+      this.cog = await (fromUrl as any)(url, { blockSize } as BlockedSourceOptions);
       const image = await this.cog.getImage();
       const fileDirectory = image.fileDirectory;
 
