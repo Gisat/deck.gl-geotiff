@@ -32,6 +32,9 @@ class CogTiles {
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
+  // Cache GeoTIFFImages by index to prevent redundant HTTP requests from geotiff 3.0.4+ eager loading
+  private imageCache: Map<number, GeoTIFFImage> = new Map();
+
   constructor(options: GeoImageOptions) {
     this.options = { ...CogTilesGeoImageOptionsDefaults, ...options };
   }
@@ -205,7 +208,13 @@ class CogTiles {
 
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number) {
     const imageIndex = this.getImageIndexForZoomLevel(zoom);
-    const targetImage = await this.cog.getImage(imageIndex);
+    
+    // Check cache first to avoid redundant getImage() calls that trigger HTTP requests in geotiff 3.0.4+
+    let targetImage = this.imageCache.get(imageIndex);
+    if (!targetImage) {
+      targetImage = await this.cog.getImage(imageIndex);
+      this.imageCache.set(imageIndex, targetImage);
+    }
 
     // --- STEP 1: CALCULATE BOUNDS IN METERS ---
 
