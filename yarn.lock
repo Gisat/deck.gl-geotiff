@@ -909,7 +909,7 @@ __metadata:
     "@types/chroma-js": "npm:^3.1.2"
     chroma-js: "npm:^3.2.0"
     eslint: "npm:^9.39.3"
-    geotiff: "npm:3.0.3"
+    geotiff: "npm:^3.0.5"
     rollup: "npm:^4.60.1"
     rollup-plugin-dts: "npm:^6.4.1"
     rollup-plugin-filesize: "npm:^10.0.0"
@@ -1909,7 +1909,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@petamoriken/float16@npm:^3.4.7":
+"@petamoriken/float16@npm:^3.9.3":
   version: 3.9.3
   resolution: "@petamoriken/float16@npm:3.9.3"
   checksum: 10c0/de0a1a0224862cba16e6b614e6a5dd557c545c3f0372db21f61d7bcce7595fa63a28d10512c908acfbe177d209a39cea406f190159936f5891b3c095d460fdc2
@@ -5311,11 +5311,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"geotiff@npm:3.0.3":
-  version: 3.0.3
-  resolution: "geotiff@npm:3.0.3"
+"geotiff@npm:^3.0.5":
+  version: 3.0.5
+  resolution: "geotiff@npm:3.0.5"
   dependencies:
-    "@petamoriken/float16": "npm:^3.4.7"
+    "@petamoriken/float16": "npm:^3.9.3"
     lerc: "npm:^3.0.0"
     pako: "npm:^2.0.4"
     parse-headers: "npm:^2.0.2"
@@ -5323,7 +5323,7 @@ __metadata:
     web-worker: "npm:^1.5.0"
     xml-utils: "npm:^1.10.2"
     zstddec: "npm:^0.2.0"
-  checksum: 10c0/7d8d86c0be6af001db57b889fc7daeb563e3a1e6bcd7e935a56fd58033ea31736ed212f4a440e5308db55396cde8fededdedc6df76cc9d4dc92a8ec60cbf4c72
+  checksum: 10c0/f3bcfdacc80d032b1edc7f5f35e6b00baf87b715f441edf96c2aac02f682e9a4f2af7f7fe60471687eaa8505ecf6f74465186e96ff9fae703f839c73aa7f25d0
   languageName: node
   linkType: hard
 
