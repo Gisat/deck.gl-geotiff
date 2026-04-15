@@ -3,14 +3,19 @@ import { GeoImageOptions, TypedArray, TileResult } from '../types';
 import { scale } from './DataUtils';
 
 export class BitmapGenerator {
+  /**
+   * Main entry point: Generates an ImageBitmap from raw raster data.
+   */
   static async generate(
     input: { width: number; height: number; rasters: TypedArray[] },
     options: GeoImageOptions
   ): Promise<TileResult> {
+    
     const optionsLocal = { ...options };
-
     const { rasters, width, height } = input;
-    const channels = rasters.length;
+    // NOTE: As of 2026-03, only interleaved rasters (rasters.length === 1) are produced by the main COG tile path.
+    // Planar (rasters.length > 1) is not currently supported in production, but this check is kept for future extension.
+    const isInterleaved = rasters.length === 1;
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -18,86 +23,52 @@ export class BitmapGenerator {
     const c = canvas.getContext('2d');
     const imageData: ImageData = c!.createImageData(width, height);
 
-    let r; let g; let b; let
-      a;
     const size = width * height * 4;
-
     const alpha255 = Math.floor(optionsLocal.alpha! * 2.55);
 
+    // Normalize colors using chroma
     optionsLocal.unidentifiedColor = this.getColorFromChromaType(optionsLocal.unidentifiedColor, alpha255);
     optionsLocal.nullColor = this.getColorFromChromaType(optionsLocal.nullColor, alpha255);
     optionsLocal.clippedColor = this.getColorFromChromaType(optionsLocal.clippedColor, alpha255);
     optionsLocal.color = this.getColorFromChromaType(optionsLocal.color, alpha255);
+    
     optionsLocal.useChannelIndex ??= optionsLocal.useChannel == null ? null : optionsLocal.useChannel - 1;
 
     // Derive channel count from data if not provided
-    const numAvailableChannels = optionsLocal.numOfChannels ?? (rasters.length === 1 ? rasters[0].length / (width * height) : rasters.length);
+    // If planar support is added, this logic must be updated to handle both layouts correctly.
+const numAvailableChannels = optionsLocal.numOfChannels ?? 
+      (rasters.length === 1 ? rasters[0].length / (width * height) : rasters.length);
 
     if (optionsLocal.useChannelIndex == null) {
-      if (channels === 1) {
-        if (rasters[0].length / (width * height) === 1) {
-          const channel = rasters[0];
-          // AUTO RANGE
+      if (isInterleaved) {
+        const ratio = rasters[0].length / (width * height);
+        if (ratio === 1) {
           if (optionsLocal.useAutoRange) {
-            optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal);
-          }
-          // SINGLE CHANNEL
-          const colorData = this.getColorValue(channel, optionsLocal, size);
-          imageData.data.set(colorData);
-        }
-        // RGB values in one channel
-        if (rasters[0].length / (width * height) === 3) {
-          let pixel = 0;
-          for (let idx = 0; idx < size; idx += 4) {
-            const rgbColor = [rasters[0][pixel], rasters[0][pixel + 1], rasters[0][pixel + 2]];
-            const rgbaColor = this.hasPixelsNoData(rgbColor, optionsLocal.noDataValue)
-              ? optionsLocal.nullColor
-              : [...rgbColor, Math.floor(optionsLocal.alpha! * 2.55)];
-
-            [imageData.data[idx], imageData.data[idx + 1], imageData.data[idx + 2], imageData.data[idx + 3]] = rgbaColor;
-            pixel += 3;
+            optionsLocal.colorScaleValueRange = this.getMinMax(rasters[0], optionsLocal);
+         }
+          imageData.data.set(this.getColorValue(rasters[0], optionsLocal, size));
+        } // 3 or 4-band RGB(A) imagery: use per-pixel loop for direct color assignment
+          else if (ratio === 3 || ratio === 4) {
+            
+          let sampleIndex = 0;
+          for (let i = 0; i < size; i += 4) {
+            const rgbColor = [rasters[0][sampleIndex], rasters[0][sampleIndex + 1], rasters[0][sampleIndex + 2]];
+            const isNoData = this.hasPixelsNoData(rgbColor, optionsLocal.noDataValue);
+            imageData.data[i] = isNoData ? optionsLocal.nullColor[0] : rgbColor[0];
+            imageData.data[i + 1] = isNoData ? optionsLocal.nullColor[1] : rgbColor[1];
+            imageData.data[i + 2] = isNoData ? optionsLocal.nullColor[2] : rgbColor[2];
+            imageData.data[i + 3] = isNoData ? optionsLocal.nullColor[3] : (ratio === 4 ? rasters[0][sampleIndex + 3] : alpha255);
+            sampleIndex += ratio;
           }
         }
-        if (rasters[0].length / (width * height) === 4) {
-          rasters[0].forEach((value, index) => {
-            imageData.data[index] = value;
-          });
-        }
-      }
-      if (channels === 3) {
-        // RGB
-        let pixel = 0;
-        const alphaConst = Math.floor(optionsLocal.alpha! * 2.55);
+      } else {
+        let sampleIndex = 0;
         for (let i = 0; i < size; i += 4) {
-          r = rasters[0][pixel];
-          g = rasters[1][pixel];
-          b = rasters[2][pixel];
-          a = alphaConst;
-
-          imageData.data[i] = r;
-          imageData.data[i + 1] = g;
-          imageData.data[i + 2] = b;
-          imageData.data[i + 3] = a;
-
-          pixel += 1;
-        }
-      }
-      if (channels === 4) {
-        // RGBA
-        let pixel = 0;
-        const alphaConst = Math.floor(optionsLocal.alpha! * 2.55);
-        for (let i = 0; i < size; i += 4) {
-          r = rasters[0][pixel];
-          g = rasters[1][pixel];
-          b = rasters[2][pixel];
-          a = alphaConst;
-
-          imageData.data[i] = r;
-          imageData.data[i + 1] = g;
-          imageData.data[i + 2] = b;
-          imageData.data[i + 3] = a;
-
-          pixel += 1;
+          imageData.data[i] = rasters[0][sampleIndex];
+          imageData.data[i + 1] = rasters[1][sampleIndex];
+          imageData.data[i + 2] = rasters[2][sampleIndex];
+          imageData.data[i + 3] = rasters.length === 4 ? rasters[3][sampleIndex] : alpha255;
+          sampleIndex++;
         }
       }
     } else if (optionsLocal.useChannelIndex < numAvailableChannels && optionsLocal.useChannelIndex >= 0) {
@@ -105,12 +76,10 @@ export class BitmapGenerator {
       const channel = isInterleaved ? rasters[0] : (rasters[optionsLocal.useChannelIndex] ?? rasters[0]);
       const samplesPerPixel = isInterleaved ? numAvailableChannels : 1;
 
-      // AUTO RANGE
       if (optionsLocal.useAutoRange) {
         optionsLocal.colorScaleValueRange = this.getMinMax(channel, optionsLocal, samplesPerPixel);
       }
-      const colorData = this.getColorValue(channel, optionsLocal, size, samplesPerPixel);
-      imageData.data.set(colorData);
+      imageData.data.set(this.getColorValue(channel, optionsLocal, size, samplesPerPixel));
     } else {
       // if user defined channel does not exist
       /* eslint-disable no-console */
@@ -126,200 +95,145 @@ export class BitmapGenerator {
     // Note: createImageBitmap(imageData) is cleaner, but using the canvas ensures broad compatibility
     c!.putImageData(imageData, 0, 0);
     const map = await createImageBitmap(canvas);
-
-    return {
-      map,
-      // rasters[0] is the interleaved buffer on the CogTiles path (primary use case).
-      // For planar multi-band GeoTIFFs via GeoImage.getBitmap(), only the first band is exposed here.
-      // Full multi-band raw picking support is tracked in https://github.com/Gisat/deck.gl-geotiff/issues/98
-      raw: rasters[0],
-      width,
-      height
-    };
-  }
-
-  static getMinMax(array: TypedArray, options: GeoImageOptions, samplesPerPixel = 1) {
-    let maxValue = -Infinity;
-    let minValue = Infinity;
-    let foundValid = false;
-
-    let pixel: number = samplesPerPixel === 1 ? 0 : (options.useChannelIndex ?? 0);
-    for (let idx = pixel; idx < array.length; idx += samplesPerPixel) {
-      if (options.noDataValue === undefined || array[idx] !== options.noDataValue) {
-        if (array[idx] > maxValue) maxValue = array[idx];
-        if (array[idx] < minValue) minValue = array[idx];
-        foundValid = true;
-      }
-    }
-
-    if (!foundValid) {
-      return options.colorScaleValueRange || [0, 255];
-    }
-
-    return [minValue, maxValue];
+    // rasters[0] is the interleaved buffer on the CogTiles path (primary use case).
+    // For planar multi-band GeoTIFFs via GeoImage.getBitmap(), only the first band is exposed here.
+    // Full multi-band raw picking support is tracked in https://github.com/Gisat/deck.gl-geotiff/issues/98
+    return { map, raw: rasters[0], width, height };
   }
 
   static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
-    const colorScale = chroma.scale(options.colorScale).domain(options.colorScaleValueRange);
-    let pixel: number = samplesPerPixel === 1 ? 0 : (options.useChannelIndex ?? 0);
-    const colorsArray = new Uint8ClampedArray(arrayLength);
+     // Normalize all colorScale entries for chroma.js compatibility
+const colorScale = chroma.scale(
+  options.colorScale?.map(c => Array.isArray(c) ? chroma(c as [number, number, number]) : c)
+).domain(options.colorScaleValueRange ?? [0, 255]);
+     const colorsArray = new Uint8ClampedArray(arrayLength);
+    const optAlpha = Math.floor((options.alpha ?? 100) * 2.55);
+    const rangeMin = options.colorScaleValueRange?.[0] ?? 0;
+    const rangeMax = options.colorScaleValueRange?.[1] ?? 255;
 
-    const cbvInput = options.colorsBasedOnValues ?? [];
-    const classesInput = options.colorClasses ?? [];
-
-    const optUseColorsBasedOnValues = options.useColorsBasedOnValues && cbvInput.length > 0;
-    const optUseColorClasses = options.useColorClasses && classesInput.length > 0;
-
-    const dataValues = optUseColorsBasedOnValues ? cbvInput.map(([first]) => first) : [];
-    const colorValues = optUseColorsBasedOnValues ? cbvInput.map(([, second]) => [...chroma(second).rgb(), Math.floor(options.alpha * 2.55)]) : [];
-
-    const colorClasses = optUseColorClasses ? classesInput.map(([color]) => [...chroma(color).rgb(), Math.floor(options.alpha * 2.55)]) : [];
-    const dataIntervals = optUseColorClasses ? classesInput.map(([, interval]) => interval) : [];
-    const dataIntervalBounds = optUseColorClasses ? classesInput.map(([, , bounds], index) => {
-      if (bounds !== undefined) return bounds;
-      if (index === classesInput.length - 1) return [true, true];
-      return [true, false];
-    }) as [boolean, boolean][] : [];
-
-    // Pre-calculate Loop Variables to avoid object lookup in loop
-    const optNoData = options.noDataValue;
-    const optClipLow = options.clipLow;
-    const optClipHigh = options.clipHigh;
-    const optClippedColor = options.clippedColor;
-    const optUseHeatMap = options.useHeatMap;
-    const optUseSingleColor = options.useSingleColor;
-    const optUseDataForOpacity = options.useDataForOpacity;
-    const optColor = options.color;
-    const optUnidentifiedColor = options.unidentifiedColor;
-    const optNullColor = options.nullColor;
-    const optAlpha = Math.floor(options.alpha * 2.55);
-    const rangeMin = options.colorScaleValueRange[0]!;
-    const rangeMax = options.colorScaleValueRange.slice(-1)[0]!;
-
-    // LOOKUP TABLE OPTIMIZATION (for 8-bit data)
-    // If the data is Uint8 (0-255), we can pre-calculate the result for every possible value.
     const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
+    const isFloatOrWide = !is8Bit && (dataArray instanceof Float32Array || dataArray instanceof Uint16Array || dataArray instanceof Int16Array);
 
-    // The LUT optimization is only applied for 8-bit data when `useDataForOpacity` is false.
-    // `useDataForOpacity` is excluded because it requires the raw data value for
-    // dynamic opacity scaling. All other visualization modes (HeatMap, Categorical,
-    // Classes, Single Color) are pre-calculated into the LUT for maximum performance.
-    if (is8Bit && !optUseDataForOpacity) {
-      // Create LUT: 256 values * 4 channels (RGBA)
+    // 1. 8-BIT COMPREHENSIVE LUT
+
+    // Single-band 8-bit (grayscale or indexed): use LUT for fast mapping
+    if (is8Bit && !options.useDataForOpacity) {
+      
       const lut = new Uint8ClampedArray(256 * 4);
-
       for (let i = 0; i < 256; i++) {
-        let r = optNullColor[0], g = optNullColor[1], b = optNullColor[2], a = optNullColor[3];
-
-        // Logic mirroring the pixel loop
-        if (optNoData === undefined || i !== optNoData) {
-          if ((optClipLow != null && i <= optClipLow) || (optClipHigh != null && i >= optClipHigh)) {
-             [r, g, b, a] = optClippedColor as number[];
-          } else {
-             let c = [r, g, b, a];
-             if (optUseHeatMap) {
-               const rgb = (colorScale(i) as any).rgb();
-               c = [rgb[0], rgb[1], rgb[2], optAlpha];
-             }
-             else if (optUseColorsBasedOnValues) {
-                const index = dataValues.indexOf(i);
-                c = (index > -1) ? colorValues[index] : optUnidentifiedColor as number[];
-             }
-             else if (optUseColorClasses) {
-                const index = this.findClassIndex(i, dataIntervals, dataIntervalBounds);
-                c = (index > -1) ? colorClasses[index] : optUnidentifiedColor as number[];
-             }
-             else if (optUseSingleColor) {
-                c = optColor as number[];
-             }
-             [r, g, b, a] = c as number[];
-          }
+        if (
+          (options.clipLow != null && i <= options.clipLow) ||
+          (options.clipHigh != null && i >= options.clipHigh)
+        ) {
+          lut.set(options.clippedColor as number[], i * 4);
+        } else {
+          lut.set(this.calculateSingleColor(i, colorScale, options, optAlpha), i * 4);
         }
-        lut[i * 4] = r;
-        lut[i * 4 + 1] = g;
-        lut[i * 4 + 2] = b;
-        lut[i * 4 + 3] = a;
       }
-
-      // Fast Apply Loop
-      let outIdx = 0;
-      const numPixels = arrayLength / 4;
-      for (let i = 0; i < numPixels; i++) {
-        const val = dataArray[pixel];
-        const lutIdx = Math.min(255, Math.max(0, val)) * 4;
-
-        colorsArray[outIdx++] = lut[lutIdx];
-        colorsArray[outIdx++] = lut[lutIdx + 1];
-        colorsArray[outIdx++] = lut[lutIdx + 2];
-        colorsArray[outIdx++] = lut[lutIdx + 3];
-
-        pixel += samplesPerPixel;
+      for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
+        const lutIdx = dataArray[sampleIndex] * 4;
+        colorsArray[i] = lut[lutIdx];
+        colorsArray[i+1] = lut[lutIdx+1];
+        colorsArray[i+2] = lut[lutIdx+2];
+        colorsArray[i+3] = lut[lutIdx+3];
       }
       return colorsArray;
     }
 
-    // Standard Loop (Float or non-optimized)
-    for (let i = 0; i < arrayLength; i += 4) {
-      let r = optNullColor[0], g = optNullColor[1], b = optNullColor[2], a = optNullColor[3];
-
-      const val = dataArray[pixel];
-
-      if ((!Number.isNaN(val)) && (optNoData === undefined || val !== optNoData)) {
+    // 2. FLOAT / 16-BIT LUT (HEATMAP ONLY)
+    if (isFloatOrWide && options.useHeatMap && !options.useDataForOpacity) {
+      
+      const LUT_SIZE = 1024;
+      const lut = new Uint8ClampedArray(LUT_SIZE * 4);
+      const rangeSpan = (rangeMax - rangeMin) || 1;
+      for (let i = 0; i < LUT_SIZE; i++) {
+        const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
         if (
-          (optClipLow != null && val <= optClipLow) || (optClipHigh != null && val >= optClipHigh)
+          (options.clipLow != null && domainVal <= options.clipLow) ||
+          (options.clipHigh != null && domainVal >= options.clipHigh)
         ) {
-          [r, g, b, a] = optClippedColor as number[];
+          lut.set(options.clippedColor as number[], i * 4);
         } else {
-          let c;
-          if (optUseHeatMap) {
-             const rgb = (colorScale(val) as any).rgb();
-             c = [rgb[0], rgb[1], rgb[2], optAlpha];
-          }
-          else if (optUseColorsBasedOnValues) {
-            const index = dataValues.indexOf(val);
-            c = (index > -1) ? colorValues[index] : optUnidentifiedColor;
-          }
-          else if (optUseColorClasses) {
-            const index = this.findClassIndex(val, dataIntervals, dataIntervalBounds);
-            c = (index > -1) ? colorClasses[index] : optUnidentifiedColor;
-          }
-          else if (optUseSingleColor) {
-            c = optColor;
-          }
-
-          if (c) {
-             [r, g, b, a] = c;
-          }
-
-          if (optUseDataForOpacity) {
-            a = scale(val, rangeMin, rangeMax, 0, 255);
-          }
+          const rgb = colorScale(domainVal).rgb();
+          lut[i * 4] = rgb[0];
+          lut[i * 4 + 1] = rgb[1];
+          lut[i * 4 + 2] = rgb[2];
+          lut[i * 4 + 3] = optAlpha;
         }
       }
+      for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
+        const val = dataArray[sampleIndex];
+        if (this.isInvalid(val, options)) {
+          colorsArray.set(this.getInvalidColor(val, options), i);
+        } else {
+          const t = (val - rangeMin) / rangeSpan;
+          const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.floor(t * (LUT_SIZE - 1)))) * 4;
+          colorsArray[i] = lut[lutIdx];
+          colorsArray[i+1] = lut[lutIdx+1];
+          colorsArray[i+2] = lut[lutIdx+2];
+          colorsArray[i+3] = lut[lutIdx+3];
+        }
+      }
+      return colorsArray;
+    }
 
-      colorsArray[i] = r;
-      colorsArray[i + 1] = g;
-      colorsArray[i + 2] = b;
-      colorsArray[i + 3] = a;
-
-      pixel += samplesPerPixel;
+    // 3. FALLBACK LOOP (Categorical Float, Opacity, or Single Color)
+    
+    let sampleIndex = options.useChannelIndex ?? 0;
+    for (let i = 0; i < arrayLength; i += 4) {
+      const val = dataArray[sampleIndex];
+      let color;
+      if ((options.clipLow != null && val <= options.clipLow) || (options.clipHigh != null && val >= options.clipHigh)) {
+        color = options.clippedColor as number[];
+      } else {
+        color = this.calculateSingleColor(val, colorScale, options, optAlpha);
+      }
+      if (options.useDataForOpacity && !this.isInvalid(val, options)) {
+        color[3] = scale(val, rangeMin, rangeMax, 0, 255);
+      }
+      colorsArray.set(color, i);
+      sampleIndex += samplesPerPixel;
     }
     return colorsArray;
   }
 
-  static findClassIndex(number: number, intervals: [number, number][], bounds: [boolean, boolean][]) {
-    for (let idx = 0; idx < intervals.length; idx += 1) {
-      const [min, max] = intervals[idx];
-      const [includeEqualMin, includeEqualMax] = bounds[idx];
-      if ((includeEqualMin ? number >= min : number > min)
-          && (includeEqualMax ? number <= max : number < max)) {
-        return idx;
-      }
+  private static calculateSingleColor(val: number, colorScale: any, options: GeoImageOptions, alpha: number): number[] {
+    if (this.isInvalid(val, options)) {
+      return options.nullColor as number[];
+    }
+    
+    // Color mode priority (most specific wins):
+    // 1. useSingleColor
+    // 2. useColorClasses
+    // 3. useColorsBasedOnValues
+    // 4. useHeatMap
+    // Only the first enabled mode is used.
+    if (options.useSingleColor) {
+      return options.color as number[];
+    } else if (options.useColorClasses) {
+      const index = this.findClassIndex(val, options);
+      return index > -1 ? [...chroma(Array.isArray(options.colorClasses![index][0]) ? chroma(options.colorClasses![index][0] as [number, number, number]) : options.colorClasses![index][0]).rgb(), alpha] : (options.unidentifiedColor as number[]);
+    } else if (options.useColorsBasedOnValues) {
+      
+      const match = options.colorsBasedOnValues?.find(([v]) => v === val);
+      return match ? [...chroma(Array.isArray(match[1]) ? chroma(match[1] as [number, number, number]) : match[1]).rgb(), alpha] : (options.unidentifiedColor as number[]);
+    } else if (options.useHeatMap) {
+      return [...colorScale(val).rgb(), alpha];
+    }
+    return options.unidentifiedColor as number[];
+  }
+
+  private static findClassIndex(val: number, options: GeoImageOptions): number {
+    if (!options.colorClasses) return -1;
+    for (let i = 0; i < options.colorClasses.length; i++) {
+      const [, [min, max], bounds] = options.colorClasses[i];
+      const [incMin, incMax] = bounds || (i === options.colorClasses.length - 1 ? [true, true] : [true, false]);
+      if ((incMin ? val >= min : val > min) && (incMax ? val <= max : val < max)) return i;
     }
     return -1;
   }
 
-  static getDefaultColor(size: number, nullColor: number[]) {
+  private static getDefaultColor(size: number, nullColor: number[]) {
     const colorsArray = new Uint8ClampedArray(size);
     for (let i = 0; i < size; i += 4) {
       [colorsArray[i], colorsArray[i + 1], colorsArray[i + 2], colorsArray[i + 3]] = nullColor;
@@ -327,14 +241,31 @@ export class BitmapGenerator {
     return colorsArray;
   }
 
-  static getColorFromChromaType(colorDefinition: number[] | chroma.Color, alpha = 255) {
-    if (!Array.isArray(colorDefinition) || colorDefinition.length !== 4) {
-      return [...chroma(colorDefinition as chroma.Color).rgb(), alpha];
-    }
-    return colorDefinition;
+  private static isInvalid(val: number, options: GeoImageOptions): boolean {
+    return Number.isNaN(val) || (options.noDataValue !== undefined && val === options.noDataValue);
   }
 
-  static hasPixelsNoData(pixels: any[], noDataValue: any) {
-    return noDataValue !== undefined && pixels.every((pixel) => pixel === noDataValue);
+  private static getInvalidColor(val: number, options: GeoImageOptions): number[] {
+    return options.nullColor as number[];
+  }
+
+  static getMinMax(array: TypedArray, options: GeoImageOptions, samplesPerPixel = 1) {
+    let max = -Infinity, min = Infinity;
+    for (let i = (options.useChannelIndex ?? 0); i < array.length; i += samplesPerPixel) {
+      const val = array[i];
+      if (!this.isInvalid(val, options)) {
+        if (val > max) max = val;
+        if (val < min) min = val;
+      }
+    }
+    return max === -Infinity ? (options.colorScaleValueRange || [0, 255]) : [min, max];
+  }
+
+  static getColorFromChromaType(color: any, alpha = 255) {
+    return (!Array.isArray(color) || color.length !== 4) ? [...chroma(color).rgb(), alpha] : color;
+  }
+
+  static hasPixelsNoData(pixels: number[], noData: number | undefined) {
+    return noData !== undefined && pixels.every(p => p === noData);
   }
 }

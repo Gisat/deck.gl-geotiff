@@ -25,10 +25,11 @@ export default class GeoImage {
         width: number,
         height: number,
         rasters: any[],
-        bounds: Bounds
+        bounds: Bounds,
+        cellSizeMeters?: number,
         },
     options: GeoImageOptions,
-    meshMaxError,
+    meshMaxError: number,
   ): Promise<TileResult | null> {
     const mergedOptions = { ...DefaultGeoImageOptions, ...options };
 
@@ -42,20 +43,23 @@ export default class GeoImage {
     }
   }
 
-  // GetHeightmap uses only "useChannel" and "multiplier" options
+   // GetHeightmap uses only "useChannel" and "multiplier" options
   async getHeightmap(
     input: string | {
         bounds: Bounds,
         width: number,
         height: number,
-        rasters: any[] },
+        rasters: any[],
+        cellSizeMeters?: number,
+        },
     options: GeoImageOptions,
-    meshMaxError,
+    meshMaxError: number,
   ): Promise<TileResult> {
     let rasters = [];
     let width: number;
     let height: number;
     let bounds: Bounds;
+    let cellSizeMeters: number | undefined;
 
     if (typeof (input) === 'string') {
       // TODO not tested
@@ -71,10 +75,11 @@ export default class GeoImage {
       width = input.width;
       height = input.height;
       bounds = input.bounds;
+      cellSizeMeters = input.cellSizeMeters;
     }
 
     // Delegate to TerrainGenerator
-    return TerrainGenerator.generate({ width, height, rasters, bounds }, options, meshMaxError);
+    return await TerrainGenerator.generate({ width, height, rasters, bounds, cellSizeMeters }, options, meshMaxError);
   }
 
   async getBitmap(

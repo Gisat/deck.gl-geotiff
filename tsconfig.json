@@ -2,7 +2,7 @@
   "exclude": ["**/tests", "**/*.test.ts", "node_modules"],
   "compilerOptions": {
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "target": "ES2022",
     "lib": ["ES2022", "DOM"],
     "allowSyntheticDefaultImports": true,
@@ -10,10 +10,6 @@
     "importHelpers": true,
     "declaration": true,
     "declarationDir": "types",
-    "baseUrl": ".",
-    "skipLibCheck": true,
-    "paths": {
-      "tslib": ["./node_modules/tslib/tslib.d.ts"]
-    }
+    "skipLibCheck": true
   }
 }

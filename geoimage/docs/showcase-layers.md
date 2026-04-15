@@ -51,7 +51,7 @@ const heatmapLayer = new CogBitmapLayer({
     type: 'image',
     useChannel: 1,
     useHeatMap: true,
-    colorScaleValueRange: [100, 200, 300],
+    colorScaleValueRange: [100, 300],
     colorScale: ['yellow', '#20908d', [68, 1, 84]]
   }
 });
@@ -172,13 +172,13 @@ const drapedLayer = new CogTerrainLayer({
 });
 ```
 
-### C. Terrain with Stylized Overlay (Dual Layer)
-Drape a *stylized* COG (e.g., a heatmap) onto the terrain. This advanced technique uses a separate `CogBitmapLayer` with `clampToTerrain: true`.
+### C. Terrain with Stylized Overlay
+
+Render the terrain with a color visualization derived from the elevation data itself — no separate layer needed. Pass visualization options directly in `terrainOptions` and `CogTerrainLayer` will automatically generate and drape the texture.
 
 <img src="/geoimage/docs/images/cogTerrainLayer_heatmap.jpeg" width="60%" alt="Terrain Heatmap Overlay" />
 
 ```typescript
-// 1. Terrain Layer (Mesh Source)
 const terrainLayer = new CogTerrainLayer({
   id: 'terrain-layer',
   elevationData: 'https://example.com/dem.tif',
@@ -187,18 +187,6 @@ const terrainLayer = new CogTerrainLayer({
   operation: 'terrain+draw',
   terrainOptions: {
     type: 'terrain',
-  }
-});
-
-// 2. Overlay Layer (Stylized Bitmap)
-const heatmapOverlay = new CogBitmapLayer({
-  id: 'heatmap-overlay',
-  rasterData: 'https://example.com/dem.tif',
-  isTiled: true,
-  opacity: 0.8,
-  clampToTerrain: true, // Drapery enabled
-  cogBitmapOptions: {
-    type: 'image',
     useHeatMap: true,
     useChannel: 1,
     colorScale: ['#fde725', '#5dc962', '#20908d', '#3a528b', '#440154'],
@@ -206,6 +194,137 @@ const heatmapOverlay = new CogBitmapLayer({
   }
 });
 ```
+
+> **Need a texture from a different COG?** If your overlay data comes from a separate file, use a `CogBitmapLayer` with `clampToTerrain: true` as before:
+>
+> ```typescript
+> // Terrain mesh
+> const terrainLayer = new CogTerrainLayer({ ... });
+>
+> // Overlay from a different source
+> const heatmapOverlay = new CogBitmapLayer({
+>   id: 'heatmap-overlay',
+>   rasterData: 'https://example.com/other-data.tif',
+>   isTiled: true,
+>   clampToTerrain: true,
+>   cogBitmapOptions: {
+>     type: 'image',
+>     useHeatMap: true,
+>     colorScaleValueRange: [-100, 9000],
+>   }
+> });
+> ```
+
+### D. Terrain with Kernel Analysis (Slope & Hillshade)
+
+Compute and visualize slope or hillshade directly from the elevation data using a 3×3 kernel. The derived surface is draped as a texture over the 3D mesh. Both elevation and the derived value are available for picking simultaneously via `TileResult.raw` and `TileResult.rawDerived`.
+
+<img src="/geoimage/docs/images/cogTerrainLayer_kernel.jpg" width="60%" alt="Terrain Kernel Slope/Hillshade" />
+
+**Static visualization** (single mode, no switching):
+
+```typescript
+const slopeLayer = new CogTerrainLayer({
+  id: 'terrain-slope',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  tileSize: 256,
+  operation: 'terrain+draw',
+  terrainOptions: {
+    type: 'terrain',
+    useChannel: 1,
+    noDataValue: 0,
+    useSlope: true,           // or useHillshade: true
+    useHeatMap: true,
+    colorScale: [[255, 255, 255], [235, 200, 150], [200, 80, 50], [100, 40, 30]],
+    colorScaleValueRange: [0, 90], // degrees
+  },
+  pickable: true,
+});
+```
+
+**Dynamic mode switching** (elevation / slope / hillshade toggle):
+
+Each mode requires a different `CogTiles` instance (different fetch size and kernel logic). Pass it via the `cogTiles` prop — when the prop changes, `CogTerrainLayer` detects it and refetches tiles while keeping the previous tile content visible during the transition.
+
+```tsx
+import { useState, useEffect, useMemo } from 'react';
+import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+
+type Mode = 'elevation' | 'slope' | 'hillshade';
+
+const modeOptions: Record<Mode, object> = {
+  elevation: { useHeatMap: true, colorScale: ['green', 'yellow', 'white'], colorScaleValueRange: [0, 6000] },
+  slope:     { useSlope: true, useHeatMap: true, colorScale: [[255,255,255],[120,70,30],[60,20,10]], colorScaleValueRange: [0, 60] },
+  hillshade: { useHillshade: true, useHeatMap: true, colorScale: [[52,38,35],[255,250,245]], colorScaleValueRange: [0, 255] },
+};
+
+function buildOptions(mode: Mode) {
+  return { type: 'terrain' as const, useChannel: 1, noDataValue: 0, ...modeOptions[mode] };
+}
+
+function MyMap() {
+  const [mode, setMode] = useState<Mode>('elevation');
+  // cogState pairs CogTiles with the mode it was built for.
+  // Keeping mode alongside CogTiles ensures terrainOptions always matches what CogTiles fetches.
+  const [cogState, setCogState] = useState<{ cog: CogTiles; mode: Mode } | null>(null);
+
+  useEffect(() => {
+    const cog = new CogTiles(buildOptions(mode));
+    cog.initializeCog('https://example.com/dem.tif').then(() => {
+      setCogState({ cog, mode });
+    });
+  }, [mode]);
+
+  const layers = useMemo(() => {
+    if (!cogState) return [];
+    return [
+      new CogTerrainLayer({
+        id: 'terrain-kernel',            // stable id — deck.gl keeps tile content during refetch
+        elevationData: 'https://example.com/dem.tif',
+        cogTiles: cogState.cog,
+        isTiled: true,
+        tileSize: 256,
+        operation: 'terrain+draw',
+        terrainOptions: buildOptions(cogState.mode), // use cogState.mode, not mode
+        pickable: true,
+      }),
+    ];
+  }, [cogState]);
+
+  return <DeckGL layers={layers} /* ... */ />;
+}
+```
+
+> **Why stable layer id?** Using the same id (`'terrain-kernel'`) across mode changes tells deck.gl to update the existing layer rather than destroy and recreate it. This preserves the tile cache, so old tiles remain visible until new ones arrive — no white canvas flash.
+
+> **Why `cogState.mode` not `mode`?** After clicking a new mode, `mode` updates immediately but `cogState` still holds the old `CogTiles`. Using `cogState.mode` for `terrainOptions` ensures the visualization options always match the `CogTiles` instance that is actually fetching — preventing a mismatch between heatmap options and kernel fetch size.
+
+**Picking slope + elevation simultaneously:**
+
+```typescript
+getTooltip={(info) => {
+  const tileResult = info.tile?.content?.[0];
+  if (!tileResult?.raw) return null;
+
+  const { raw, rawDerived, width, height } = tileResult;
+  const { west, south, east, north } = info.tile.bbox;
+  const u = (info.coordinate[0] - west) / (east - west);
+  const v = (north - info.coordinate[1]) / (north - south);
+
+  const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
+  const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
+  const elevation = raw[y * width + x];
+
+  const kx = Math.min(255, Math.max(0, Math.floor(u * 255)));
+  const ky = Math.min(255, Math.max(0, Math.floor(v * 255)));
+  const slope = rawDerived?.[ky * 256 + kx];
+
+  return { text: [`Elevation: ${elevation.toFixed(1)} m`, slope != null ? `Slope: ${slope.toFixed(1)}°` : ''].join('\n') };
+}}
+```
+
+> **Hillshade variant:** replace `useSlope: true` with `useHillshade: true` and set `colorScale: [[52, 38, 35], [255, 250, 245]]` with `colorScaleValueRange: [0, 255]`. Optionally set `hillshadeAzimuth` (default `315`) and `hillshadeAltitude` (default `45`) to control the sun position.
 
 ---
 

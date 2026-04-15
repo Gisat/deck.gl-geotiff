@@ -17,7 +17,7 @@ export type EdgeIndices = {
  * @param {TypedArray} position - position attribute geometry data
  * @returns {number[][]} - outside edges data
  */
-function getOutsideEdgesFromIndices(indices: EdgeIndices, position: ArrayLike<number>) {
+function getOutsideEdgesFromIndices(indices: EdgeIndices, position: ArrayLike<number>): number[][] {
   // Sort skirt indices to create adjacent triangles
   indices.westIndices.sort((a, b) => position[3 * a + 1] - position[3 * b + 1]);
   // Reverse (b - a) to match triangle winding
@@ -28,7 +28,7 @@ function getOutsideEdgesFromIndices(indices: EdgeIndices, position: ArrayLike<nu
 
   const edges: number[][] = [];
   for (const index in indices) {
-    const indexGroup = indices[index];
+    const indexGroup = (indices as Record<string, number[]>)[index];
     for (let i = 0; i < indexGroup.length - 1; i++) {
       edges.push([indexGroup[i], indexGroup[i + 1]]);
     }
@@ -44,7 +44,7 @@ function getOutsideEdgesFromIndices(indices: EdgeIndices, position: ArrayLike<nu
  * @param outsideIndices - edge indices from quantized mesh data
  * @returns - geometry data with added skirt
  */
-export function addSkirt(attributes, triangles, skirtHeight: number, outsideIndices?: EdgeIndices) {
+export function addSkirt(attributes: any, triangles: any, skirtHeight: number, outsideIndices?: EdgeIndices) {
   const outsideEdges = outsideIndices
     ? getOutsideEdgesFromIndices(outsideIndices, attributes.POSITION.value)
     : getOutsideEdgesFromTriangles(triangles);
@@ -87,7 +87,7 @@ export function addSkirt(attributes, triangles, skirtHeight: number, outsideIndi
  * @param {any} triangles - indices array of the mesh geometry
  * @returns {number[][]} - outside edges data
  */
-function getOutsideEdgesFromTriangles(triangles) {
+function getOutsideEdgesFromTriangles(triangles: any): number[][] {
   const edges: number[][] = [];
   for (let i = 0; i < triangles.length; i += 3) {
     edges.push([triangles[i], triangles[i + 1]]);
@@ -130,7 +130,15 @@ function updateAttributesForNewEdge({
   newPosition,
   newTexcoord0,
   newTriangles,
-}) {
+}: {
+  edge: number[];
+  edgeIndex: number;
+  attributes: any;
+  skirtHeight: number;
+  newPosition: any;
+  newTexcoord0: any;
+  newTriangles: any;
+}): void {
   const positionsLength = attributes.POSITION.value.length;
   const vertex1Offset = edgeIndex * 2;
   const vertex2Offset = edgeIndex * 2 + 1;
