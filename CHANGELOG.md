@@ -1,3 +1,14 @@
+## [2.4.1-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0...v2.4.1-dev.1) (2026-04-17)
+
+### Bug Fixes
+
+* **cog:** explicitly enable BlockedSource to restore HTTP block caching ([48b9b6c](https://github.com/Gisat/deck.gl-geotiff/commit/48b9b6cf88f505a9e94f5dbac79f5e6c06847621))
+* **cog:** fix excessive request regression with concurrent caching and BlockedSource ([59ba96a](https://github.com/Gisat/deck.gl-geotiff/commit/59ba96a4f4fc59390e2d7aba1975b3815718cb35))
+
+### Performance Improvements
+
+* **cog:** add instance and image caching for multi-mode use cases ([3b35f3c](https://github.com/Gisat/deck.gl-geotiff/commit/3b35f3cbed3446e4b7cbb656e2c8e7d7c5f5cea3))
+
 ## [2.4.0](https://github.com/Gisat/deck.gl-geotiff/compare/v2.3.0...v2.4.0) (2026-04-15)
 
 ### Features
