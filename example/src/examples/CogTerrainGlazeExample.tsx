@@ -34,7 +34,6 @@ function CogTerrainGlazeExample() {
   const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_NEPAL_DEM;
   const [viewState, setViewState] = useState<any>(null);
   const [mode, setMode] = useState<TerrainMode>('lit');
-  const [cogState, setCogState] = useState<{ cog: CogTiles; glaze: CogTiles | null; mode: TerrainMode } | null>(null);
 
   const buildTerrainOptions = (m: TerrainMode): GeoImageOptions => ({
     ...mainCog.defaultOptions as GeoImageOptions,
@@ -56,14 +55,31 @@ function CogTerrainGlazeExample() {
     maxGlazeAlpha: 100,
   };
 
+  // Map of CogTiles instances, one per terrain mode, to enable caching and reuse
+  const [cogTilesCache] = useState(
+    new Map<TerrainMode, CogTiles>([
+      ['lit', new CogTiles(buildTerrainOptions('lit'))],
+      ['glaze', new CogTiles(buildTerrainOptions('glaze'))],
+      ['plain', new CogTiles(buildTerrainOptions('plain'))],
+    ])
+  );
+  // Separate glaze layer CogTiles
+  const [glazeCogTiles] = useState(new CogTiles(glazeOptions));
+  // cogState pairs CogTiles with the mode it was initialized for.
+  const [cogState, setCogState] = useState<{ cog: CogTiles; glaze: CogTiles; mode: TerrainMode } | null>(null);
+
+  // Initial load: set viewState and initialize all CogTiles instances
   useEffect(() => {
     const init = async () => {
-      const cog = new CogTiles(buildTerrainOptions('lit'));
-      await cog.initializeCog(mainCog.url);
+      // Initialize all terrain and glaze CogTiles instances in parallel
+      await Promise.all([
+        ...Array.from(cogTilesCache.values()).map((cog) =>
+          cog.initializeCog(mainCog.url)
+        ),
+        glazeCogTiles.initializeCog(mainCog.url),
+      ]);
 
-      const glaze = new CogTiles(glazeOptions);
-      await glaze.initializeCog(mainCog.url);
-
+      const cog = cogTilesCache.get(mode)!;
       const bounds = cog.getBoundsAsLatLon();
 
       const viewport = new WebMercatorViewport({
@@ -85,16 +101,18 @@ function CogTerrainGlazeExample() {
         pitch: 60,
         bearing: 0,
       });
-      setCogState({ cog, glaze, mode });
+      setCogState({ cog, glaze: glazeCogTiles, mode });
     };
 
     init();
   }, []);
 
+  // Switch to the appropriate CogTiles instance on mode change.
+  // Since instances are pre-initialized and cached, switching is instant with no re-fetching.
   useEffect(() => {
-    if (!viewState || !cogState) return;
-    // Only update mode, no need to reinitialize CogTiles for any mode
-    setCogState((prev) => ({ ...prev!, mode }));
+    if (!viewState || !cogTilesCache.has(mode)) return;
+    const cog = cogTilesCache.get(mode)!;
+    setCogState((prev) => ({ ...prev!, cog, mode }));
   }, [mode, viewState]);
 
   const layers = useMemo(() => {

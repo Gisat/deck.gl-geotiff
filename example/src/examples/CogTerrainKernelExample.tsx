@@ -129,6 +129,7 @@ function CogTerrainKernelExample() {
       ['elevation', new CogTiles(buildTerrainOptions('elevation'))],
       ['slope', new CogTiles(buildTerrainOptions('slope'))],
       ['hillshade', new CogTiles(buildTerrainOptions('hillshade'))],
+      ['swissrelief', new CogTiles(buildTerrainOptions('swissrelief'))],
     ])
   );
   // cogState pairs CogTiles with the mode it was initialized for.
