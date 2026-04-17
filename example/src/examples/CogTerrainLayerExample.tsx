@@ -36,7 +36,8 @@ function CogTerrainLayerExample() {
   const terrainOptions: GeoImageOptions = {
     ...mainCog.defaultOptions as GeoImageOptions,
     type: 'terrain',
-    useHeatMap: true,
+    useHeatMap: false,
+    useSingleColor: true,
     colorScale: [
         [75, 120, 90],    // Brightened forest green
         [100, 145, 100],  // Soft meadow green

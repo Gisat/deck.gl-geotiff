@@ -348,7 +348,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     const shouldDisableLighting = isSwiss || disableLighting;
 
     const lightingProps = shouldDisableLighting ? {
-      _lighting: 'none',
       material: {
         ambient: 1.0,
         diffuse: 0.0,
@@ -356,8 +355,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         specularColor: [0, 0, 0]
       }
     } : {
-      // Standard deck.gl lighting
-      _lighting: undefined,
       material: this.props.material 
     };
       

@@ -228,9 +228,9 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       }
       return tileData;
     } catch (error) {
-      // Log the error but don't throw - let the tile fail gracefully
+      // Log the error and rethrow so TileLayer can surface the failure via onTileError
       log.warn(`Failed to load bitmap tile at ${tile.index.z}/${tile.index.x}/${tile.index.y}:`, error)();
-      return null as any;
+      throw error;
     }
   }
 

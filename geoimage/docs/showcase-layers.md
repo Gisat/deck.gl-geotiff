@@ -352,7 +352,7 @@ const swissReliefTerrainLayer = new CogTerrainLayer({
   terrainOptions: {
     type: 'terrain',
     useSwissRelief: true,
-    useHeatMap: false,
+    useHeatMap: true,
     colorScale: [
       [20, 30, 40],      // Deep blue (water/low)
       [34, 139, 34],     // Forest green (foothills)

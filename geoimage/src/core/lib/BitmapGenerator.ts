@@ -155,45 +155,63 @@ export class BitmapGenerator {
       const reliefMask = (dataArray as TypedArray[])[1];
       const rangeSpan = (rangeMax - rangeMin) || 1;
 
-      const LUT_SIZE = 1024;
-      
-      // Cache LUT: generate key from colorScale config + range + alpha
-      const cacheKey = `${rangeMin}_${rangeMax}_${optAlpha}_${JSON.stringify(options.colorScale)}`;
-      let lut = this._swissColorLUTCache.get(cacheKey);
-      
-      if (!lut) {
-        // LUT not cached, generate it
-        lut = new Uint8ClampedArray(LUT_SIZE * 4);
-        for (let i = 0; i < LUT_SIZE; i++) {
-          const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
-          const rgb = colorScale(domainVal).rgb();
-          lut[i * 4] = rgb[0];
-          lut[i * 4 + 1] = rgb[1];
-          lut[i * 4 + 2] = rgb[2];
-          lut[i * 4 + 3] = optAlpha;
+      // Only use LUT optimization for useHeatMap mode; other modes use calculateSingleColor per-pixel
+      let lut: Uint8ClampedArray | null = null;
+      if (options.useHeatMap) {
+        const LUT_SIZE = 1024;
+        
+        // Cache LUT: generate key from colorScale config + range + alpha
+        const cacheKey = `${rangeMin}_${rangeMax}_${optAlpha}_${JSON.stringify(options.colorScale)}`;
+        lut = this._swissColorLUTCache.get(cacheKey) || null;
+        
+        if (!lut) {
+          // LUT not cached, generate it
+          lut = new Uint8ClampedArray(LUT_SIZE * 4);
+          for (let i = 0; i < LUT_SIZE; i++) {
+            const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
+            const rgb = colorScale(domainVal).rgb();
+            lut[i * 4] = rgb[0];
+            lut[i * 4 + 1] = rgb[1];
+            lut[i * 4 + 2] = rgb[2];
+            lut[i * 4 + 3] = optAlpha;
+          }
+          this._swissColorLUTCache.set(cacheKey, lut);
         }
-        this._swissColorLUTCache.set(cacheKey, lut);
       }
 
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
         const elevationVal = primaryBuffer[sampleIndex];
         
-        // Inline the "isInvalid" check for speed
-        if (Number.isNaN(elevationVal) || (options.noDataValue !== undefined && elevationVal === options.noDataValue)) {
+        // NaN-aware noData check for Swiss relief
+        const isNoData = options.noDataValue !== undefined && (
+          Number.isNaN(options.noDataValue)
+            ? Number.isNaN(elevationVal)
+            : elevationVal === options.noDataValue
+        );
+        if (Number.isNaN(elevationVal) || isNoData) {
           colorsArray.set(options.nullColor as number[], i);
           continue;
         }
 
-        const t = (elevationVal - rangeMin) / rangeSpan;
-        const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.floor(t * (LUT_SIZE - 1)))) * 4;
+        let baseColor: number[];
+        if (lut) {
+          // LUT-optimized path for useHeatMap
+          const t = (elevationVal - rangeMin) / rangeSpan;
+          const lutIdx = Math.min(1023, Math.max(0, Math.floor(t * 1023))) * 4;
+          baseColor = [lut[lutIdx], lut[lutIdx + 1], lut[lutIdx + 2], lut[lutIdx + 3]];
+        } else {
+          // Per-pixel calculation for useSingleColor, useColorClasses, useColorsBasedOnValues
+          baseColor = this.calculateSingleColor(elevationVal, colorScale, options, optAlpha);
+        }
         
+        // Apply relief mask as multiplier (Ambient Fill approach)
         const maskVal = reliefMask[sampleIndex];
-        const multiplier = 0.4 + 0.6 * (maskVal / 255); // The "Ambient Fill"
+        const multiplier = 0.4 + 0.6 * (maskVal / 255);
 
-        colorsArray[i]     = lut[lutIdx]     * multiplier;
-        colorsArray[i + 1] = lut[lutIdx + 1] * multiplier;
-        colorsArray[i + 2] = lut[lutIdx + 2] * multiplier;
-        colorsArray[i + 3] = lut[lutIdx + 3];
+        colorsArray[i]     = Math.floor(baseColor[0] * multiplier);
+        colorsArray[i + 1] = Math.floor(baseColor[1] * multiplier);
+        colorsArray[i + 2] = Math.floor(baseColor[2] * multiplier);
+        colorsArray[i + 3] = baseColor[3];
       }
       return colorsArray;
     }

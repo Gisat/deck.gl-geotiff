@@ -50,7 +50,8 @@ const MODE_OPTIONS: Record<KernelMode, Partial<GeoImageOptions>> = {
   },
   swissrelief: {
     useSwissRelief: true,
-    useHeatMap: true,
+    useHeatMap: false,
+    useSingleColor: true,
     // Uses the same palette and value range as elevation
     colorScale: [
         [75, 120, 90],    // Brightened forest green

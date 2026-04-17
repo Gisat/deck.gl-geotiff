@@ -184,14 +184,14 @@ export class TerrainGenerator {
   }
 
   private static hasVisualizationOptions(options: GeoImageOptions): boolean {
-   if (options.useSingleColor) return false;
-   return !!(
-     options.useHeatMap ||
-     options.useSwissRelief||
-     options.useColorsBasedOnValues ||
-     options.useColorClasses
-   );
- }
+    return !!(
+      options.useSingleColor ||
+      options.useHeatMap ||
+      options.useSwissRelief ||
+      options.useColorsBasedOnValues ||
+      options.useColorClasses
+    );
+  }
 
   /**
    * Preserve noData values in a separate raster for kernel computation.
@@ -211,9 +211,14 @@ export class TerrainGenerator {
       sourceRaster &&
       sourceRaster.length === terrain.length
     ) {
+      const preserveNaNNoData = Number.isNaN(noDataValue);
       for (let i = 0; i < terrain.length; i++) {
-         
-        kernelTerrain[i] = (sourceRaster as any)[i] == noDataValue ? (noDataValue as number) : terrain[i];
+        const sourceValue = (sourceRaster as any)[i];
+        const isNoData = preserveNaNNoData
+          ? Number.isNaN(sourceValue)
+          : sourceValue === noDataValue;
+
+        kernelTerrain[i] = isNoData ? (noDataValue as number) : terrain[i];
       }
     } else {
       // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.

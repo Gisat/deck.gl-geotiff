@@ -393,6 +393,7 @@ class CogTiles {
     let tileHeight = requiredSize;
 
     // Relief glaze computation for bitmap layers
+    // Note: For multi-band support (band selection via useChannelIndex), see issue #98
     if (this.options.type === 'image' && this.options.useReliefGlaze) {
       const elevation = tileData[0] as Float32Array;
       

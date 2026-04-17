@@ -96,7 +96,7 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 
 ### Kernel / Derived / Glaze Analysis Options
 
-These options activate 3×3 neighborhood kernel calculations on the elevation raster, producing slope, hillshade, or Swiss relief glaze as the tile texture. **Mutually exclusive** — set either `useSlope` or `useHillshade`, not both. Requires `useHeatMap: true` and a `colorScale` to control the output visualization. Some options are also used by Swiss relief glaze overlays.
+These options activate 3×3 neighborhood kernel calculations on the elevation raster, producing slope, hillshade, or Swiss relief glaze as the tile texture. **Mutually exclusive** — set either `useSlope` or `useHillshade`, not both. For slope and hillshade heatmap-style visualization, use `useHeatMap: true` together with a `colorScale` to control the output. **For Swiss relief (baked or glaze mode):** use `useSwissRelief` or `useReliefGlaze` with any visualization option — these modes do not require `useHeatMap`.
 
 When active, tiles are fetched at 258×258 (one pixel border beyond the 256 output) to provide edge neighbors for the kernel, and the derived values are stored in `TileResult.rawDerived` alongside the original elevation in `TileResult.raw`. **All parameters are optional.**
 
@@ -108,6 +108,8 @@ When active, tiles are fetched at 258×258 (one pixel border beyond the 256 outp
 | **`hillshadeAltitude`** | `number` | `45` | Sun altitude above the horizon in degrees (0 = horizon, 90 = zenith). Only used when `useHillshade: true`. |
 | **`zFactor`** | `number` | `1` | Vertical exaggeration applied before gradient calculation. Useful when horizontal and vertical units differ significantly (e.g. degrees vs. metres). |
 | **`swissSlopeWeight`** | `number` | `0.5` | Controls the influence of slope on the final appearance for both kernel and Swiss relief glaze. Lower values (0.2–0.5) favor hillshade, higher values (0.5–1.0) emphasize slope contrast. |
+| **`useSwissRelief`** | `boolean` | `false` | Enables Swiss-style shaded relief (composited slope + multi-directional hillshade) for terrain visualization. Automatically disables lighting on `CogTerrainLayer`. Applies relief mask as a texture overlay. |
+| **`useReliefGlaze`** | `boolean` | `false` | *(Bitmap layers only)* Generates a transparent Swiss relief glaze overlay (0–255 mask) that can be composited over external rasters or basemaps. Relief is computed from the elevation channel selected via `useChannel`/`useChannelIndex`. Ignores global `alpha` setting (uses `maxGlazeAlpha` instead). |
 | **`maxGlazeAlpha`** | `number` | `128` | Intensity ceiling for relief glaze (0-255). 0 is fully transparent; 255 is maximum theoretical opacity. Only used with `useReliefGlaze`. Recommended range for satellite overlays: 120-160. |
 
 ### Layer Props (CogTerrainLayer)

@@ -53,6 +53,7 @@ export class KernelGenerator {
     const cellSizeFactor = 1 / (8 * cellSize);
     // Cache constant for radians to degrees conversion
     const RAD_TO_DEG = 180 / Math.PI;
+    const isNaNNoData = noDataValue !== undefined && Number.isNaN(noDataValue);
 
     for (let r = 0; r < OUT; r++) {
       for (let c = 0; c < OUT; c++) {
@@ -60,7 +61,10 @@ export class KernelGenerator {
         const base = r * IN + c;
         const z5 = src[base + IN + 1]; // center pixel
 
-        if (noDataValue !== undefined && z5 === noDataValue) {
+        const isNoData = noDataValue !== undefined && (
+          isNaNNoData ? Number.isNaN(z5) : z5 === noDataValue
+        );
+        if (isNoData) {
           out[r * OUT + c] = NaN;
           continue;
         }
@@ -114,13 +118,17 @@ export class KernelGenerator {
     
     // Hoist division out of loop: multiplication is ~2-3x faster than division
     const cellSizeFactor = 1 / (8 * cellSize);
+    const isNaNNoData = noDataValue !== undefined && Number.isNaN(noDataValue);
 
     for (let r = 0; r < OUT; r++) {
       for (let c = 0; c < OUT; c++) {
         const base = r * IN + c;
         const z5 = src[base + IN + 1]; // center pixel
 
-        if (noDataValue !== undefined && z5 === noDataValue) {
+        const isNoData = noDataValue !== undefined && (
+          isNaNNoData ? Number.isNaN(z5) : z5 === noDataValue
+        );
+        if (isNoData) {
           out[r * OUT + c] = NaN;
           continue;
         }
@@ -167,6 +175,7 @@ export class KernelGenerator {
     
     // Hoist division out of loop: multiplication is ~2-3x faster than division
     const cellSizeFactor = 1 / (8 * cellSize);
+    const isNaNNoData = noDataValue !== undefined && Number.isNaN(noDataValue);
 
     // Setup 3 light sources: NW (Main), W (Fill), N (Fill)
     const lights = [
@@ -188,7 +197,12 @@ export class KernelGenerator {
     for (let r = 0; r < OUT; r++) {
       for (let c = 0; c < OUT; c++) {
         const base = r * IN + c;
-        if (noDataValue !== undefined && src[base + IN + 1] === noDataValue) {
+        const z5 = src[base + IN + 1];
+        
+        const isNoData = noDataValue !== undefined && (
+          isNaNNoData ? Number.isNaN(z5) : z5 === noDataValue
+        );
+        if (isNoData) {
           out[r * OUT + c] = NaN;
           continue;
         }
