@@ -24,6 +24,14 @@ These options select which band of the GeoTIFF to use. Shared by both Bitmap and
 | **`useChannelIndex`** | `number` \| `null` | `null` | **Optional**. 0-based index of the channel to visualize (e.g. `0` for the first channel). Alternative to `useChannel`. |
 | **`format`** | `string` \| `undefined` | `undefined` | **Optional**. Explicit data type hint: `'uint8'`, `'uint16'`, `'uint32'`, `'int8'`, `'int16'`, `'int32'`, `'float32'`, `'float64'`. Auto-detected from the GeoTIFF when omitted. |
 
+## COG Fetching Options
+
+These options control how raw bytes are fetched from the remote COG file. **All parameters are optional.**
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **`blockSize`** | `number` | `65536` | Block size in bytes for the internal HTTP range-request cache. The COG source is wrapped in a `BlockedSource` that fetches and caches data in fixed-size blocks. Larger values reduce the number of HTTP requests at the cost of fetching more data per request. Set to `0` to disable block caching entirely (not recommended for standard COG servers). The default of `65536` (64 KB) matches the geotiff.js internal default. |
+
 ## Bitmap Specific Options
 
 These options apply to `CogBitmapLayer` (via `cogBitmapOptions`) and to `CogTerrainLayer` (via `terrainOptions`). When passed in `terrainOptions`, a texture is automatically generated from the elevation data and applied to the 3D mesh — no separate `CogBitmapLayer` needed. **All parameters are optional.**

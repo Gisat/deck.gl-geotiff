@@ -193,12 +193,21 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   async initializeState(context: any) {
     super.initializeState(context);
 
+    const terrainCogTiles = this.props.cogTiles || new CogTiles(this.props.terrainOptions);
     this.setState({
-      terrainCogTiles: this.props.cogTiles || new CogTiles(this.props.terrainOptions),
+      terrainCogTiles,
       initialized: false,
     });
 
-    await (this as any).init(this.terrainUrl);
+    // Only initialize if not already done (e.g., provided cogTiles instance may be pre-initialized)
+    if (!terrainCogTiles.cog) {
+      await this.init();
+    } else {
+      // CogTiles already initialized; just extract zoom range and mark ready
+      const zoomRange = terrainCogTiles.getZoomRange();
+      const [minZoom, maxZoom] = zoomRange;
+      this.setState({ initialized: true, minZoom, maxZoom });
+    }
   }
 
   async init() {

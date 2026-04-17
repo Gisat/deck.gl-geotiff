@@ -103,15 +103,29 @@ function CogTerrainKernelExample() {
   const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_NEPAL_DEM;
   const [viewState, setViewState] = useState<any>(null);
   const [mode, setMode] = useState<KernelMode>('elevation');
+  // Map of CogTiles instances, one per mode, to enable caching and reuse
+  const [cogTilesCache] = useState(
+    new Map<KernelMode, CogTiles>([
+      ['elevation', new CogTiles(buildTerrainOptions('elevation'))],
+      ['slope', new CogTiles(buildTerrainOptions('slope'))],
+      ['hillshade', new CogTiles(buildTerrainOptions('hillshade'))],
+    ])
+  );
   // cogState pairs CogTiles with the mode it was initialized for.
   // null while reinitializing — prevents layers from rendering with wrong CogTiles.
   const [cogState, setCogState] = useState<{ cog: CogTiles; mode: KernelMode } | null>(null);
 
-  // Initial load: set viewState and first cogTiles
+  // Initial load: set viewState and initialize all CogTiles instances
   useEffect(() => {
     const init = async () => {
-      const cog = new CogTiles(buildTerrainOptions(mode));
-      await cog.initializeCog(mainCog.url);
+      // Initialize all three CogTiles instances in parallel
+      await Promise.all(
+        Array.from(cogTilesCache.values()).map((cog) =>
+          cog.initializeCog(mainCog.url)
+        )
+      );
+
+      const cog = cogTilesCache.get(mode)!;
       const bounds = cog.getBoundsAsLatLon();
 
       const viewport = new WebMercatorViewport({
@@ -130,17 +144,13 @@ function CogTerrainKernelExample() {
     init();
   }, []);
 
-  // Reinitialize CogTiles on mode change.
-  // Does NOT clear cogState — old layer stays mounted so deck.gl keeps tile content visible
-  // while new tiles are being computed (kernel calculation).
+  // Switch to the appropriate CogTiles instance on mode change.
+  // Since instances are pre-initialized and cached, switching is instant with no re-fetching.
   useEffect(() => {
-    if (!viewState) return; // Don't reinit before initial load completes
-    const options = buildTerrainOptions(mode);
-    const cog = new CogTiles(options);
-    cog.initializeCog(mainCog.url).then(() => {
-      setCogState({ cog, mode });
-    });
-  }, [mode]);
+    if (!viewState || !cogTilesCache.has(mode)) return;
+    const cog = cogTilesCache.get(mode)!;
+    setCogState({ cog, mode });
+  }, [mode, viewState]);
 
   const layers = useMemo(() => {
     if (!viewState || !cogState) return [];

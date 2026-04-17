@@ -1,4 +1,4 @@
-import { fromUrl, GeoTIFF, GeoTIFFImage } from 'geotiff';
+import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geotiff';
 
 // Bitmap styling
 import GeoImage from './GeoImage';
@@ -32,48 +32,71 @@ class CogTiles {
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
+  // Cache GeoTIFFImage Promises by index to prevent redundant HTTP requests from geotiff 3.0.4+ eager loading
+  // Stores Promises (not resolved values) so concurrent requests share the same getImage() call
+  private imageCache: Map<number, Promise<GeoTIFFImage>> = new Map();
+
+  // Store initialization promise to prevent concurrent duplicate initializations
+  private initializePromise?: Promise<void>;
+
   constructor(options: GeoImageOptions) {
     this.options = { ...CogTilesGeoImageOptionsDefaults, ...options };
   }
 
   async initializeCog(url: string) {
-    if (this.cog) return; // Prevent re-initialization on the same instance
+    // Return existing initialization promise if already in progress (prevents concurrent duplicates)
+    if (this.initializePromise) return this.initializePromise;
+    if (this.cog) return;
 
-    try {
-      this.cog = await fromUrl(url);
-      const image = await this.cog.getImage();
-      const fileDirectory = image.fileDirectory;
+    this.initializePromise = (async () => {
+      try {
+        // fromUrl's type declaration only exposes RemoteSourceOptions, but the implementation
+        // also accepts BlockedSourceOptions (forwarded to makeFetchSource internally).
+        // Explicitly enabling BlockedSource restores the block-level LRU cache that was
+        // accidentally active in geotiff 3.0.3 (due to a null vs undefined bug there).
+        // blockSize defaults to 65536 (64KB) and can be tuned via GeoImageOptions.
+        const blockSize = this.options.blockSize ?? 65536;
+        this.cog = await (fromUrl as any)(url, { blockSize } as BlockedSourceOptions);
+        const imagePromise = this.cog.getImage();
+        this.imageCache.set(0, imagePromise);  // Cache base image (index 0) to avoid re-fetching during getTileFromImage
+        const image = await imagePromise;
+        const fileDirectory = image.fileDirectory;
 
-      this.cogOrigin = image.getOrigin();
+        this.cogOrigin = image.getOrigin();
 
-      this.options.noDataValue ??= await this.getNoDataValue(image);
-      this.options.format ??= await this.getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
+        this.options.noDataValue ??= await this.getNoDataValue(image);
+        this.options.format ??= await this.getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
 
-      this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
-      this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
+        this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
+        this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
 
-      [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
+        [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
 
-      this.tileSize = image.getTileWidth();
+        this.tileSize = image.getTileWidth();
 
-      // 1. Validation: Ensure the image is tiled
-      if (!this.tileSize || !image.getTileHeight()) {
-        throw new Error(
-          'GeoTIFF Error: The provided image is not tiled. '
-          + 'Please use "rio cogeo create --web-optimized" to fix this.',
+        // 1. Validation: Ensure the image is tiled
+        if (!this.tileSize || !image.getTileHeight()) {
+          throw new Error(
+            'GeoTIFF Error: The provided image is not tiled. '
+            + 'Please use "rio cogeo create --web-optimized" to fix this.',
+          );
+        }
+
+        this.zoomRange = this.calculateZoomRange(
+          this.tileSize, image.getResolution()[0], await this.cog.getImageCount()
         );
+
+        this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
+      } catch (error) {
+        // Reset initialization promise on error so retry can be attempted
+        this.initializePromise = undefined;
+        /* eslint-disable no-console */
+        console.error(`[CogTiles] Failed to initialize COG from ${url}:`, error);
+        throw error;
       }
+    })();
 
-      this.zoomRange = this.calculateZoomRange(
-        this.tileSize, image.getResolution()[0], await this.cog.getImageCount()
-      );
-
-      this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
-    } catch (error) {
-      /* eslint-disable no-console */
-      console.error(`[CogTiles] Failed to initialize COG from ${url}:`, error);
-      throw error;
-    }
+    return this.initializePromise;
   }
 
   getZoomRange() {
@@ -199,7 +222,14 @@ class CogTiles {
 
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number) {
     const imageIndex = this.getImageIndexForZoomLevel(zoom);
-    const targetImage = await this.cog.getImage(imageIndex);
+    
+    // Cache Promises to share in-flight requests across concurrent tiles at the same overview
+    let imagePromise = this.imageCache.get(imageIndex);
+    if (!imagePromise) {
+      imagePromise = this.cog.getImage(imageIndex);
+      this.imageCache.set(imageIndex, imagePromise);
+    }
+    const targetImage = await imagePromise;
 
     // --- STEP 1: CALCULATE BOUNDS IN METERS ---
 

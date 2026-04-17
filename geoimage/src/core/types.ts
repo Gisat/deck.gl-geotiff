@@ -13,6 +13,13 @@ export type ClampToTerrainOptions = {
 export type GeoImageOptions = {
     // --- Shared / Data ---
     type: 'image' | 'terrain',
+    /**
+     * Block size in bytes for the internal HTTP range-request cache (BlockedSource).
+     * Increasing this reduces the number of HTTP requests at the cost of fetching more data per request.
+     * Set to 0 to disable block caching entirely (not recommended for most COG servers).
+     * Defaults to 65536 (64 KB) — the geotiff.js BlockedSource default.
+     */
+    blockSize?: number,
     format?: 'uint8' | 'uint16' | 'uint32' |'int8' | 'int16' | 'int32' | 'float32' | 'float64',
     /** 1-based index of the channel to visualize (e.g. 1 for the first channel). */
     useChannel?: number | null, // Note: 0 is not a valid channel; this is enforced at runtime.
@@ -61,6 +68,7 @@ export type GeoImageOptions = {
 export const DefaultGeoImageOptions: GeoImageOptions = {
     // --- Shared / Data ---
     type: 'image',
+    blockSize: 65536,
     format: undefined,
     useChannel: null,
     useChannelIndex: null,
