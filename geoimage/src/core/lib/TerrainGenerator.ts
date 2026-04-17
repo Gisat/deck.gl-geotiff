@@ -212,7 +212,7 @@ export class TerrainGenerator {
       sourceRaster.length === terrain.length
     ) {
       for (let i = 0; i < terrain.length; i++) {
-        // eslint-disable-next-line eqeqeq -- Loose equality handles null/undefined and numeric type coercion
+         
         kernelTerrain[i] = (sourceRaster as any)[i] == noDataValue ? (noDataValue as number) : terrain[i];
       }
     } else {
