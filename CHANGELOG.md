@@ -1,3 +1,13 @@
+## [2.5.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.1...v2.5.0-dev.2) (2026-04-20)
+
+### Features
+
+* implement visualization mode defaults, terrainColor, and LUT caching ([84db70f](https://github.com/Gisat/deck.gl-geotiff/commit/84db70f0701e1e726a36b3595a3be6045ac73f8b))
+
+### Bug Fixes
+
+* Address PR [#141](https://github.com/Gisat/deck.gl-geotiff/issues/141) code review comments ([fd50e3d](https://github.com/Gisat/deck.gl-geotiff/commit/fd50e3d2531d7b0296c73e1408183dbe929f6988))
+
 ## [2.5.0-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.1-dev.1...v2.5.0-dev.1) (2026-04-20)
 
 ### Features
