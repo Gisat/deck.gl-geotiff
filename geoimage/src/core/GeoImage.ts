@@ -52,11 +52,9 @@ export default class GeoImage {
    * Solves three key issues:
    *
    * 1. **Mutual exclusivity**: `DefaultGeoImageOptions` sets `useHeatMap: true`. If a user
-   *    explicitly enables a higher-priority mode (`useSingleColor`, `useColorClasses`,
-   *    `useColorsBasedOnValues`) without also setting `useHeatMap: false`, the default bleeds
-   *    through and activates the float-LUT heatmap path before `calculateSingleColor` is reached.
-   *    Fix: when the user explicitly enables any non-heatmap coloring mode, force `useHeatMap`
-   *    to `false` (unless the user also explicitly set `useHeatMap: true`).
+   *    explicitly enables a coloring mode without explicitly setting `useHeatMap: false`,
+   *    enforce that only the explicitly-enabled modes are active (all others forced to false).
+   *    This prevents the default `useHeatMap: true` from interfering with user-chosen modes.
    *
    * 2. **Bitmap default**: for `type === 'image'` with no user-specified coloring mode,
    *    keep `useHeatMap: true` from defaults. This provides sensible data-driven visualization.
@@ -72,17 +70,20 @@ export default class GeoImage {
     mergedOptions: GeoImageOptions,
     userOptions: GeoImageOptions,
   ): GeoImageOptions {
-    const coloringModes = ['useHeatMap', 'useSingleColor', 'useColorClasses', 'useColorsBasedOnValues'] as const;
+    const coloringModes = ['useSingleColor', 'useColorClasses', 'useColorsBasedOnValues', 'useHeatMap'] as const;
 
     const userExplicitColoringModes = coloringModes.filter(m => userOptions[m] === true);
 
     const resolved = { ...mergedOptions };
 
     if (userExplicitColoringModes.length > 0) {
-      // Enforce mutual exclusivity: only the modes the user explicitly enabled stay active.
-      // This prevents the default useHeatMap from overriding an explicitly chosen mode.
+      // Enforce mutual exclusivity: disable all coloring modes, then enable only those
+      // explicitly set by the user. This prevents the default useHeatMap from interfering.
       for (const mode of coloringModes) {
-        resolved[mode] = userOptions[mode] === true;
+        resolved[mode] = false;
+      }
+      for (const mode of userExplicitColoringModes) {
+        resolved[mode] = true;
       }
     } else if (mergedOptions.type === 'terrain') {
       // Terrain with no explicit coloring mode.

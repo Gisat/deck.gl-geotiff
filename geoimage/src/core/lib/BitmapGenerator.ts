@@ -11,14 +11,14 @@ export class BitmapGenerator {
 
   /**
    * Cache for 8-bit (256-entry) color LUTs.
-   * Shared across all tiles of the same COG when options are fixed (i.e. !useAutoRange).
+   * Shared process-wide across all tiles and datasets when options are fixed (i.e. !useAutoRange).
    * Key: serialised coloring options, Value: pre-computed 256×RGBA LUT
    */
   private static _8bitLUTCache: Map<string, Uint8ClampedArray> = new Map();
 
   /**
    * Cache for float/16-bit (1024-entry) heatmap LUTs.
-   * Shared across all tiles when !useAutoRange.
+   * Shared process-wide across all tiles and datasets when !useAutoRange.
    * Key: serialised coloring options + range, Value: pre-computed 1024×RGBA LUT
    */
   private static _floatLUTCache: Map<string, Uint8ClampedArray> = new Map();
