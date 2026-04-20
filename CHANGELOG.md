@@ -1,3 +1,26 @@
+## [2.5.0-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.1-dev.1...v2.5.0-dev.1) (2026-04-20)
+
+### Features
+
+* Add disableLighting support to GeoImageOptions and CogTerrainLayer ([04ba032](https://github.com/Gisat/deck.gl-geotiff/commit/04ba032be7ace89823ffe85e8b7999e818eb4095))
+* Add multi-mode terrain glaze example with interactive mode switching ([4711efd](https://github.com/Gisat/deck.gl-geotiff/commit/4711efdafa5fbbbef378dc635b9f351d09556066))
+* Add Swiss relief demo & update documentation ([93febef](https://github.com/Gisat/deck.gl-geotiff/commit/93febefe861969a19175e547fff7624b86c9e8a1))
+* Add Swiss relief types and multi-hillshade kernel ([297c0a8](https://github.com/Gisat/deck.gl-geotiff/commit/297c0a85fbd6019987ea29d92c4f374b9a66c512))
+* Implement Swiss relief compositing in TerrainGenerator & BitmapGenerator ([a880677](https://github.com/Gisat/deck.gl-geotiff/commit/a8806772f171f89ed76c5df025cb8af5793d1853))
+
+### Bug Fixes
+
+* Add graceful error handling to CogBitmapLayer tile fetching ([e10cc5b](https://github.com/Gisat/deck.gl-geotiff/commit/e10cc5be93eb1be7332b49dada8d33c0a414a962))
+* Address PR [#140](https://github.com/Gisat/deck.gl-geotiff/issues/140) code review comments ([b7918bf](https://github.com/Gisat/deck.gl-geotiff/commit/b7918bf6c57d5c31f61b6cf2141b34ca85916188)), closes [#98](https://github.com/Gisat/deck.gl-geotiff/issues/98)
+* Apply proper null-coalescing operators in BitmapGenerator.getColorValue ([4e20524](https://github.com/Gisat/deck.gl-geotiff/commit/4e205240e1791fd2b6d9b0fa0b325f15deb45b46))
+* Correct rangeMax calculation in BitmapGenerator.getColorValue ([10ca22e](https://github.com/Gisat/deck.gl-geotiff/commit/10ca22e1bfae1b1f3349cf2931948490ce0b62e1))
+* Resolve RecoilRoot TypeScript type mismatch in example app ([de245d9](https://github.com/Gisat/deck.gl-geotiff/commit/de245d99ebb3937eb0c972d0d3a951889e99e313))
+
+### Performance Improvements
+
+* Cache Swiss relief color LUT in BitmapGenerator ([79a5d11](https://github.com/Gisat/deck.gl-geotiff/commit/79a5d11abde44a2c0724ff359f9c45ea251cd67d))
+* Extract gradient computation helper in KernelGenerator ([e6dee01](https://github.com/Gisat/deck.gl-geotiff/commit/e6dee0128762a72c69c7f865ce477339b5cfec1a))
+
 ## [2.4.1-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0...v2.4.1-dev.1) (2026-04-17)
 
 ### Bug Fixes
