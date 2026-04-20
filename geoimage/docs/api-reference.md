@@ -92,7 +92,7 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 | **`multiplier`** | `number` | `1.0` | Multiplies each data value by this factor (e.g. vertical exaggeration). Used in calculating elevation. |
 | **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
-| **`terrainColor`** | `number[]` \| `ChromaColor` | `[133, 133, 133, 255]` | Base RGBA color of the terrain mesh when no texture or visualization options are set. |
+| **`terrainColor`** | `number[]` \| `ChromaColor` | `[200, 200, 200, 255]` | Base RGBA color of the terrain mesh when no texture or visualization options are set. |
 
 ### Kernel / Derived / Glaze Analysis Options
 

@@ -10,6 +10,25 @@ export class BitmapGenerator {
   private static _swissColorLUTCache: Map<string, Uint8ClampedArray> = new Map();
 
   /**
+   * Cache for 8-bit (256-entry) color LUTs.
+   * Shared process-wide across all tiles and datasets when options are fixed (i.e. !useAutoRange).
+   * Key: serialised coloring options, Value: pre-computed 256×RGBA LUT
+   */
+  private static _8bitLUTCache: Map<string, Uint8ClampedArray> = new Map();
+
+  /**
+   * Cache for float/16-bit (1024-entry) heatmap LUTs.
+   * Shared process-wide across all tiles and datasets when !useAutoRange.
+   * Key: serialised coloring options + range, Value: pre-computed 1024×RGBA LUT
+   */
+  private static _floatLUTCache: Map<string, Uint8ClampedArray> = new Map();
+
+  /** Build a cache key that captures all options affecting LUT colour output. */
+  private static getLUTCacheKey(options: GeoImageOptions, rangeMin: number, rangeMax: number, optAlpha: number): string {
+    return `${rangeMin}_${rangeMax}_${optAlpha}_${JSON.stringify(options.colorScale)}_${options.useSingleColor}_${JSON.stringify(options.color)}_${options.useColorClasses}_${JSON.stringify(options.colorClasses)}_${options.useColorsBasedOnValues}_${JSON.stringify(options.colorsBasedOnValues)}_${options.useHeatMap}_${options.clipLow ?? ''}_${options.clipHigh ?? ''}_${JSON.stringify(options.clippedColor)}_${JSON.stringify(options.nullColor)}_${JSON.stringify(options.unidentifiedColor)}`;
+  }
+
+  /**
    * Main entry point: Generates an ImageBitmap from raw raster data.
    */
   static async generate(
@@ -218,20 +237,28 @@ export class BitmapGenerator {
 
     // 2. 8-BIT COMPREHENSIVE LUT
 
-    // Single-band 8-bit (grayscale or indexed): use LUT for fast mapping
+    // Single-band 8-bit (grayscale or indexed): use LUT for fast mapping.
+    // The LUT covers all 256 possible values and is fixed for a given set of coloring options,
+    // so cache it across tiles (skip cache only when useAutoRange recomputes the range per tile).
     if (is8Bit && !options.useDataForOpacity) {
-      
-      const lut = new Uint8ClampedArray(256 * 4);
-      for (let i = 0; i < 256; i++) {
-        if (
-          (options.clipLow != null && i <= options.clipLow) ||
-          (options.clipHigh != null && i >= options.clipHigh)
-        ) {
-          lut.set(options.clippedColor as number[], i * 4);
-        } else {
-          lut.set(this.calculateSingleColor(i, colorScale, options, optAlpha), i * 4);
+      const cacheKey = !options.useAutoRange ? this.getLUTCacheKey(options, rangeMin, rangeMax, optAlpha) : null;
+      let lut = cacheKey ? (this._8bitLUTCache.get(cacheKey) ?? null) : null;
+
+      if (!lut) {
+        lut = new Uint8ClampedArray(256 * 4);
+        for (let i = 0; i < 256; i++) {
+          if (
+            (options.clipLow != null && i <= options.clipLow) ||
+            (options.clipHigh != null && i >= options.clipHigh)
+          ) {
+            lut.set(options.clippedColor as number[], i * 4);
+          } else {
+            lut.set(this.calculateSingleColor(i, colorScale, options, optAlpha), i * 4);
+          }
         }
+        if (cacheKey) this._8bitLUTCache.set(cacheKey, lut);
       }
+
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
         const lutIdx = primaryBuffer[sampleIndex] * 4;
         colorsArray[i] = lut[lutIdx];
@@ -243,26 +270,37 @@ export class BitmapGenerator {
     }
 
     // 3. FLOAT / 16-BIT LUT (HEATMAP ONLY)
-    if (isFloatOrWide && options.useHeatMap && !options.useDataForOpacity) {
+    // Guard: only activate when heatmap is the highest-priority active mode.
+    // If a more specific mode (useSingleColor, useColorClasses, useColorsBasedOnValues) is set,
+    // fall through to the general loop so calculateSingleColor can honour the priority chain.
+    if (isFloatOrWide && options.useHeatMap && !options.useSingleColor && !options.useColorClasses && !options.useColorsBasedOnValues && !options.useDataForOpacity) {
       
       const LUT_SIZE = 1024;
-      const lut = new Uint8ClampedArray(LUT_SIZE * 4);
       const rangeSpan = (rangeMax - rangeMin) || 1;
-      for (let i = 0; i < LUT_SIZE; i++) {
-        const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
-        if (
-          (options.clipLow != null && domainVal <= options.clipLow) ||
-          (options.clipHigh != null && domainVal >= options.clipHigh)
-        ) {
-          lut.set(options.clippedColor as number[], i * 4);
-        } else {
-          const rgb = colorScale(domainVal).rgb();
-          lut[i * 4] = rgb[0];
-          lut[i * 4 + 1] = rgb[1];
-          lut[i * 4 + 2] = rgb[2];
-          lut[i * 4 + 3] = optAlpha;
+
+      const cacheKey = !options.useAutoRange ? this.getLUTCacheKey(options, rangeMin, rangeMax, optAlpha) : null;
+      let lut = cacheKey ? (this._floatLUTCache.get(cacheKey) ?? null) : null;
+
+      if (!lut) {
+        lut = new Uint8ClampedArray(LUT_SIZE * 4);
+        for (let i = 0; i < LUT_SIZE; i++) {
+          const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
+          if (
+            (options.clipLow != null && domainVal <= options.clipLow) ||
+            (options.clipHigh != null && domainVal >= options.clipHigh)
+          ) {
+            lut.set(options.clippedColor as number[], i * 4);
+          } else {
+            const rgb = colorScale(domainVal).rgb();
+            lut[i * 4] = rgb[0];
+            lut[i * 4 + 1] = rgb[1];
+            lut[i * 4 + 2] = rgb[2];
+            lut[i * 4 + 3] = optAlpha;
+          }
         }
+        if (cacheKey) this._floatLUTCache.set(cacheKey, lut);
       }
+
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
         const val = primaryBuffer[sampleIndex];
         if (this.isInvalid(val, options)) {
