@@ -86,11 +86,18 @@ Used for categorical data (land cover, classification).
 
 These options apply specifically to `CogTerrainLayer` or when generating heightmaps. **All parameters are optional.**
 
+> **`multiplier` vs. `verticalExaggeration`:** These are two separate concerns.
+> - **`multiplier`** is for unit conversion (e.g. cm → m) and affects how Martini/Delatin compare the error threshold against the terrain mesh.
+> - **`verticalExaggeration`** is for visual appearance only and stretches the final mesh vertically without changing the error tolerance or mesh density.
+> 
+> Example: If your data is in centimetres, set `multiplier: 0.01` to convert to metres. To make the terrain look 3× taller for visualization, set `verticalExaggeration: 3.0`. These changes are independent — changing `verticalExaggeration` will never cause over-tessellation.
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`tesselator`** | `'martini'` \| `'delatin'` | `'martini'` | The algorithm used for terrain mesh generation. 'Martini' is generally faster, 'Delatin' may produce higher quality meshes. |
-| **`multiplier`** | `number` | `1.0` | Multiplies each data value by this factor (e.g. vertical exaggeration). Used in calculating elevation. |
-| **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
+| **`multiplier`** | `number` | `1.0` | **Unit conversion only.** Multiplies each raw data value before Martini/Delatin tessellation. Use this to convert raw values to metres (e.g. `0.2` to convert cm to m). `meshMaxError` is always compared against post-`multiplier` values, so this parameter does not affect mesh density. |
+| **`verticalExaggeration`** | `number` | `1.0` | **Visual exaggeration only.** Scales vertex z positions after mesh generation, making terrain appear taller. Unlike `multiplier`, this does **not** affect `meshMaxError` — the error threshold is always evaluated against real-world (post-`multiplier`) elevation values. The skirt height is automatically scaled by this factor. |
+| **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. Automatically scaled by `verticalExaggeration`. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
 | **`terrainColor`** | `number[]` \| `ChromaColor` | `[200, 200, 200, 255]` | Base RGBA color of the terrain mesh when no texture or visualization options are set. |
 
@@ -139,7 +146,7 @@ When a tile is loaded, both generators bundle the raw raster data alongside the 
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `map` | `ImageBitmap \| MeshAttributes` | The visual artifact sent to the GPU. |
-| `raw` | `TypedArray` | The original raster data, kept on the CPU. For terrain this is elevation in metres. |
+| `raw` | `TypedArray` | The original raster data after `multiplier` scaling (used by Martini/Delatin). For terrain this is elevation in metres (if `multiplier: 1.0`). **Note:** Does not include `verticalExaggeration` — the z values in the mesh vertices are exaggerated, but `raw` contains only the base elevation values. |
 | `width` | `number` | Tile width in pixels. |
 | `height` | `number` | Tile height in pixels. |
 | `texture` | `ImageBitmap \| undefined` | *(Terrain only)* Generated texture bitmap from elevation data. Present when at least one visualization option is active in `terrainOptions` (`useHeatMap`, `colorScale`, `useSingleColor`, `useColorsBasedOnValues`, or `useColorClasses`). `undefined` when no visualization options are set. |

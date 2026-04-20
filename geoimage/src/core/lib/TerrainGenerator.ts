@@ -27,7 +27,7 @@ export class TerrainGenerator {
     const meshHeight = isKernel ? 257 : height;
 
     // 2. Tesselate (Generate Mesh)
-    const { terrainSkirtHeight } = options;
+    const { terrainSkirtHeight, verticalExaggeration = 1.0 } = options;
 
     let mesh;
     switch (options.tesselator) {
@@ -46,15 +46,16 @@ export class TerrainGenerator {
 
     const { vertices } = mesh;
     let { triangles } = mesh;
-    let attributes = this.getMeshAttributes(vertices, meshTerrain, meshWidth, meshHeight, input.bounds);
+    let attributes = this.getMeshAttributes(vertices, meshTerrain, meshWidth, meshHeight, input.bounds, verticalExaggeration);
     // Compute bounding box before adding skirt so that z values are not skewed
     const boundingBox = getMeshBoundingBox(attributes);
 
     if (terrainSkirtHeight) {
+      const scaledSkirtHeight = terrainSkirtHeight * verticalExaggeration;
       const { attributes: newAttributes, triangles: newTriangles } = addSkirt(
         attributes,
         triangles,
-        terrainSkirtHeight,
+        scaledSkirtHeight,
       );
       attributes = newAttributes;
       triangles = newTriangles;
@@ -340,10 +341,11 @@ export class TerrainGenerator {
     width: number,
     height: number,
     bounds: Bounds | number[],
+    verticalExaggeration: number = 1.0,
   ) {
     const gridSize = width === 257 ? 257 : width + 1;
     const numOfVerticies = vertices.length / 2;
-    // vec3. x, y in pixels, z in meters
+    // vec3. x, y in pixels, z in meters (scaled by verticalExaggeration)
     const positions = new Float32Array(numOfVerticies * 3);
     // vec2. 1 to 1 relationship with position. represents the uv on the texture image. 0,0 to 1,1.
     const texCoords = new Float32Array(numOfVerticies * 2);
@@ -364,7 +366,7 @@ export class TerrainGenerator {
 
       positions[3 * i] = x * xScale + minX;
       positions[3 * i + 1] = -y * yScale + maxY;
-      positions[3 * i + 2] = terrain[pixelIdx];
+      positions[3 * i + 2] = terrain[pixelIdx] * verticalExaggeration;
 
       texCoords[2 * i] = x / effectiveWidth;
       texCoords[2 * i + 1] = y / effectiveHeight;
