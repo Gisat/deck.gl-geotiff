@@ -105,7 +105,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     // --- Mesh generation (terrain only) ---
     tesselator: 'martini',
     terrainColor: [200, 200, 200, 255],
-    terrainSkirtHeight: 100,
+    terrainSkirtHeight: 1,
     // Default fallback for invalid/nodata elevations. Should be configured based on the dataset's actual range.
     terrainMinValue: 0,
 

@@ -88,26 +88,26 @@ export function addSkirt(attributes: any, triangles: any, skirtHeight: number, o
  * @returns {number[][]} - outside edges data
  */
 function getOutsideEdgesFromTriangles(triangles: any): number[][] {
-  const edges: number[][] = [];
+  const edgeMap = new Map<string, number[]>();
+
   for (let i = 0; i < triangles.length; i += 3) {
-    edges.push([triangles[i], triangles[i + 1]]);
-    edges.push([triangles[i + 1], triangles[i + 2]]);
-    edges.push([triangles[i + 2], triangles[i]]);
-  }
+    const edges = [
+      [triangles[i], triangles[i + 1]],
+      [triangles[i + 1], triangles[i + 2]],
+      [triangles[i + 2], triangles[i]],
+    ];
 
-  edges.sort((a, b) => Math.min(...a) - Math.min(...b) || Math.max(...a) - Math.max(...b));
-
-  const outsideEdges: number[][] = [];
-  let index = 0;
-  while (index < edges.length) {
-    if (edges[index][0] === edges[index + 1]?.[1] && edges[index][1] === edges[index + 1]?.[0]) {
-      index += 2;
-    } else {
-      outsideEdges.push(edges[index]);
-      index++;
+    for (const edge of edges) {
+      const key = `${Math.min(edge[0], edge[1])}_${Math.max(edge[0], edge[1])}`;
+      if (edgeMap.has(key)) {
+        edgeMap.delete(key);
+      } else {
+        edgeMap.set(key, edge);
+      }
     }
   }
-  return outsideEdges;
+
+  return Array.from(edgeMap.values());
 }
 
 /**

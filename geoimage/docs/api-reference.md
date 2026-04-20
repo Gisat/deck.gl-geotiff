@@ -92,12 +92,14 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 > 
 > Example: If your data is in centimetres, set `multiplier: 0.01` to convert to metres. To make the terrain look 3× taller for visualization, set `verticalExaggeration: 3.0`. These changes are independent — changing `verticalExaggeration` will never cause over-tessellation.
 
+> **Performance and `terrainSkirtHeight`:** The skirt (enabled by default at 1 meter) prevents visible cracks at tile boundaries by adding vertical walls. This requires deduplicating mesh boundary edges during generation, which has a small CPU cost. For typical configurations (meshMaxError: 4.0), this is negligible (~5ms per tile). For very fine meshes or performance-critical applications, you can disable skirts with `terrainSkirtHeight: 0` to save the edge deduplication cost, accepting tile boundary cracks as a trade-off.
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`tesselator`** | `'martini'` \| `'delatin'` | `'martini'` | The algorithm used for terrain mesh generation. 'Martini' is generally faster, 'Delatin' may produce higher quality meshes. |
 | **`multiplier`** | `number` | `1.0` | **Unit conversion only.** Multiplies each raw data value before Martini/Delatin tessellation. Use this to convert raw values to metres (e.g. `0.2` to convert cm to m). `meshMaxError` is always compared against post-`multiplier` values, so this parameter does not affect mesh density. |
 | **`verticalExaggeration`** | `number` | `1.0` | **Visual exaggeration only.** Scales vertex z positions after mesh generation, making terrain appear taller. Unlike `multiplier`, this does **not** affect `meshMaxError` — the error threshold is always evaluated against real-world (post-`multiplier`) elevation values. The skirt height is automatically scaled by this factor. |
-| **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. Automatically scaled by `verticalExaggeration`. |
+| **`terrainSkirtHeight`** | `number` | `1` | Height (in meters) of the "skirt" around tiles to hide cracks at tile boundaries. Automatically scaled by `verticalExaggeration`. Set to `0` to disable. **Performance note:** Adding skirts has a small CPU cost during mesh generation (edge deduplication), roughly proportional to the number of triangles. For typical use cases with the default `meshMaxError: 4.0`, this cost is negligible (~5ms per tile). For very fine meshes (small `meshMaxError`), disabling skirts entirely (`terrainSkirtHeight: 0`) can improve performance if tile boundary cracks are acceptable. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
 | **`terrainColor`** | `number[]` \| `ChromaColor` | `[200, 200, 200, 255]` | Base RGBA color of the terrain mesh when no texture or visualization options are set. |
 
