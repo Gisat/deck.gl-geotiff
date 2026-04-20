@@ -86,7 +86,9 @@ export default class GeoImage {
     input: string | {
         width: number,
         height: number,
-        rasters: any[] },
+        rasters: any[],
+        bounds?: Bounds,
+        cellSizeMeters?: number },
     options: GeoImageOptions,
   ): Promise<TileResult> {
     let rasters = [];

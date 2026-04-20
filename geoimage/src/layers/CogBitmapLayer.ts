@@ -215,19 +215,23 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
   }
 
   async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
-    // TODO - pass signal to getTile
-    // abort request if signal is aborted
-    const tileData = await this.state.bitmapCogTiles.getTile(
-      tile.index.x,
-      tile.index.y,
-      tile.index.z,
-      // bounds,
-      // this.props.meshMaxError,
-    );
-    if (tileData && !this.props.pickable) {
-      tileData.raw = null;
+    try {
+      // TODO - pass signal to getTile
+      // abort request if signal is aborted
+      const tileData = await this.state.bitmapCogTiles.getTile(
+        tile.index.x,
+        tile.index.y,
+        tile.index.z,
+      );
+      if (tileData && !this.props.pickable) {
+        tileData.raw = null;
+      }
+      return tileData;
+    } catch (error) {
+      // Log the error and rethrow so TileLayer can surface the failure via onTileError
+      log.warn(`Failed to load bitmap tile at ${tile.index.z}/${tile.index.x}/${tile.index.y}:`, error)();
+      throw error;
     }
-    return tileData;
   }
 
   renderSubLayers(

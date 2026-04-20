@@ -3,6 +3,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geoti
 // Bitmap styling
 import GeoImage from './GeoImage';
 import { GeoImageOptions, TileResult } from './types';
+import { ReliefCompositor } from './lib/ReliefCompositor';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -372,8 +373,11 @@ class CogTiles {
     let requiredSize = this.tileSize; // Default 256 for image/bitmap
 
     if (this.options.type === 'terrain') {
-      const isKernel = this.options.useSlope || this.options.useHillshade;
+      const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
       requiredSize = this.tileSize + (isKernel ? 2 : 1); // 258 for kernel (3×3 border), 257 for normal stitching
+    } else if (this.options.type === 'image' && this.options.useReliefGlaze) {
+      // Bitmap layer with relief glaze mode needs kernel padding for slope/hillshade computation
+      requiredSize = this.tileSize + 2; // 258 for kernel
     }
 
     const tileData = await this.getTileFromImage(x, y, z, requiredSize);
@@ -384,10 +388,33 @@ class CogTiles {
     const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
     const cellSizeMeters = tileWidthMeters / this.tileSize;
 
+    let rasters = [tileData[0]];
+    let tileWidth = requiredSize;
+    let tileHeight = requiredSize;
+
+    // Relief glaze computation for bitmap layers
+    // Note: For multi-band support (band selection via useChannelIndex), see issue #98
+    if (this.options.type === 'image' && this.options.useReliefGlaze) {
+      const elevation = tileData[0] as Float32Array;
+      
+      // Pass full 258×258 padded elevation directly — KernelGenerator expects IN=258 and outputs 256×256
+      const reliefMask = ReliefCompositor.composeSwissRelief(
+        elevation,
+        this.options,
+        cellSizeMeters,
+        this.tileSize,
+        this.tileSize,
+      );
+      // For glaze-only mode, pass ONLY the 256×256 relief mask
+      rasters = [reliefMask as any];
+      tileWidth = this.tileSize;
+      tileHeight = this.tileSize;
+    }
+
     return this.geo.getMap({
-      rasters: [tileData[0]],
-      width: requiredSize,
-      height: requiredSize,
+      rasters,
+      width: tileWidth,
+      height: tileHeight,
       bounds,
       cellSizeMeters,
     }, this.options, meshMaxError);

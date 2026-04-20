@@ -333,18 +333,33 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   ) {
 	  const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
 
-	  const { color, wireframe, material } = this.props;
+	  const { color, wireframe, terrainOptions } = this.props;
 	  const { data } = props;
 
 	  if (!data) {
       return null;
 	  }
 
-	  // const [mesh, texture] = data;
-	  const [meshResult] = data;
+    const [meshResult] = data;
 	  const tileTexture = (!this.props.disableTexture && meshResult?.texture) ? meshResult.texture : null;
 
+    const isSwiss = terrainOptions?.useSwissRelief;
+    const disableLighting = terrainOptions?.disableLighting;
+    const shouldDisableLighting = isSwiss || disableLighting;
+
+    const lightingProps = shouldDisableLighting ? {
+      material: {
+        ambient: 1.0,
+        diffuse: 0.0,
+        shininess: 0.0,
+        specularColor: [0, 0, 0]
+      }
+    } : {
+      material: this.props.material 
+    };
+      
 	  return new SubLayerClass({ ...props, tileSize: props.tileSize }, {
+      ...lightingProps,
       data: DUMMY_DATA,
       mesh: meshResult?.map,
       texture: tileTexture,
@@ -354,7 +369,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       // getPosition: (d) => [0, 0, 0],
       getColor: tileTexture ? [255, 255, 255] : color,
       wireframe,
-      material,
 	  });
   }
 
@@ -418,13 +432,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
           updateTriggers: {
 			      getTileData: {
               elevationData: urlTemplateToUpdateTrigger(elevationData),
-              // texture: urlTemplateToUpdateTrigger(texture),
               meshMaxError,
               elevationDecoder,
-              // When cogTiles instance is swapped (e.g. mode switch), refetch tiles.
-              // deck.gl keeps old tile content visible until new tiles are ready.
               terrainCogTiles: this.state.terrainCogTiles,
 			      },
+              renderSubLayers: {
+                disableTexture: this.props.disableTexture,
+                terrainOptions: this.props.terrainOptions,
+              },
           },
           onViewportLoad: this.onViewportLoad.bind(this),
           zRange: this.state.zRange || null,

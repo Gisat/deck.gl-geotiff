@@ -19,6 +19,7 @@ This library allows you to efficiently visualize high-resolution bitmap and terr
 - **Customizable Rendering**: Custom color scales, multichannel support, heatmaps, categorical classification, and opacity control.
 - **Terrain Texturing**: Drape a styled visualization (elevation heatmap, external imagery) directly onto the 3D terrain mesh — no separate layer needed.
 - **Kernel Analysis**: Compute slope and hillshade directly from elevation data using 3×3 neighborhood kernels (Horn's method / ESRI algorithm).
+- **Swiss Relief Shading**: Apply hypsometric color blending with hillshade and slope for superior terrain perception. Supports both terrain baking and transparent glaze overlays on satellite imagery.
 - **Raw Value Picking**: Access original raster values (elevation, band values, slope, hillshade) at hover/click locations with no extra network requests.
 
 

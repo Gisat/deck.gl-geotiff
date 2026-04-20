@@ -5,6 +5,7 @@ import { addSkirt } from '../helpers/skirt';
 import { GeoImageOptions, Bounds, TypedArray, TileResult } from '../types';
 import { BitmapGenerator } from './BitmapGenerator';
 import { KernelGenerator } from './KernelGenerator';
+import { ReliefCompositor } from './ReliefCompositor';
 
 export class TerrainGenerator {
   static async generate(
@@ -86,7 +87,36 @@ export class TerrainGenerator {
     };
 
     // 3. Kernel path: compute slope or hillshade, store as rawDerived, generate texture
-    if (isKernel && (options.useSlope || options.useHillshade)) {
+    if (isKernel && options.useSwissRelief) {
+      const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
+      
+      // Build a separate raster for kernel computation that preserves noData samples.
+      const kernelTerrain = this.preserveNoDataForKernel(
+        terrain,
+        input.rasters[0],
+        options.noDataValue
+      );
+
+      // Compose Swiss relief using ReliefCompositor
+      const swissReliefResult = ReliefCompositor.composeSwissRelief(
+        kernelTerrain,
+        options,
+        cellSize,
+        256,
+        256,
+      );
+      tileResult.rawDerived = swissReliefResult;
+
+      if (this.hasVisualizationOptions(options)) {
+        const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
+        const bitmapResult = await BitmapGenerator.generate(
+          { width: 256, height: 256, rasters: [cropped, swissReliefResult] },
+          { ...options, type: 'image' }
+        );
+        tileResult.texture = bitmapResult.map as ImageBitmap;
+      }
+    }
+    else if (isKernel && (options.useSlope || options.useHillshade)) {
       // Use pre-computed geographic cellSize (meters/pixel) from tile indices.
       // Falls back to bounds-derived estimate if not provided.
       const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
@@ -100,25 +130,11 @@ export class TerrainGenerator {
       }
 
       // Build a separate raster for kernel computation that preserves noData samples.
-      const kernelTerrain = new Float32Array(terrain.length);
-      const sourceRaster = input.rasters[0];
-      const noData = options.noDataValue;
-      if (
-        noData !== undefined &&
-        noData !== null &&
-        sourceRaster &&
-        sourceRaster.length === terrain.length
-      ) {
-        for (let i = 0; i < terrain.length; i++) {
-          // If the source raster marks this sample as noData, keep it as noData for the kernel.
-          // Otherwise, use the processed terrain elevation value.
-           
-          kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
-        }
-      } else {
-        // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
-        kernelTerrain.set(terrain);
-      }
+      const kernelTerrain = this.preserveNoDataForKernel(
+        terrain,
+        input.rasters[0],
+        options.noDataValue
+      );
       let kernelOutput: Float32Array;
       if (options.useSlope) {
         kernelOutput = KernelGenerator.calculateSlope(kernelTerrain, cellSize, zFactor, options.noDataValue);
@@ -155,7 +171,6 @@ export class TerrainGenerator {
     return tileResult;
   }
 
-  /** Extracts rows 1–257, cols 1–257 from a 258×258 terrain array → 257×257 for mesh generation. */
   private static extractMeshRaster(terrain258: Float32Array): Float32Array {
     const MESH = 257;
     const IN = 258;
@@ -168,12 +183,49 @@ export class TerrainGenerator {
     return out;
   }
 
-  private static hasVisualizationOptions(options: GeoImageOptions): boolean {    return !!(
-      options.useHeatMap ||
+  private static hasVisualizationOptions(options: GeoImageOptions): boolean {
+    return !!(
       options.useSingleColor ||
+      options.useHeatMap ||
+      options.useSwissRelief ||
       options.useColorsBasedOnValues ||
       options.useColorClasses
     );
+  }
+
+  /**
+   * Preserve noData values in a separate raster for kernel computation.
+   * If the source raster marks a sample as noData, keep it as noData.
+   * Otherwise, use the processed terrain elevation value.
+   */
+  private static preserveNoDataForKernel(
+    terrain: Float32Array,
+    sourceRaster: TypedArray | undefined,
+    noDataValue: number | undefined
+  ): Float32Array {
+    const kernelTerrain = new Float32Array(terrain.length);
+
+    if (
+      noDataValue !== undefined &&
+      noDataValue !== null &&
+      sourceRaster &&
+      sourceRaster.length === terrain.length
+    ) {
+      const preserveNaNNoData = Number.isNaN(noDataValue);
+      for (let i = 0; i < terrain.length; i++) {
+        const sourceValue = (sourceRaster as any)[i];
+        const isNoData = preserveNaNNoData
+          ? Number.isNaN(sourceValue)
+          : sourceValue === noDataValue;
+
+        kernelTerrain[i] = isNoData ? (noDataValue as number) : terrain[i];
+      }
+    } else {
+      // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
+      kernelTerrain.set(terrain);
+    }
+
+    return kernelTerrain;
   }
 
   private static cropRaster(

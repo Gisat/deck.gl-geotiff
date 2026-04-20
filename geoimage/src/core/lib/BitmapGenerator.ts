@@ -4,6 +4,12 @@ import { scale } from './DataUtils';
 
 export class BitmapGenerator {
   /**
+   * Cache for Swiss relief color LUTs to avoid regenerating on every tile.
+   * Key: colorScale config + range, Value: pre-computed RGBA LUT
+   */
+  private static _swissColorLUTCache: Map<string, Uint8ClampedArray> = new Map();
+
+  /**
    * Main entry point: Generates an ImageBitmap from raw raster data.
    */
   static async generate(
@@ -36,10 +42,36 @@ export class BitmapGenerator {
 
     // Derive channel count from data if not provided
     // If planar support is added, this logic must be updated to handle both layouts correctly.
-const numAvailableChannels = optionsLocal.numOfChannels ?? 
+    const numAvailableChannels = optionsLocal.numOfChannels ?? 
       (rasters.length === 1 ? rasters[0].length / (width * height) : rasters.length);
 
-    if (optionsLocal.useChannelIndex == null) {
+    if (optionsLocal.useReliefGlaze) {
+      if (rasters.length >= 1) {
+        // Relief glaze: pure black/white overlay with variable alpha
+        imageData.data.set(
+          this.getReliefGlazeRGBA(rasters, optionsLocal, size)
+        );
+      } else {
+        // Missing relief mask: fill with transparent
+        const transparentData = new Uint8ClampedArray(size);
+        transparentData.fill(0);
+        imageData.data.set(transparentData);
+      }
+    }
+    else if (optionsLocal.useSwissRelief) {
+      if (rasters.length === 2) {
+        // Normal Swiss relief rendering: hypsometric color × relief mask
+        imageData.data.set(
+          this.getColorValue(rasters, optionsLocal, size)
+        );
+      } else { // Missing mask: fill with null color (fully transparent or a fallback)
+        const defaultColorData = this.getDefaultColor(size, optionsLocal.nullColor);
+        defaultColorData.forEach((value, index) => {
+          imageData.data[index] = value;
+        });
+      }
+    }  
+    else if (optionsLocal.useChannelIndex == null) {
       if (isInterleaved) {
         const ratio = rasters[0].length / (width * height);
         if (ratio === 1) {
@@ -101,20 +133,90 @@ const numAvailableChannels = optionsLocal.numOfChannels ??
     return { map, raw: rasters[0], width, height };
   }
 
-  static getColorValue(dataArray: TypedArray | any[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
-     // Normalize all colorScale entries for chroma.js compatibility
-const colorScale = chroma.scale(
-  options.colorScale?.map(c => Array.isArray(c) ? chroma(c as [number, number, number]) : c)
-).domain(options.colorScaleValueRange ?? [0, 255]);
-     const colorsArray = new Uint8ClampedArray(arrayLength);
+  static getColorValue(dataArray: TypedArray | TypedArray[], options: GeoImageOptions, arrayLength: number, samplesPerPixel = 1) {
+    // Normalize all colorScale entries for chroma.js compatibility
+    const colorScale = chroma.scale(
+      options.colorScale?.map(c => Array.isArray(c) ? chroma(c as [number, number, number]) : c)
+    ).domain(options.colorScaleValueRange ?? [0, 255]);
+    const colorsArray = new Uint8ClampedArray(arrayLength);
     const optAlpha = Math.floor((options.alpha ?? 100) * 2.55);
     const rangeMin = options.colorScaleValueRange?.[0] ?? 0;
     const rangeMax = options.colorScaleValueRange?.[1] ?? 255;
 
-    const is8Bit = dataArray instanceof Uint8Array || dataArray instanceof Uint8ClampedArray;
-    const isFloatOrWide = !is8Bit && (dataArray instanceof Float32Array || dataArray instanceof Uint16Array || dataArray instanceof Int16Array);
+    const isMultiRaster = Array.isArray(dataArray);
+    const primaryBuffer = isMultiRaster ? dataArray[0] : dataArray as TypedArray;
 
-    // 1. 8-BIT COMPREHENSIVE LUT
+    const isSwiss = options.useSwissRelief && isMultiRaster && dataArray.length >= 2;
+    const is8Bit = primaryBuffer instanceof Uint8Array || primaryBuffer instanceof Uint8ClampedArray;
+    const isFloatOrWide = !is8Bit && (primaryBuffer instanceof Float32Array || primaryBuffer instanceof Uint16Array || primaryBuffer instanceof Int16Array);
+
+    // 1. SWISS MODE BRANCH
+    if (isSwiss) {
+      const reliefMask = (dataArray as TypedArray[])[1];
+      const rangeSpan = (rangeMax - rangeMin) || 1;
+
+      // Only use LUT optimization for useHeatMap mode; other modes use calculateSingleColor per-pixel
+      let lut: Uint8ClampedArray | null = null;
+      if (options.useHeatMap) {
+        const LUT_SIZE = 1024;
+        
+        // Cache LUT: generate key from colorScale config + range + alpha
+        const cacheKey = `${rangeMin}_${rangeMax}_${optAlpha}_${JSON.stringify(options.colorScale)}`;
+        lut = this._swissColorLUTCache.get(cacheKey) || null;
+        
+        if (!lut) {
+          // LUT not cached, generate it
+          lut = new Uint8ClampedArray(LUT_SIZE * 4);
+          for (let i = 0; i < LUT_SIZE; i++) {
+            const domainVal = rangeMin + (i / (LUT_SIZE - 1)) * rangeSpan;
+            const rgb = colorScale(domainVal).rgb();
+            lut[i * 4] = rgb[0];
+            lut[i * 4 + 1] = rgb[1];
+            lut[i * 4 + 2] = rgb[2];
+            lut[i * 4 + 3] = optAlpha;
+          }
+          this._swissColorLUTCache.set(cacheKey, lut);
+        }
+      }
+
+      for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
+        const elevationVal = primaryBuffer[sampleIndex];
+        
+        // NaN-aware noData check for Swiss relief
+        const isNoData = options.noDataValue !== undefined && (
+          Number.isNaN(options.noDataValue)
+            ? Number.isNaN(elevationVal)
+            : elevationVal === options.noDataValue
+        );
+        if (Number.isNaN(elevationVal) || isNoData) {
+          colorsArray.set(options.nullColor as number[], i);
+          continue;
+        }
+
+        let baseColor: number[];
+        if (lut) {
+          // LUT-optimized path for useHeatMap
+          const t = (elevationVal - rangeMin) / rangeSpan;
+          const lutIdx = Math.min(1023, Math.max(0, Math.floor(t * 1023))) * 4;
+          baseColor = [lut[lutIdx], lut[lutIdx + 1], lut[lutIdx + 2], lut[lutIdx + 3]];
+        } else {
+          // Per-pixel calculation for useSingleColor, useColorClasses, useColorsBasedOnValues
+          baseColor = this.calculateSingleColor(elevationVal, colorScale, options, optAlpha);
+        }
+        
+        // Apply relief mask as multiplier (Ambient Fill approach)
+        const maskVal = reliefMask[sampleIndex];
+        const multiplier = 0.4 + 0.6 * (maskVal / 255);
+
+        colorsArray[i]     = Math.floor(baseColor[0] * multiplier);
+        colorsArray[i + 1] = Math.floor(baseColor[1] * multiplier);
+        colorsArray[i + 2] = Math.floor(baseColor[2] * multiplier);
+        colorsArray[i + 3] = baseColor[3];
+      }
+      return colorsArray;
+    }
+
+    // 2. 8-BIT COMPREHENSIVE LUT
 
     // Single-band 8-bit (grayscale or indexed): use LUT for fast mapping
     if (is8Bit && !options.useDataForOpacity) {
@@ -131,7 +233,7 @@ const colorScale = chroma.scale(
         }
       }
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
-        const lutIdx = dataArray[sampleIndex] * 4;
+        const lutIdx = primaryBuffer[sampleIndex] * 4;
         colorsArray[i] = lut[lutIdx];
         colorsArray[i+1] = lut[lutIdx+1];
         colorsArray[i+2] = lut[lutIdx+2];
@@ -140,7 +242,7 @@ const colorScale = chroma.scale(
       return colorsArray;
     }
 
-    // 2. FLOAT / 16-BIT LUT (HEATMAP ONLY)
+    // 3. FLOAT / 16-BIT LUT (HEATMAP ONLY)
     if (isFloatOrWide && options.useHeatMap && !options.useDataForOpacity) {
       
       const LUT_SIZE = 1024;
@@ -162,7 +264,7 @@ const colorScale = chroma.scale(
         }
       }
       for (let i = 0, sampleIndex = (options.useChannelIndex ?? 0); i < arrayLength; i += 4, sampleIndex += samplesPerPixel) {
-        const val = dataArray[sampleIndex];
+        const val = primaryBuffer[sampleIndex];
         if (this.isInvalid(val, options)) {
           colorsArray.set(this.getInvalidColor(val, options), i);
         } else {
@@ -177,11 +279,11 @@ const colorScale = chroma.scale(
       return colorsArray;
     }
 
-    // 3. FALLBACK LOOP (Categorical Float, Opacity, or Single Color)
+    // 4. FALLBACK LOOP (Categorical Float, Opacity, or Single Color)
     
     let sampleIndex = options.useChannelIndex ?? 0;
     for (let i = 0; i < arrayLength; i += 4) {
-      const val = dataArray[sampleIndex];
+      const val = primaryBuffer[sampleIndex];
       let color;
       if ((options.clipLow != null && val <= options.clipLow) || (options.clipHigh != null && val >= options.clipHigh)) {
         color = options.clippedColor as number[];
@@ -195,6 +297,60 @@ const colorScale = chroma.scale(
       sampleIndex += samplesPerPixel;
     }
     return colorsArray;
+  }
+
+  /**
+   * Generate relief glaze RGBA output.
+   * Maps relief mask (0-255) to pure black/white glaze with variable alpha.
+   * - reliefValue < 128: Pure black (0,0,0) darkens shadows
+   * - reliefValue > 128: Pure white (255,255,255) brightens highlights
+   * - reliefValue == 128: Transparent (no effect)
+   * 
+   * High-performance implementation using pre-computed alpha LUT to avoid 65k Math.pow calls.
+   *
+   * @param rasters Array of [relief mask raster] (single raster expected)
+   * @param options GeoImageOptions (alpha used for opacity scaling)
+   * @param arrayLength Total RGBA array length
+   * @returns Uint8ClampedArray of RGBA values
+   */
+  static getReliefGlazeRGBA(
+    rasters: TypedArray[],
+    options: GeoImageOptions,
+    arrayLength: number,
+  ): Uint8ClampedArray {
+    const reliefMask = rasters[0];
+    const opacityFactor = (options.maxGlazeAlpha ?? 128) / 255;
+    
+    // Pre-compute alpha lookup table (256 entries, one per relief value 0-255)
+    const alphaLookup = new Uint8Array(256);
+    for (let v = 0; v < 256; v++) {
+      if (v === 0) {
+        alphaLookup[v] = 0; // noData: fully transparent
+      } else {
+        const alphaDist = Math.abs(v - 128) / 128;
+        const bias = v < 128 ? 0.6 : 0.8;
+        alphaLookup[v] = Math.floor(Math.pow(alphaDist, bias) * 255 * opacityFactor);
+      }
+    }
+    
+    const glazeArray = new Uint8ClampedArray(arrayLength);
+
+    let maskIndex = 0;
+    for (let i = 0; i < arrayLength; i += 4) {
+      const reliefValue = reliefMask[maskIndex];
+      
+      // Pure black for shadows, pure white for highlights (no muddy grays)
+      const glaze = reliefValue < 128 ? 0 : 255;
+      const alpha = alphaLookup[reliefValue];
+
+      glazeArray[i] = glaze;        // R
+      glazeArray[i + 1] = glaze;    // G
+      glazeArray[i + 2] = glaze;    // B
+      glazeArray[i + 3] = alpha;    // A
+
+      maskIndex++;
+    }
+    return glazeArray;
   }
 
   private static calculateSingleColor(val: number, colorScale: any, options: GeoImageOptions, alpha: number): number[] {
