@@ -28,8 +28,12 @@ export type GeoImageOptions = {
     noDataValue?: number,
     /**
      * Scalar applied to raw raster values before Martini/Delatin tessellation.
-     * Use this for **unit conversion** only (e.g. convert raw values to metres).
-     * `meshMaxError` is always compared against post-`multiplier` values.
+     * Use this to convert or normalize source elevation values into the units that
+     * should be seen by the tessellator (e.g. convert raw values to metres).
+     * Because the scaled values are used during tessellation, changing `multiplier`
+     * also changes the effective mesh density unless `meshMaxError` is adjusted.
+     * `meshMaxError` must be specified in the same units as the post-`multiplier`
+     * elevation values.
      * Default: 1.0
      */
     multiplier?: number,

@@ -52,13 +52,16 @@ export class TerrainGenerator {
 
     if (terrainSkirtHeight) {
       const scaledSkirtHeight = terrainSkirtHeight * verticalExaggeration;
-      const { attributes: newAttributes, triangles: newTriangles } = addSkirt(
-        attributes,
-        triangles,
-        scaledSkirtHeight,
-      );
-      attributes = newAttributes;
-      triangles = newTriangles;
+      // Skip skirt generation if scaled height is zero (e.g., verticalExaggeration = 0)
+      if (scaledSkirtHeight > 0) {
+        const { attributes: newAttributes, triangles: newTriangles } = addSkirt(
+          attributes,
+          triangles,
+          scaledSkirtHeight,
+        );
+        attributes = newAttributes;
+        triangles = newTriangles;
+      }
     }
 
     const map = {

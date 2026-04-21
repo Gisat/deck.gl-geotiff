@@ -88,17 +88,27 @@ export function addSkirt(attributes: any, triangles: any, skirtHeight: number, o
  * @returns {number[][]} - outside edges data
  */
 function getOutsideEdgesFromTriangles(triangles: any): number[][] {
-  const edgeMap = new Map<string, number[]>();
+  const edgeMap = new Map<number, number[]>();
 
   for (let i = 0; i < triangles.length; i += 3) {
+    const v0 = triangles[i];
+    const v1 = triangles[i + 1];
+    const v2 = triangles[i + 2];
+
+    // Process edges: (v0, v1), (v1, v2), (v2, v0)
+    // Use numeric key: min * large_prime + max to avoid string allocation overhead
     const edges = [
-      [triangles[i], triangles[i + 1]],
-      [triangles[i + 1], triangles[i + 2]],
-      [triangles[i + 2], triangles[i]],
+      [v0, v1],
+      [v1, v2],
+      [v2, v0],
     ];
 
     for (const edge of edges) {
-      const key = `${Math.min(edge[0], edge[1])}_${Math.max(edge[0], edge[1])}`;
+      const min = Math.min(edge[0], edge[1]);
+      const max = Math.max(edge[0], edge[1]);
+      // Use numeric key: min * 65536 + max (assumes vertex indices fit in 16 bits per component)
+      const key = (min << 16) | max;
+
       if (edgeMap.has(key)) {
         edgeMap.delete(key);
       } else {
