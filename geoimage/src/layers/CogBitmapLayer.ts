@@ -219,6 +219,8 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       tile.index.x,
       tile.index.y,
       tile.index.z,
+      undefined,
+      undefined,
       tile.signal,
     ).catch((error: any) => {
       // Suppress AbortError from deck.gl's internal Tile2DHeader.abort()
@@ -233,9 +235,6 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
         return null;
       }
       throw error;
-    }).catch(() => {
-      // Fallback: If any other error slips through, swallow it
-      return null;
     });
 
     const resolvedTileData = await tileData;

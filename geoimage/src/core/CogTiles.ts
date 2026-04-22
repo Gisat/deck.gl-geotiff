@@ -380,7 +380,7 @@ class CogTiles {
     return tileData;
   }
 
-  async getTile(x: number, y: number, z: number, signal?: AbortSignal, bounds?: Bounds, meshMaxError?: number): Promise<TileResult | null> {
+  async getTile(x: number, y: number, z: number, bounds?: Bounds, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
     let requiredSize = this.tileSize; // Default 256 for image/bitmap
 
     if (this.options.type === 'terrain') {

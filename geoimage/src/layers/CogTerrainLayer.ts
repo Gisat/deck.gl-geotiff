@@ -311,9 +311,9 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       tile.index.x,
       tile.index.y,
       tile.index.z,
-      tile.signal,
       bounds,
       this.props.meshMaxError,
+      tile.signal,
     ).catch((error: any) => {
       // Suppress AbortError from deck.gl's internal Tile2DHeader.abort()
       // This is expected when tiles are pruned during viewport changes
@@ -327,9 +327,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         return null;
       }
       throw error;
-    }).catch(() => {
-      // Fallback: If any other error slips through that mentions abort, swallow it
-      return null;
     });
 
     const resolvedTerrain = await terrain;
