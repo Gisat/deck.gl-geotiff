@@ -391,53 +391,49 @@ class CogTiles {
       requiredSize = this.tileSize + 2; // 258 for kernel
     }
 
-    try {
-      const tileData = await this.getTileFromImage(x, y, z, requiredSize, signal);
+    const tileData = await this.getTileFromImage(x, y, z, requiredSize, signal);
 
-      // If tile was cancelled (abort), return null gracefully
-      if (!tileData) {
-        return null;
-      }
-
-      // Compute true ground cell size in meters from tile indices.
-      // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
-      const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
-      const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
-      const cellSizeMeters = tileWidthMeters / this.tileSize;
-
-      let rasters = [tileData[0]];
-      let tileWidth = requiredSize;
-      let tileHeight = requiredSize;
-
-      // Relief glaze computation for bitmap layers
-      // Note: For multi-band support (band selection via useChannelIndex), see issue #98
-      if (this.options.type === 'image' && this.options.useReliefGlaze) {
-        const elevation = tileData[0] as Float32Array;
-        
-        // Pass full 258×258 padded elevation directly — KernelGenerator expects IN=258 and outputs 256×256
-        const reliefMask = ReliefCompositor.composeSwissRelief(
-          elevation,
-          this.options,
-          cellSizeMeters,
-          this.tileSize,
-          this.tileSize,
-        );
-        // For glaze-only mode, pass ONLY the 256×256 relief mask
-        rasters = [reliefMask as any];
-        tileWidth = this.tileSize;
-        tileHeight = this.tileSize;
-      }
-
-      return this.geo.getMap({
-        rasters,
-        width: tileWidth,
-        height: tileHeight,
-        bounds: bounds ?? [0, 0, 0, 0],
-        cellSizeMeters,
-      }, this.options, meshMaxError ?? 4.0);
-    } catch (error) {
-      throw error;
+    // If tile was cancelled (abort), return null gracefully
+    if (!tileData) {
+      return null;
     }
+
+    // Compute true ground cell size in meters from tile indices.
+    // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
+    const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
+    const cellSizeMeters = tileWidthMeters / this.tileSize;
+
+    let rasters = [tileData[0]];
+    let tileWidth = requiredSize;
+    let tileHeight = requiredSize;
+
+    // Relief glaze computation for bitmap layers
+    // Note: For multi-band support (band selection via useChannelIndex), see issue #98
+    if (this.options.type === 'image' && this.options.useReliefGlaze) {
+      const elevation = tileData[0] as Float32Array;
+      
+      // Pass full 258×258 padded elevation directly — KernelGenerator expects IN=258 and outputs 256×256
+      const reliefMask = ReliefCompositor.composeSwissRelief(
+        elevation,
+        this.options,
+        cellSizeMeters,
+        this.tileSize,
+        this.tileSize,
+      );
+      // For glaze-only mode, pass ONLY the 256×256 relief mask
+      rasters = [reliefMask as any];
+      tileWidth = this.tileSize;
+      tileHeight = this.tileSize;
+    }
+
+    return this.geo.getMap({
+      rasters,
+      width: tileWidth,
+      height: tileHeight,
+      bounds: bounds ?? [0, 0, 0, 0],
+      cellSizeMeters,
+    }, this.options, meshMaxError ?? 4.0);
   }
 
   /**
