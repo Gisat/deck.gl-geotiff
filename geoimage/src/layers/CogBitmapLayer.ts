@@ -215,23 +215,34 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
   }
 
   async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
-    try {
-      // TODO - pass signal to getTile
-      // abort request if signal is aborted
-      const tileData = await this.state.bitmapCogTiles.getTile(
-        tile.index.x,
-        tile.index.y,
-        tile.index.z,
-      );
-      if (tileData && !this.props.pickable) {
-        tileData.raw = null;
+    const tileData = this.state.bitmapCogTiles.getTile(
+      tile.index.x,
+      tile.index.y,
+      tile.index.z,
+      tile.signal,
+    ).catch((error: any) => {
+      // Suppress AbortError from deck.gl's internal Tile2DHeader.abort()
+      // This is expected when tiles are pruned during viewport changes
+      // Check both DOMException and name, plus signal aborted state and message patterns
+      const isAbortError = 
+        (error instanceof DOMException && error.name === 'AbortError')
+        || (error?.message?.includes?.('aborted'))
+        || (tile.signal?.aborted);
+      
+      if (isAbortError) {
+        return null;
       }
-      return tileData;
-    } catch (error) {
-      // Log the error and rethrow so TileLayer can surface the failure via onTileError
-      log.warn(`Failed to load bitmap tile at ${tile.index.z}/${tile.index.x}/${tile.index.y}:`, error)();
       throw error;
+    }).catch(() => {
+      // Fallback: If any other error slips through, swallow it
+      return null;
+    });
+
+    const resolvedTileData = await tileData;
+    if (resolvedTileData && !this.props.pickable) {
+      resolvedTileData.raw = null;
     }
+    return resolvedTileData;
   }
 
   renderSubLayers(

@@ -221,16 +221,17 @@ class CogTiles {
     return exactMatchIndex;
   }
 
-  async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number) {
-    const imageIndex = this.getImageIndexForZoomLevel(zoom);
-    
-    // Cache Promises to share in-flight requests across concurrent tiles at the same overview
-    let imagePromise = this.imageCache.get(imageIndex);
-    if (!imagePromise) {
-      imagePromise = this.cog.getImage(imageIndex);
-      this.imageCache.set(imageIndex, imagePromise);
-    }
-    const targetImage = await imagePromise;
+  async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
+    try {
+      const imageIndex = this.getImageIndexForZoomLevel(zoom);
+      
+      // Cache Promises to share in-flight requests across concurrent tiles at the same overview
+      let imagePromise = this.imageCache.get(imageIndex);
+      if (!imagePromise) {
+        imagePromise = this.cog.getImage(imageIndex);
+        this.imageCache.set(imageIndex, imagePromise);
+      }
+      const targetImage = await imagePromise;
 
     // --- STEP 1: CALCULATE BOUNDS IN METERS ---
 
@@ -309,7 +310,7 @@ class CogTiles {
       }
 
       // if the valid window is smaller than the tile size, it gets the image size width and height, thus validRasterData.width must be used as below
-      const validRasterData = await targetImage.readRasters({ window });
+      const validRasterData = await targetImage.readRasters({ window, signal });
 
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
@@ -345,10 +346,20 @@ class CogTiles {
 
     // Case B: Perfect Match (Optimization)
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
-    // console.log("Perfect aligned read");
-    const tileData = await targetImage.readRasters({ window, interleave: true });
-    // console.log(`data that starts at the left top corner of the tile ${tileX}, ${tileY}`);
+    const tileData = await targetImage.readRasters({ window, interleave: true, signal });
     return [tileData];
+    } catch (error) {
+      // Catch abort errors (from signal.abort()) and return gracefully
+      // geotiff.js throws an Error with message "Request was aborted", not a DOMException
+      const isAbortError = (error instanceof DOMException && error.name === 'AbortError') 
+        || (error instanceof Error && error.message === 'Request was aborted');
+      
+      if (isAbortError) {
+        return null; // Signal that this tile is no longer needed
+      }
+      // For other errors (network, parsing, etc.), re-throw
+      throw error;
+    }
   }
 
   /**
@@ -369,7 +380,7 @@ class CogTiles {
     return tileData;
   }
 
-  async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number): Promise<TileResult | null> {
+  async getTile(x: number, y: number, z: number, signal?: AbortSignal, bounds?: Bounds, meshMaxError?: number): Promise<TileResult | null> {
     let requiredSize = this.tileSize; // Default 256 for image/bitmap
 
     if (this.options.type === 'terrain') {
@@ -380,44 +391,53 @@ class CogTiles {
       requiredSize = this.tileSize + 2; // 258 for kernel
     }
 
-    const tileData = await this.getTileFromImage(x, y, z, requiredSize);
+    try {
+      const tileData = await this.getTileFromImage(x, y, z, requiredSize, signal);
 
-    // Compute true ground cell size in meters from tile indices.
-    // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
-    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
-    const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
-    const cellSizeMeters = tileWidthMeters / this.tileSize;
+      // If tile was cancelled (abort), return null gracefully
+      if (!tileData) {
+        return null;
+      }
 
-    let rasters = [tileData[0]];
-    let tileWidth = requiredSize;
-    let tileHeight = requiredSize;
+      // Compute true ground cell size in meters from tile indices.
+      // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
+      const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
+      const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
+      const cellSizeMeters = tileWidthMeters / this.tileSize;
 
-    // Relief glaze computation for bitmap layers
-    // Note: For multi-band support (band selection via useChannelIndex), see issue #98
-    if (this.options.type === 'image' && this.options.useReliefGlaze) {
-      const elevation = tileData[0] as Float32Array;
-      
-      // Pass full 258×258 padded elevation directly — KernelGenerator expects IN=258 and outputs 256×256
-      const reliefMask = ReliefCompositor.composeSwissRelief(
-        elevation,
-        this.options,
+      let rasters = [tileData[0]];
+      let tileWidth = requiredSize;
+      let tileHeight = requiredSize;
+
+      // Relief glaze computation for bitmap layers
+      // Note: For multi-band support (band selection via useChannelIndex), see issue #98
+      if (this.options.type === 'image' && this.options.useReliefGlaze) {
+        const elevation = tileData[0] as Float32Array;
+        
+        // Pass full 258×258 padded elevation directly — KernelGenerator expects IN=258 and outputs 256×256
+        const reliefMask = ReliefCompositor.composeSwissRelief(
+          elevation,
+          this.options,
+          cellSizeMeters,
+          this.tileSize,
+          this.tileSize,
+        );
+        // For glaze-only mode, pass ONLY the 256×256 relief mask
+        rasters = [reliefMask as any];
+        tileWidth = this.tileSize;
+        tileHeight = this.tileSize;
+      }
+
+      return this.geo.getMap({
+        rasters,
+        width: tileWidth,
+        height: tileHeight,
+        bounds: bounds ?? [0, 0, 0, 0],
         cellSizeMeters,
-        this.tileSize,
-        this.tileSize,
-      );
-      // For glaze-only mode, pass ONLY the 256×256 relief mask
-      rasters = [reliefMask as any];
-      tileWidth = this.tileSize;
-      tileHeight = this.tileSize;
+      }, this.options, meshMaxError ?? 4.0);
+    } catch (error) {
+      throw error;
     }
-
-    return this.geo.getMap({
-      rasters,
-      width: tileWidth,
-      height: tileHeight,
-      bounds,
-      cellSizeMeters,
-    }, this.options, meshMaxError);
   }
 
   /**
