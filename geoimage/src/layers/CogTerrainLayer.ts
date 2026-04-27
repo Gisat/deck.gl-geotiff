@@ -314,17 +314,9 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       this.props.meshMaxError,
       tile.signal,
     ).catch((error: any) => {
-      // Suppress AbortError from deck.gl's internal Tile2DHeader.abort()
-      // This is expected when tiles are pruned during viewport changes
-      // Check both DOMException and name, plus signal aborted state and message patterns
-      const isAbortError = 
-        (error instanceof DOMException && error.name === 'AbortError')
-        || (error?.message?.includes?.('aborted'))
-        || (tile.signal?.aborted);
-      
-      if (isAbortError) {
-        return null;
-      }
+      // Re-throw all errors — deck.gl handles AbortErrors from tile cancellation correctly
+      // (keeps parent tiles visible as placeholders). The global suppressGlobalAbortErrors()
+      // prevents unhandled AbortError console noise.
       throw error;
     });
 

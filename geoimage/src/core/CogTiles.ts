@@ -222,6 +222,18 @@ class CogTiles {
   }
 
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
+    // Create a fresh local AbortController for this specific fetch.
+    // We do NOT pass `signal` directly to readRasters because deck.gl may reuse tile
+    // objects whose signal is already aborted (same tile re-requested after viewport change).
+    // An already-aborted signal passed to geotiff.js immediately cancels the fetch,
+    // leaving the tile permanently empty. Instead, we only forward cancellation when
+    // the signal fires WHILE the request is actually in flight.
+    const controller = new AbortController();
+    if (signal && !signal.aborted) {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    const localSignal = controller.signal;
+
     try {
       const imageIndex = this.getImageIndexForZoomLevel(zoom);
       
@@ -310,7 +322,7 @@ class CogTiles {
       }
 
       // if the valid window is smaller than the tile size, it gets the image size width and height, thus validRasterData.width must be used as below
-      const validRasterData = await targetImage.readRasters({ window, signal });
+      const validRasterData = await targetImage.readRasters({ window, signal: localSignal });
 
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
@@ -346,21 +358,25 @@ class CogTiles {
 
     // Case B: Perfect Match (Optimization)
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
-    const tileData = await targetImage.readRasters({ window, interleave: true, signal });
+    const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
     return [tileData];
-    } catch (error) {
-      // Catch abort errors (from signal.abort()) and return gracefully
-      // geotiff.js throws an Error with message "Request was aborted", not a DOMException
-      const isAbortError = (error instanceof DOMException && error.name === 'AbortError') 
-        || (error instanceof Error && error.message === 'Request was aborted');
-      
-      if (isAbortError) {
-        return null; // Signal that this tile is no longer needed
-      }
-      // For other errors (network, parsing, etc.), re-throw
-      throw error;
+  } catch (error) {
+    // If the signal was aborted (or geotiff.js threw AggregateError wrapping an abort),
+    // re-throw as a standard AbortError so deck.gl handles tile cancellation gracefully
+    // and suppressGlobalAbortErrors() can suppress the unhandled rejection noise.
+    const isAbortRelated = localSignal.aborted
+      || (error instanceof AggregateError && error.errors?.some(
+        (e: any) => e?.name === 'AbortError' || e?.message?.includes('aborted') || e?.message?.includes('abort')
+      ))
+      || (error instanceof DOMException && error.name === 'AbortError')
+      || (error instanceof Error && error.message === 'Request was aborted');
+
+    if (isAbortRelated) {
+      throw new DOMException('Tile request aborted', 'AbortError');
     }
+    throw error;
   }
+}
 
   /**
    * Creates a blank tile buffer filled with the "No Data" value.
@@ -395,11 +411,6 @@ class CogTiles {
 
     // If tile was cancelled (abort), return null gracefully
     if (!tileData) {
-      return null;
-    }
-
-    // Guard against signal abort between cache hit and expensive geo.getMap() call
-    if (signal?.aborted) {
       return null;
     }
 
