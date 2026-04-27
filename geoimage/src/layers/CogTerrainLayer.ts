@@ -166,7 +166,6 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
 
 // TODO remove elevationDecoder
 // TODO use meshMaxError
-// TODO - pass signal to getTile
 
 /** Render mesh surfaces from height map images. */
 export default class CogTerrainLayer<ExtraPropsT extends object = object> extends CompositeLayer<
