@@ -88,33 +88,32 @@ export function addSkirt(attributes: any, triangles: any, skirtHeight: number, o
  * @returns {number[][]} - outside edges data
  */
 function getOutsideEdgesFromTriangles(triangles: any): number[][] {
+  // Use integer keys instead of strings: min * 70000 + max is collision-free
+  // for any grid ≤ 257×257 (66,049 vertices < 70,000)
   const edgeMap = new Map<number, number[]>();
+
+  const processEdge = (a: number, b: number) => {
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
+    // Integer key: no string allocation per edge
+    const key = min * 70000 + max;
+
+    if (edgeMap.has(key)) {
+      edgeMap.delete(key);  // Interior edge, remove
+    } else {
+      edgeMap.set(key, [a, b]);
+    }
+  };
 
   for (let i = 0; i < triangles.length; i += 3) {
     const v0 = triangles[i];
     const v1 = triangles[i + 1];
     const v2 = triangles[i + 2];
 
-    // Process edges: (v0, v1), (v1, v2), (v2, v0)
-    // Use numeric key: min * large_prime + max to avoid string allocation overhead
-    const edges = [
-      [v0, v1],
-      [v1, v2],
-      [v2, v0],
-    ];
-
-    for (const edge of edges) {
-      const min = Math.min(edge[0], edge[1]);
-      const max = Math.max(edge[0], edge[1]);
-      // Use numeric key: min * 65536 + max (assumes vertex indices fit in 16 bits per component)
-      const key = (min << 16) | max;
-
-      if (edgeMap.has(key)) {
-        edgeMap.delete(key);
-      } else {
-        edgeMap.set(key, edge);
-      }
-    }
+    // Process each edge inline — no temporary array allocation per triangle
+    processEdge(v0, v1);
+    processEdge(v1, v2);
+    processEdge(v2, v0);
   }
 
   return Array.from(edgeMap.values());
