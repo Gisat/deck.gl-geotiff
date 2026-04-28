@@ -265,10 +265,7 @@ class CogTiles {
     const cacheKey = `${zoom}/${tileX}/${tileY}`;
     const cachedRaster = this.rasterCache.get(cacheKey);
     if (cachedRaster) {
-      console.log(`[CogTiles] Raster cache hit: (${tileX}, ${tileY}, ${zoom})`);
       return [cachedRaster];
-    } else {
-      console.log(`[CogTiles] Raster cache miss: (${tileX}, ${tileY}, ${zoom})`);
     }
     try {
       const imageIndex = this.getImageIndexForZoomLevel(zoom);
@@ -359,7 +356,6 @@ class CogTiles {
 
       // if the valid window is smaller than the tile size, it gets the image size width and height, thus validRasterData.width must be used as below
       const validRasterData = await targetImage.readRasters({ window, signal: localSignal });
-      console.log(`[CogTiles] readRasters fetch: (${tileX}, ${tileY}, ${zoom})`);
 
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
@@ -399,7 +395,6 @@ class CogTiles {
 
     // Case B: Perfect Match (Optimization)
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
-    console.log(`[CogTiles] readRasters fetch: (${tileX}, ${tileY}, ${zoom})`);
     const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
     // Mark raster as cached after successful fetch
     if (!cachedRaster) {
@@ -482,6 +477,11 @@ class CogTiles {
       rasters = [reliefMask as any];
       tileWidth = this.tileSize;
       tileHeight = this.tileSize;
+    }
+
+    // Guard against abort race condition: if signal aborted after cache hit but before expensive geo.getMap()
+    if (signal?.aborted) {
+      return null;
     }
 
     return this.geo.getMap({
