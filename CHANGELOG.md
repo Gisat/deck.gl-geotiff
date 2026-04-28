@@ -1,3 +1,18 @@
+## [2.5.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.2...v2.5.0-dev.3) (2026-04-28)
+
+### Features
+
+* add verticalExaggeration option to decouple visual exaggeration from unit conversion ([7d37465](https://github.com/Gisat/deck.gl-geotiff/commit/7d3746580d03c9a26c58e24bb0752d97638801b5))
+
+### Bug Fixes
+
+* Address PR [#142](https://github.com/Gisat/deck.gl-geotiff/issues/142) code review comments ([bc44a3e](https://github.com/Gisat/deck.gl-geotiff/commit/bc44a3edddf2b00db49e5f6b162d99d89a9d227a))
+
+### Performance Improvements
+
+* optimize skirt edge deduplication with integer keys and inline processing ([2716af9](https://github.com/Gisat/deck.gl-geotiff/commit/2716af95ea5932cb505a1cb50955a16d49579362))
+* replace O(n log n) sort with O(n) HashMap in skirt edge deduplication ([744e1e8](https://github.com/Gisat/deck.gl-geotiff/commit/744e1e8173c77b51d6dce06a8db3056890fd7533))
+
 ## [2.5.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.1...v2.5.0-dev.2) (2026-04-20)
 
 ### Features
