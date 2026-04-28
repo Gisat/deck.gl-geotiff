@@ -70,7 +70,8 @@ cellSizeMeters = EARTH_CIRCUMFERENCE / 2^z × cos(lat) / tileSize
 The `TerrainGenerator` class converts elevation raster data into 3D meshes (vertices, triangles, and attributes).
 
 ### Key Responsibilities
-- **Elevation Decoding**: Scales and offsets raw values (Int16, Float32) into real-world elevation meters using `multiplier`.
+- **Elevation Decoding**: Scales raw values (Int16, Float32) into the elevation units used for tessellation via `multiplier` (for example, unit conversion to meters). Because Martini/Delatin operate on this scaled terrain, `meshMaxError` should be specified in the same units.
+- **Visual Exaggeration**: Scales final vertex z positions and skirt height using `verticalExaggeration` (visual appearance only; for a fixed `meshMaxError`, it does not affect tessellation density).
 - **Tesselation**: Supports two algorithms:
   - **`Martini`**: Optimized for regular grid data, very fast for on-the-fly generation.
   - **`Delatin`**: A more flexible TIN-based (Triangulated Irregular Network) algorithm for high-quality meshes with fewer triangles.

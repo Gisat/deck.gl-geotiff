@@ -114,7 +114,7 @@ function CogTerrainLayerExample() {
       cogTiles: initializedCog,
       isTiled: true,
       tileSize: 256,
-      // meshMaxError: 1,
+      meshMaxError: 40,
       operation: 'terrain+draw',
       terrainOptions,
       pickable: true,

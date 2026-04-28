@@ -86,11 +86,22 @@ Used for categorical data (land cover, classification).
 
 These options apply specifically to `CogTerrainLayer` or when generating heightmaps. **All parameters are optional.**
 
+> **`multiplier` vs. `verticalExaggeration`:** These are two separate concerns.
+> - **`multiplier`** is for unit conversion (e.g. cm → m) and affects how Martini/Delatin compare the error threshold against the terrain mesh.
+> - **`verticalExaggeration`** is for visual appearance only and stretches the final mesh vertically without changing the error tolerance or mesh density.
+> 
+> Example: If your data is in centimetres, set `multiplier: 0.01` to convert to metres. To make the terrain look 3× taller for visualization, set `verticalExaggeration: 3.0`. These changes are independent — changing `verticalExaggeration` will never cause over-tessellation.
+
+> **`meshMaxError` and COG Resolution:** Set `meshMaxError` to approximately your COG's ground resolution (pixel size in meters), or larger. Your COG has a native resolution — trying to represent finer detail than this via smaller `meshMaxError` values creates unnecessary vertices without improving visual quality. For example, if your COG pixels are 38 meters, setting `meshMaxError: 40` uses the native resolution efficiently. Setting `meshMaxError: 1` wastes computation by creating a much finer mesh than the source data can support.
+
+> **Performance and `terrainSkirtHeight`:** The skirt (enabled by default at 100 meters) prevents visible cracks at tile boundaries by adding vertical walls. This requires deduplicating mesh boundary edges during generation, which has a small CPU cost. For typical configurations (meshMaxError: 4.0), this is negligible (~5ms per tile). For very fine meshes or performance-critical applications, you can disable skirts with `terrainSkirtHeight: 0` to save the edge deduplication cost, accepting tile boundary cracks as a trade-off.
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`tesselator`** | `'martini'` \| `'delatin'` | `'martini'` | The algorithm used for terrain mesh generation. 'Martini' is generally faster, 'Delatin' may produce higher quality meshes. |
-| **`multiplier`** | `number` | `1.0` | Multiplies each data value by this factor (e.g. vertical exaggeration). Used in calculating elevation. |
-| **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
+| **`multiplier`** | `number` | `1.0` | Scales each raw elevation value before Martini/Delatin tessellation. Use this for unit conversion into metres when needed (e.g. `0.01` to convert cm to m). `meshMaxError` must be specified in the same units as these scaled elevation values (typically meters after conversion), so changing `multiplier` without adjusting `meshMaxError` will change tessellation density. |
+| **`verticalExaggeration`** | `number` | `1.0` | **Visual exaggeration only.** Scales vertex z positions after mesh generation, making terrain appear taller. Unlike `multiplier`, this does **not** affect `meshMaxError` — the error threshold is always evaluated against real-world (post-`multiplier`) elevation values. The skirt height is automatically scaled by this factor. |
+| **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks at tile boundaries. Automatically scaled by `verticalExaggeration`. Set to `0` to disable. **Performance note:** Adding skirts has a small CPU cost during mesh generation (edge deduplication), roughly proportional to the number of triangles. For typical use cases with the default `meshMaxError: 4.0`, this cost is negligible (~5ms per tile). For very fine meshes (small `meshMaxError`), disabling skirts entirely (`terrainSkirtHeight: 0`) can improve performance if tile boundary cracks are acceptable. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
 | **`terrainColor`** | `number[]` \| `ChromaColor` | `[200, 200, 200, 255]` | Base RGBA color of the terrain mesh when no texture or visualization options are set. |
 
@@ -118,7 +129,7 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **`meshMaxError`** | `number` | `4.0` | Martini/Delatin error tolerance in meters. Smaller number -> more detailed mesh (higher triangle count). |
+| **`meshMaxError`** | `number` | `4.0` | Martini/Delatin error tolerance in meters. Smaller number → more detailed mesh (higher triangle count). **Recommendation:** Set this to approximately your COG's pixel resolution (cellSize) or larger. Setting it significantly lower than the source resolution wastes computation without adding visual detail — the underlying data cannot represent features finer than its own pixel size. |
 | **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 | **`disableTexture`** | `boolean` | `false` | When `true`, suppresses any generated texture and renders the mesh in plain `color`. Useful for showing neutral grey terrain during mode transitions. |
 
@@ -139,7 +150,7 @@ When a tile is loaded, both generators bundle the raw raster data alongside the 
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `map` | `ImageBitmap \| MeshAttributes` | The visual artifact sent to the GPU. |
-| `raw` | `TypedArray` | The original raster data, kept on the CPU. For terrain this is elevation in metres. |
+| `raw` | `TypedArray` | The original raster data after `multiplier` scaling (used by Martini/Delatin). For terrain this is elevation in metres (if `multiplier: 1.0`). **Note:** Does not include `verticalExaggeration` — the z values in the mesh vertices are exaggerated, but `raw` contains only the base elevation values. |
 | `width` | `number` | Tile width in pixels. |
 | `height` | `number` | Tile height in pixels. |
 | `texture` | `ImageBitmap \| undefined` | *(Terrain only)* Generated texture bitmap from elevation data. Present when at least one visualization option is active in `terrainOptions` (`useHeatMap`, `colorScale`, `useSingleColor`, `useColorsBasedOnValues`, or `useColorClasses`). `undefined` when no visualization options are set. |

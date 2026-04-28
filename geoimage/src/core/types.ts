@@ -26,7 +26,26 @@ export type GeoImageOptions = {
     /** 0-based index of the channel to visualize (e.g. 0 for the first channel). Alternative to useChannel. */
     useChannelIndex?: number | null,
     noDataValue?: number,
+    /**
+     * Scalar applied to raw raster values before Martini/Delatin tessellation.
+     * Use this to convert or normalize source elevation values into the units that
+     * should be seen by the tessellator (e.g. convert raw values to metres).
+     * Because the scaled values are used during tessellation, changing `multiplier`
+     * also changes the effective mesh density unless `meshMaxError` is adjusted.
+     * `meshMaxError` must be specified in the same units as the post-`multiplier`
+     * elevation values.
+     * Default: 1.0
+     */
     multiplier?: number,
+    /**
+     * Vertical scale factor applied **only** to mesh vertex z positions, after
+     * tessellation. Use this for **visual exaggeration** (make terrain look taller).
+     * Unlike `multiplier`, this does not affect `meshMaxError` — the error threshold
+     * is always evaluated against real-world (post-`multiplier`) elevation values.
+     * The skirt height is scaled by this factor automatically.
+     * Default: 1.0
+     */
+    verticalExaggeration?: number,
     numOfChannels?: number,
     planarConfig?: number,
 
@@ -83,6 +102,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     useChannelIndex: null,
     noDataValue: undefined,
     multiplier: 1.0,
+    verticalExaggeration: 1.0,
     numOfChannels: undefined,
     planarConfig: undefined,
 
