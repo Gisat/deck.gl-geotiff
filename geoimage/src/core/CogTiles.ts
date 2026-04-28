@@ -409,11 +409,6 @@ class CogTiles {
 
     const tileData = await this.getTileFromImage(x, y, z, requiredSize, signal);
 
-    // If tile was cancelled (abort), return null gracefully
-    if (!tileData) {
-      return null;
-    }
-
     // Compute true ground cell size in meters from tile indices.
     // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
     const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));

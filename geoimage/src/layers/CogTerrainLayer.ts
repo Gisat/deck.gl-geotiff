@@ -306,21 +306,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  }
 	  const bounds: Bounds = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
 
-    const terrain = this.state.terrainCogTiles.getTile(
+    const resolvedTerrain = await this.state.terrainCogTiles.getTile(
       tile.index.x,
       tile.index.y,
       tile.index.z,
       bounds,
       this.props.meshMaxError,
       tile.signal,
-    ).catch((error: any) => {
-      // Re-throw all errors — deck.gl handles AbortErrors from tile cancellation correctly
-      // (keeps parent tiles visible as placeholders). The global suppressGlobalAbortErrors()
-      // prevents unhandled AbortError console noise.
-      throw error;
-    });
-
-    const resolvedTerrain = await terrain;
+    );
 
       if (resolvedTerrain && !this.props.pickable) {
         resolvedTerrain.raw = null;

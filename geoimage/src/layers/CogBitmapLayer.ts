@@ -215,21 +215,15 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
   }
 
   async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
-    const tileData = this.state.bitmapCogTiles.getTile(
+    const resolvedTileData = await this.state.bitmapCogTiles.getTile(
       tile.index.x,
       tile.index.y,
       tile.index.z,
       undefined,
       undefined,
       tile.signal,
-    ).catch((error: any) => {
-      // Re-throw all errors — deck.gl handles AbortErrors from tile cancellation correctly
-      // (keeps parent tiles visible as placeholders). The global suppressGlobalAbortErrors()
-      // prevents unhandled AbortError console noise.
-      throw error;
-    });
+    );
 
-    const resolvedTileData = await tileData;
     if (resolvedTileData && !this.props.pickable) {
       resolvedTileData.raw = null;
     }

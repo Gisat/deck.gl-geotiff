@@ -148,8 +148,8 @@ To optimize network usage with large COGs, the library uses **AbortSignal** to c
 3. **CogTiles propagates it** to `geotiff.js` via `readRasters({ signal })`
 4. **When deck.gl prunes the tile**, it calls `signal.abort()`
 5. **Geotiff.js detects the abort** and throws `AbortError`
-6. **We catch it gracefully** in `getTileFromImage()` and return `null`
-7. **Result**: Network request is cancelled, WebGL resources freed ✅
+6. **We normalize abort errors** in `getTileFromImage()` by rethrowing a standard `DOMException('AbortError')`. This ensures deck.gl treats the request as a cancellation and keeps parent tiles visible as placeholders rather than leaving holes.
+7. **Result**: Network request is cancelled, WebGL resources freed, and deck.gl keeps parent tiles as placeholders ✅
 
 ### Handling Deck.gl's Internal AbortErrors
 

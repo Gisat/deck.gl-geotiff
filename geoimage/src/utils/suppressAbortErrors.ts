@@ -2,19 +2,25 @@ let isListenerAttached = false;
 
 /**
  * Suppresses unhandled AbortErrors from deck.gl tile cancellation.
- * 
- * Call this function from your application root to prevent console spam
- * when tiles are pruned during viewport changes (pan/zoom).
- * 
- * Example usage in your app root:
+ *
+ * NOTE: The library's main entry point installs this handler automatically
+ * when the package is imported via its primary build (for example
+ * `import '@gisatcz/deckgl-geolib'`). This default prevents console spam during
+ * normal tile cancellation (pan/zoom) for the vast majority of consumers.
+ *
+ * If you need to control installation manually (for example when importing
+ * internals or for custom lifecycle control), import and call the exported
+ * function yourself:
+ *
  *   import { suppressGlobalAbortErrors } from '@gisatcz/deckgl-geolib';
  *   suppressGlobalAbortErrors();
- * 
- * Note: This suppresses ALL unhandled AbortErrors (including from your own code).
- * If you need finer control, implement your own unhandledrejection handler instead.
- * 
- * The listener is attached only once and only in browser environments, making
- * this function idempotent and safe to call from multiple places.
+ *
+ * Warning: This suppresses ALL unhandled AbortErrors (including from your own
+ * code). If you need finer control, implement a custom `unhandledrejection`
+ * handler instead.
+ *
+ * The listener is attached only once and only in browser environments,
+ * making this function idempotent and safe to call multiple times.
  */
 export function suppressGlobalAbortErrors(): void {
   // Ensure we are in a browser environment and haven't already attached the listener
