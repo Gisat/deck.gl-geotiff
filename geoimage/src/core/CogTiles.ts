@@ -2,7 +2,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geoti
 
 // Bitmap styling
 import GeoImage from './GeoImage';
-import { GeoImageOptions, TileResult } from './types';
+import { GeoImageOptions, TileResult, TypedArray } from './types';
 import { ReliefCompositor } from './lib/ReliefCompositor';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
@@ -68,7 +68,7 @@ class CogTiles {
 
   // Relief mask cache for bitmap + glaze layers — saves network fetch + kernel convolution on revisit.
   // Stores the Float32Array output of composeSwissRelief; BitmapGenerator re-runs from it cheaply.
-  private reliefMaskCache: Map<string, Promise<Float32Array>> = new Map();
+  private reliefMaskCache: Map<string, Promise<Uint8ClampedArray>> = new Map();
   private readonly reliefMaskCacheMaxSize = 64;
 
   private getTileCacheKey(x: number, y: number, z: number): string {
@@ -558,7 +558,7 @@ class CogTiles {
 
       if (!maskPromise) {
         console.log(`[ReliefMaskCache] MISS ${maskKey}`);
-        maskPromise = (async (): Promise<Float32Array> => {
+        maskPromise = (async (): Promise<Uint8ClampedArray> => {
           const tileData = await this.getTileFromImage(x, y, z, this.tileSize + 2, signal);
           return ReliefCompositor.composeSwissRelief(
             tileData[0] as Float32Array,

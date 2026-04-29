@@ -214,7 +214,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     }
   }
 
-  async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
+  async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult | null> {
     let resolvedTileData: TileResult | null;
     try {
       resolvedTileData = await this.state.bitmapCogTiles.getTile(
@@ -299,7 +299,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       return new TileLayer<TileResult>(this.getSubLayerProps({
         id: 'tiles',
       }), {
-        getTileData: this.getTiledBitmapData.bind(this),
+        getTileData: this.getTiledBitmapData.bind(this) as (props: TileLoadProps) => Promise<TileResult>,
         renderSubLayers: this.renderSubLayers.bind(this),
         pickable: this.props.pickable,
         onClick: this.props.onClick,
