@@ -2,7 +2,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geoti
 
 // Bitmap styling
 import GeoImage from './GeoImage';
-import { GeoImageOptions, TileResult, TypedArray } from './types';
+import { GeoImageOptions, TileResult } from './types';
 import { ReliefCompositor } from './lib/ReliefCompositor';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
@@ -33,32 +33,32 @@ class CogTiles {
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
-  // Cache fetched rasters in an LRU-style Map keyed by `${z}/${x}/${y}/${fetchSize}`,
-  // with each value holding the cached raster for that tile request.
-  private rasterCache: Map<string, TypedArray> = new Map();
-  private readonly maxCacheSize = 256;
+  // TileResult cache — keyed by z/x/y/meshMaxError.
+  // Each entry owns an AbortController and a caller reference count.
+  // The pipeline is aborted only when ALL callers have cancelled (ref-count → 0),
+  // so concurrent deck.gl requests for the same tile share one in-flight fetch/tessellation
+  // and individual tile cancellations (e.g. from panning) do not poison other callers.
+  // Once the promise settles (resolved or rejected), controller/callerCount are irrelevant;
+  // future cache hits just await the already-resolved promise directly.
+  private tileResultCache: Map<string, {
+    promise: Promise<TileResult | null>;
+    controller: AbortController;
+    callerCount: number;
+    settled: boolean;
+  }> = new Map();
+  private readonly tileResultCacheMaxSize = 32;
 
-  // LRU cache helpers
-  private getCachedRaster(key: string): TypedArray | undefined {
-    const value = this.rasterCache.get(key);
-    if (value !== undefined) {
-      // Refresh order: delete and re-set
-      this.rasterCache.delete(key);
-      this.rasterCache.set(key, value);
-    }
-    return value;
+  private getTileResultCacheKey(x: number, y: number, z: number, meshMaxError: number): string {
+    return `${z}/${x}/${y}/${meshMaxError}`;
   }
 
-  private setCachedRaster(key: string, value: TypedArray): void {
-    this.rasterCache.set(key, value);
-    if (this.rasterCache.size > this.maxCacheSize) {
-      // Evict oldest
-      const oldestKey = this.rasterCache.keys().next().value;
-      if (typeof oldestKey === 'string') {
-        this.rasterCache.delete(oldestKey);
-      }
-
+  /** Clears the TileResult cache. Call when the COG URL or meshMaxError changes. */
+  clearTileResultCache(): void {
+    // Abort any in-flight pipelines so their network requests are cancelled
+    for (const entry of this.tileResultCache.values()) {
+      if (!entry.settled) entry.controller.abort();
     }
+    this.tileResultCache.clear();
   }
 
   // Cache GeoTIFFImage Promises by index to prevent redundant HTTP requests from geotiff 3.0.4+ eager loading
@@ -80,7 +80,7 @@ class CogTiles {
     if (this.initializePromise) return this.initializePromise;
     // Clear cache only if URL changed (preserves cache on idempotent re-init)
     if (this.lastInitializedUrl !== url) {
-      this.rasterCache.clear();
+      this.tileResultCache.clear();
     }
     if (this.cog) return;
 
@@ -281,12 +281,6 @@ class CogTiles {
     }
     const localSignal = controller.signal;
 
-    // Check if raster is already cached
-    const cacheKey = `${zoom}/${tileX}/${tileY}/${fetchSize ?? this.tileSize}`;
-    const cachedRaster = this.getCachedRaster(cacheKey);
-    if (cachedRaster) {
-      return [cachedRaster];
-    }
     try {
       const imageIndex = this.getImageIndexForZoomLevel(zoom);
       
@@ -405,16 +399,12 @@ class CogTiles {
           validImageData[i * numChannels + band] = tileBuffer[i];
         }
       }
-      // Mark raster as cached after successful fetch
-      this.setCachedRaster(cacheKey, validImageData); // for partial overlap
       return [validImageData];
     }
 
     // Case B: Perfect Match (Optimization)
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
     const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
-    // Mark raster as cached after successful fetch
-    this.setCachedRaster(cacheKey, tileData); // for perfect match
     return [tileData];
   } catch (error) {
     // If the signal was aborted (or geotiff.js threw AggregateError wrapping an abort),
@@ -453,60 +443,121 @@ class CogTiles {
   }
 
   async getTile(x: number, y: number, z: number, bounds?: Bounds, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
-    let requiredSize = this.tileSize; // Default 256 for image/bitmap
+    const cacheKey = this.getTileResultCacheKey(x, y, z, meshMaxError ?? 4.0);
+    const existing = this.tileResultCache.get(cacheKey);
 
-    if (this.options.type === 'terrain') {
-      const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
-      requiredSize = this.tileSize + (isKernel ? 2 : 1); // 258 for kernel (3×3 border), 257 for normal stitching
-    } else if (this.options.type === 'image' && this.options.useReliefGlaze) {
-      // Bitmap layer with relief glaze mode needs kernel padding for slope/hillshade computation
-      requiredSize = this.tileSize + 2; // 258 for kernel
+    if (existing) {
+      if (existing.settled) {
+        // Already resolved — just return the result directly
+        if (signal?.aborted) return null;
+        return existing.promise;
+      }
+
+      // Pipeline still in-flight: register this caller's signal with the ref-count.
+      // Only abort the pipeline when every caller has cancelled.
+      existing.callerCount += 1;
+      if (signal && !signal.aborted) {
+        signal.addEventListener('abort', () => {
+          existing.callerCount -= 1;
+          if (existing.callerCount <= 0 && !existing.settled) {
+            existing.controller.abort();
+          }
+        }, { once: true });
+      }
+
+      const result = await existing.promise;
+      if (signal?.aborted) return null;
+      return result;
     }
 
-    const tileData = await this.getTileFromImage(x, y, z, requiredSize, signal);
+    // --- New pipeline ---
+    const controller = new AbortController();
+    const entry = {
+      promise: null as unknown as Promise<TileResult | null>,
+      controller,
+      callerCount: 1,
+      settled: false,
+    };
 
-    // Compute true ground cell size in meters from tile indices.
-    // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
-    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
-    const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
-    const cellSizeMeters = tileWidthMeters / this.tileSize;
+    // Register the first caller's signal into the ref-count
+    if (signal && !signal.aborted) {
+      signal.addEventListener('abort', () => {
+        entry.callerCount -= 1;
+        if (entry.callerCount <= 0 && !entry.settled) {
+          entry.controller.abort();
+        }
+      }, { once: true });
+    }
 
-    let rasters = [tileData[0]];
-    let tileWidth = requiredSize;
-    let tileHeight = requiredSize;
+    const pipeline: Promise<TileResult | null> = (async () => {
+      let requiredSize = this.tileSize;
 
-    // Relief glaze computation for bitmap layers
-    // Note: For multi-band support (band selection via useChannelIndex), see issue #98
-    if (this.options.type === 'image' && this.options.useReliefGlaze) {
-      const elevation = tileData[0] as Float32Array;
-      
-      // Pass full 258×258 padded elevation directly — KernelGenerator expects IN=258 and outputs 256×256
-      const reliefMask = ReliefCompositor.composeSwissRelief(
-        elevation,
-        this.options,
+      if (this.options.type === 'terrain') {
+        const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
+        requiredSize = this.tileSize + (isKernel ? 2 : 1);
+      } else if (this.options.type === 'image' && this.options.useReliefGlaze) {
+        requiredSize = this.tileSize + 2;
+      }
+
+      const tileData = await this.getTileFromImage(x, y, z, requiredSize, controller.signal);
+
+      const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
+      const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
+      const cellSizeMeters = tileWidthMeters / this.tileSize;
+
+      let rasters = [tileData[0]];
+      let tileWidth = requiredSize;
+      let tileHeight = requiredSize;
+
+      if (this.options.type === 'image' && this.options.useReliefGlaze) {
+        const elevation = tileData[0] as Float32Array;
+        const reliefMask = ReliefCompositor.composeSwissRelief(
+          elevation,
+          this.options,
+          cellSizeMeters,
+          this.tileSize,
+          this.tileSize,
+        );
+        rasters = [reliefMask as any];
+        tileWidth = this.tileSize;
+        tileHeight = this.tileSize;
+      }
+
+      return this.geo.getMap({
+        rasters,
+        width: tileWidth,
+        height: tileHeight,
+        bounds: bounds ?? [0, 0, 0, 0],
         cellSizeMeters,
-        this.tileSize,
-        this.tileSize,
-      );
-      // For glaze-only mode, pass ONLY the 256×256 relief mask
-      rasters = [reliefMask as any];
-      tileWidth = this.tileSize;
-      tileHeight = this.tileSize;
+      }, this.options, meshMaxError ?? 4.0);
+    })();
+
+    entry.promise = pipeline;
+    this.tileResultCache.set(cacheKey, entry);
+
+    // Evict oldest entry when cache exceeds max size
+    if (this.tileResultCache.size > this.tileResultCacheMaxSize) {
+      const oldestKey = this.tileResultCache.keys().next().value;
+      if (typeof oldestKey === 'string') {
+        const evicted = this.tileResultCache.get(oldestKey);
+        if (evicted && !evicted.settled) evicted.controller.abort();
+        this.tileResultCache.delete(oldestKey);
+      }
     }
 
-    // Guard against abort race condition: if signal aborted after cache hit but before expensive geo.getMap()
-    if (signal?.aborted) {
-      return null;
+    try {
+      const result = await pipeline;
+      entry.settled = true;
+      if (signal?.aborted) return null;
+      return result;
+    } catch (error) {
+      entry.settled = true;
+      // Remove from cache so next request can retry
+      this.tileResultCache.delete(cacheKey);
+      throw error;
     }
-
-    return this.geo.getMap({
-      rasters,
-      width: tileWidth,
-      height: tileHeight,
-      bounds: bounds ?? [0, 0, 0, 0],
-      cellSizeMeters,
-    }, this.options, meshMaxError ?? 4.0);
   }
+
 
   /**
    * Determines the data type (e.g., "Int32", "Float64") of a GeoTIFF image

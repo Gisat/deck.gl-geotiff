@@ -190,3 +190,11 @@ export interface TileResult {
     /** Optional: grayscale or color bitmap for Swiss relief or other overlays */
     bitmap?: Uint8ClampedArray | ImageBitmap;
 }
+
+/**
+ * Cacheable subset of TileResult — excludes `texture` (ImageBitmap) because
+ * ImageBitmaps are frame-specific GPU resources that can be closed/invalidated
+ * and are cheap to regenerate from `raw`. Everything else (mesh, raw data,
+ * derived arrays, overlay bitmap) is safe to cache long-term.
+ */
+export type CachedTileResult = Omit<TileResult, 'texture'>;

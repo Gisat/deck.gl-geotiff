@@ -236,6 +236,12 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 		|| props.elevationDecoder !== oldProps.elevationDecoder
 		|| props.bounds !== oldProps.bounds;
 
+    // When meshMaxError changes, cached meshes are stale — clear so new tiles are tessellated
+    // at the correct error tolerance
+    if (props.meshMaxError !== oldProps.meshMaxError && this.state.terrainCogTiles) {
+      this.state.terrainCogTiles.clearTileResultCache();
+    }
+
 	  if (!this.state.isTiled && shouldReload) {
       // When state.isTiled, elevationData cannot be an array
       // const terrain = this.loadTerrain(props as TerrainLoadProps);
@@ -306,14 +312,23 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  }
 	  const bounds: Bounds = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
 
-    const resolvedTerrain = await this.state.terrainCogTiles.getTile(
-      tile.index.x,
-      tile.index.y,
-      tile.index.z,
-      bounds,
-      this.props.meshMaxError,
-      tile.signal,
-    );
+    let resolvedTerrain: TileResult | null = null;
+    try {
+      resolvedTerrain = await this.state.terrainCogTiles.getTile(
+        tile.index.x,
+        tile.index.y,
+        tile.index.z,
+        bounds,
+        this.props.meshMaxError,
+        tile.signal,
+      );
+    } catch (error) {
+      // Tile was cancelled (AbortError) — return null so deck.gl discards it cleanly
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return null as unknown as MeshAndTexture;
+      }
+      throw error;
+    }
 
       if (resolvedTerrain && !this.props.pickable) {
         resolvedTerrain.raw = null;
