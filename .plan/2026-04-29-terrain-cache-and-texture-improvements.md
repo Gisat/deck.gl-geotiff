@@ -270,26 +270,46 @@ Clear `reliefMaskCache` in `initializeCog` and on URL change.
 
 ---
 
-## Step F — Web Workers for Tessellation (Deferred)
+## Step F — Skip Mesh Calculation for noData / Discard Values ✅ **PLANNED**
+
+_Files: `TerrainGenerator.ts`, `CogTiles.ts`_
+
+Currently, tiles that are fully or partially covered by noData values still run the full
+tessellation pipeline (Martini/Delatin) even when every vertex would be a discard/fill value.
+This wastes CPU on tiles outside the COG extent or masked areas.
+
+### 6.1 — Detect all-noData tiles before tessellation
+
+After `getTileFromImage` returns, check if the raster contains only noData values.
+If so, return `null` from `getTile()` early — no mesh, no texture, no cache entry.
+
+### 6.2 — Detect partially-noData tiles (optional / stretch)
+
+For tiles partially covered by noData, consider clamping noData pixels to the nearest valid
+elevation before tessellation (avoids spikes/holes at COG boundaries).
+
+### 6.3 — Integration with TileResult cache
+
+All-noData result (`null`) should NOT be stored in `tileResultCache` — if the COG extent
+changes or options change, the tile should be re-evaluated. Only non-null results are cached.
+
+---
+
+## Step G — Web Workers for Tessellation (Deferred)
 
 _See `2026-04-20-terrain-performance-plan.md` Item 5 for full spec._  
-Separate PR, after Steps A–E are stable and merged.
+Separate PR, after Steps A–F are stable and merged.
 
 ---
 
 ## Implementation Order & Priority
 
-| Step | What | Files | Priority | Branch |
-|---|---|---|---|---|
-| A | Fix raster cache bugs + remove console.logs | `CogTiles.ts` | **Before merge** | current |
-| B | Replace raster cache → TileResult cache | `CogTiles.ts`, `types.ts` | High | new branch |
-| C | Skip texture for wireframe / disableTexture | `GeoImage.ts`, `TerrainGenerator.ts`, `CogTerrainLayer.ts`, `types.ts` | High | same as B |
-| D | `wireframeOverlay` prop | `CogTerrainLayer.ts` | Medium | follow-up |
-| E | `reliefGlaze` mask cache | `CogTiles.ts` | Medium | follow-up |
-| F | Web Worker tessellation | `TerrainGenerator.ts`, Rollup | Low | separate PR |
-
-**Recommended grouping:**
-- **PR 1 (current branch):** Step A only — unblock merge
-- **PR 2:** Steps B + C together — TileResult cache + texture skip (interact via `disableTexture` invalidating the cache)
-- **PR 3:** Steps D + E — wireframe overlay + glaze mask cache (self-contained)
-- **PR 4:** Step F — Web Workers (significant scope, own PR)
+| Step | What | Files | Priority | Branch | Status |
+|---|---|---|---|---|---|
+| A | Fix raster cache bugs + remove console.logs | `CogTiles.ts` | **Before merge** | feat/terrain-perf-item4-raster-cache | ✅ Done |
+| B | Per-type caching (TileResult/raster/relief mask) | `CogTiles.ts`, `types.ts` | High | feat/terrain-perf-tileresult-cache | ✅ Done |
+| C | Skip texture for wireframe / disableTexture | `GeoImage.ts`, `TerrainGenerator.ts`, `CogTerrainLayer.ts`, `types.ts` | High | follow-up | ⬜ Pending |
+| D | `wireframeOverlay` prop | `CogTerrainLayer.ts` | Medium | follow-up | ⬜ Pending |
+| E | Per-type bitmap caching (raster + relief mask) | `CogTiles.ts` | Medium | feat/terrain-perf-tileresult-cache | ✅ Done |
+| F | Skip mesh for noData/discard tiles | `TerrainGenerator.ts`, `CogTiles.ts` | Medium | feat/terrain-perf-tileresult-cache | ⬜ Pending |
+| G | Web Worker tessellation | `TerrainGenerator.ts`, Rollup | Low | separate PR | ⬜ Pending |

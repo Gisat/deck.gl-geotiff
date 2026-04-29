@@ -215,14 +215,22 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
   }
 
   async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
-    const resolvedTileData = await this.state.bitmapCogTiles.getTile(
-      tile.index.x,
-      tile.index.y,
-      tile.index.z,
-      undefined,
-      undefined,
-      tile.signal,
-    );
+    let resolvedTileData: TileResult | null;
+    try {
+      resolvedTileData = await this.state.bitmapCogTiles.getTile(
+        tile.index.x,
+        tile.index.y,
+        tile.index.z,
+        undefined,
+        undefined,
+        tile.signal,
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return null as unknown as TileResult;
+      }
+      throw error;
+    }
 
     if (resolvedTileData && !this.props.pickable) {
       resolvedTileData.raw = null;
