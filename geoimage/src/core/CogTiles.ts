@@ -221,16 +221,29 @@ class CogTiles {
     return exactMatchIndex;
   }
 
-  async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number) {
-    const imageIndex = this.getImageIndexForZoomLevel(zoom);
-    
-    // Cache Promises to share in-flight requests across concurrent tiles at the same overview
-    let imagePromise = this.imageCache.get(imageIndex);
-    if (!imagePromise) {
-      imagePromise = this.cog.getImage(imageIndex);
-      this.imageCache.set(imageIndex, imagePromise);
+  async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
+    // Create a fresh local AbortController for this specific fetch.
+    // We do NOT pass `signal` directly to readRasters because deck.gl may reuse tile
+    // objects whose signal is already aborted (same tile re-requested after viewport change).
+    // An already-aborted signal passed to geotiff.js immediately cancels the fetch,
+    // leaving the tile permanently empty. Instead, we only forward cancellation when
+    // the signal fires WHILE the request is actually in flight.
+    const controller = new AbortController();
+    if (signal && !signal.aborted) {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
     }
-    const targetImage = await imagePromise;
+    const localSignal = controller.signal;
+
+    try {
+      const imageIndex = this.getImageIndexForZoomLevel(zoom);
+      
+      // Cache Promises to share in-flight requests across concurrent tiles at the same overview
+      let imagePromise = this.imageCache.get(imageIndex);
+      if (!imagePromise) {
+        imagePromise = this.cog.getImage(imageIndex);
+        this.imageCache.set(imageIndex, imagePromise);
+      }
+      const targetImage = await imagePromise;
 
     // --- STEP 1: CALCULATE BOUNDS IN METERS ---
 
@@ -309,7 +322,7 @@ class CogTiles {
       }
 
       // if the valid window is smaller than the tile size, it gets the image size width and height, thus validRasterData.width must be used as below
-      const validRasterData = await targetImage.readRasters({ window });
+      const validRasterData = await targetImage.readRasters({ window, signal: localSignal });
 
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
@@ -345,11 +358,25 @@ class CogTiles {
 
     // Case B: Perfect Match (Optimization)
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
-    // console.log("Perfect aligned read");
-    const tileData = await targetImage.readRasters({ window, interleave: true });
-    // console.log(`data that starts at the left top corner of the tile ${tileX}, ${tileY}`);
+    const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
     return [tileData];
+  } catch (error) {
+    // If the signal was aborted (or geotiff.js threw AggregateError wrapping an abort),
+    // re-throw as a standard AbortError so deck.gl handles tile cancellation gracefully
+    // and suppressGlobalAbortErrors() can suppress the unhandled rejection noise.
+    const isAbortRelated = localSignal.aborted
+      || (error instanceof AggregateError && error.errors?.some(
+        (e: any) => e?.name === 'AbortError' || e?.message?.includes('aborted') || e?.message?.includes('abort')
+      ))
+      || (error instanceof DOMException && error.name === 'AbortError')
+      || (error instanceof Error && error.message === 'Request was aborted');
+
+    if (isAbortRelated) {
+      throw new DOMException('Tile request aborted', 'AbortError');
+    }
+    throw error;
   }
+}
 
   /**
    * Creates a blank tile buffer filled with the "No Data" value.
@@ -369,7 +396,7 @@ class CogTiles {
     return tileData;
   }
 
-  async getTile(x: number, y: number, z: number, bounds:Bounds, meshMaxError: number): Promise<TileResult | null> {
+  async getTile(x: number, y: number, z: number, bounds?: Bounds, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
     let requiredSize = this.tileSize; // Default 256 for image/bitmap
 
     if (this.options.type === 'terrain') {
@@ -380,7 +407,7 @@ class CogTiles {
       requiredSize = this.tileSize + 2; // 258 for kernel
     }
 
-    const tileData = await this.getTileFromImage(x, y, z, requiredSize);
+    const tileData = await this.getTileFromImage(x, y, z, requiredSize, signal);
 
     // Compute true ground cell size in meters from tile indices.
     // Tile y in slippy-map convention → center latitude → Web Mercator distortion correction.
@@ -415,9 +442,9 @@ class CogTiles {
       rasters,
       width: tileWidth,
       height: tileHeight,
-      bounds,
+      bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
-    }, this.options, meshMaxError);
+    }, this.options, meshMaxError ?? 4.0);
   }
 
   /**

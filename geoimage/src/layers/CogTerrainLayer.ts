@@ -166,7 +166,6 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
 
 // TODO remove elevationDecoder
 // TODO use meshMaxError
-// TODO - pass signal to getTile
 
 /** Render mesh surfaces from height map images. */
 export default class CogTerrainLayer<ExtraPropsT extends object = object> extends CompositeLayer<
@@ -307,21 +306,20 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  }
 	  const bounds: Bounds = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
 
-    // TODO - pass signal to getTile
-    // abort request if signal is aborted
-    const terrain = await this.state.terrainCogTiles.getTile(
+    const resolvedTerrain = await this.state.terrainCogTiles.getTile(
       tile.index.x,
       tile.index.y,
       tile.index.z,
       bounds,
       this.props.meshMaxError,
+      tile.signal,
     );
 
-    if (terrain && !this.props.pickable) {
-      terrain.raw = null;
-    }
+      if (resolvedTerrain && !this.props.pickable) {
+        resolvedTerrain.raw = null;
+      }
 
-    return Promise.all([terrain, null]) as unknown as Promise<MeshAndTexture>;
+      return Promise.all([resolvedTerrain, null]) as unknown as Promise<MeshAndTexture>;
   }
 
   renderSubLayers(

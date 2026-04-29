@@ -88,18 +88,18 @@ export function addSkirt(attributes: any, triangles: any, skirtHeight: number, o
  * @returns {number[][]} - outside edges data
  */
 function getOutsideEdgesFromTriangles(triangles: any): number[][] {
-  // Use integer keys instead of strings: min * 70000 + max is collision-free
-  // for any grid ≤ 257×257 (66,049 vertices < 70,000)
-  const edgeMap = new Map<number, number[]>();
+  // Use BigInt keys to avoid collisions for large meshes.
+  // Pack min and max into a single BigInt key: (min << 32) | max
+  const edgeMap = new Map<bigint, number[]>();
 
   const processEdge = (a: number, b: number) => {
     const min = Math.min(a, b);
     const max = Math.max(a, b);
-    // Integer key: no string allocation per edge
-    const key = min * 70000 + max;
+    // Pack indices into a single BigInt key to avoid string allocation and collisions
+    const key = (BigInt(min) << 32n) | BigInt(max);
 
     if (edgeMap.has(key)) {
-      edgeMap.delete(key);  // Interior edge, remove
+      edgeMap.delete(key); // Interior edge, remove
     } else {
       edgeMap.set(key, [a, b]);
     }
