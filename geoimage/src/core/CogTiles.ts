@@ -74,6 +74,7 @@ class CogTiles {
   async initializeCog(url: string) {
     // Return existing initialization promise if already in progress (prevents concurrent duplicates)
     if (this.initializePromise) return this.initializePromise;
+    this.rasterCache.clear(); // Clear stale cache in case instance is re-used with a new URL
     if (this.cog) return;
 
     this.initializePromise = (async () => {
@@ -242,8 +243,7 @@ class CogTiles {
     const exactMatchIndex = this.cogZoomLookup.indexOf(zoom);
     if (exactMatchIndex === -1) {
       // TO DO improve the condition if the match index is not found
-      /* eslint-disable no-console */
-      console.log('getImageIndexForZoomLevel: error in retrieving image by zoom index');
+      console.error('[CogTiles] getImageIndexForZoomLevel: image index not found for zoom', zoom);
     }
     return exactMatchIndex;
   }
@@ -262,8 +262,8 @@ class CogTiles {
     const localSignal = controller.signal;
 
     // Check if raster is already cached
-    const cacheKey = `${zoom}/${tileX}/${tileY}`;
-    const cachedRaster = this.rasterCache.get(cacheKey);
+    const cacheKey = `${zoom}/${tileX}/${tileY}/${fetchSize ?? this.tileSize}`;
+    const cachedRaster = this.getCachedRaster(cacheKey);
     if (cachedRaster) {
       return [cachedRaster];
     }
@@ -377,8 +377,7 @@ class CogTiles {
             if (destRow < FETCH_SIZE && destCol < FETCH_SIZE) {
               tileBuffer[destRowOffset + destCol] = validRasterData[band][srcRowOffset + col];
             } else {
-              /* eslint-disable no-console */
-              console.log(`error in assigning data to tile buffer: destRow ${destRow}, destCol ${destCol}, FETCH_SIZE ${FETCH_SIZE}`);
+              console.error(`[CogTiles] tile buffer bounds exceeded: destRow ${destRow}, destCol ${destCol}, FETCH_SIZE ${FETCH_SIZE}`);
             }
           }
         }
@@ -387,9 +386,7 @@ class CogTiles {
         }
       }
       // Mark raster as cached after successful fetch
-      if (!cachedRaster) {
-        this.rasterCache.set(cacheKey, validImageData); // for partial overlap
-      }
+      this.setCachedRaster(cacheKey, validImageData); // for partial overlap
       return [validImageData];
     }
 
@@ -397,9 +394,7 @@ class CogTiles {
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
     const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
     // Mark raster as cached after successful fetch
-    if (!cachedRaster) {
-      this.rasterCache.set(cacheKey, tileData); // for perfect match
-    }
+    this.setCachedRaster(cacheKey, tileData); // for perfect match
     return [tileData];
   } catch (error) {
     // If the signal was aborted (or geotiff.js threw AggregateError wrapping an abort),
