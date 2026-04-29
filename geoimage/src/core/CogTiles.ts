@@ -48,8 +48,8 @@ class CogTiles {
   }> = new Map();
   private readonly tileResultCacheMaxSize = 32;
 
-  private getTileResultCacheKey(x: number, y: number, z: number, meshMaxError: number): string {
-    return `${z}/${x}/${y}/${meshMaxError}`;
+  private getTileResultCacheKey(x: number, y: number, z: number, meshMaxError: number, skipTexture: boolean): string {
+    return `${z}/${x}/${y}/${meshMaxError}/${skipTexture ? '1' : '0'}`;
   }
 
   /** Clears the TileResult cache. Call when the COG URL or meshMaxError changes. */
@@ -458,7 +458,7 @@ class CogTiles {
     return tileData;
   }
 
-  async getTile(x: number, y: number, z: number, bounds?: Bounds, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
+  async getTile(x: number, y: number, z: number, bounds?: Bounds, meshMaxError?: number, signal?: AbortSignal, skipTexture?: boolean): Promise<TileResult | null> {
     // cellSizeMeters is derived purely from tile coordinates — compute once for all paths
     const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
     const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
@@ -471,7 +471,8 @@ class CogTiles {
     // Full TileResult (mesh + raw + texture) cached with ref-counted abort so that
     // panning cancels in-flight fetches only when ALL callers have cancelled.
     if (isTerrain) {
-      const cacheKey = this.getTileResultCacheKey(x, y, z, meshMaxError ?? 4.0);
+      const skipTextureFlag = skipTexture ?? this.options.skipTexture ?? false;
+      const cacheKey = this.getTileResultCacheKey(x, y, z, meshMaxError ?? 4.0, skipTextureFlag);
       const existing = this.tileResultCache.get(cacheKey);
 
       if (existing) {
@@ -557,7 +558,6 @@ class CogTiles {
       let maskPromise = this.reliefMaskCache.get(maskKey);
 
       if (!maskPromise) {
-        console.log(`[ReliefMaskCache] MISS ${maskKey}`);
         maskPromise = (async (): Promise<Uint8ClampedArray> => {
           const tileData = await this.getTileFromImage(x, y, z, this.tileSize + 2, signal);
           return ReliefCompositor.composeSwissRelief(

@@ -255,6 +255,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       this.state.terrainCogTiles.options.useChannelIndex = null; // Clear cached index
     }
 
+    // Update skipTexture when wireframe/operation/disableTexture changes so cache keys are correct
+    const newSkipTexture = !!(props?.wireframe || props?.operation === 'terrain' || props?.disableTexture);
+    const oldSkipTexture = !!(oldProps?.wireframe || oldProps?.operation === 'terrain' || oldProps?.disableTexture);
+    if (newSkipTexture !== oldSkipTexture && this.state.terrainCogTiles) {
+      this.state.terrainCogTiles.options.skipTexture = newSkipTexture;
+      this.state.terrainCogTiles.clearTileResultCache();
+    }
+
     // When the external cogTiles instance is swapped (e.g. mode switch), update state so
     // renderLayers picks up the new reference and the TileLayer updateTrigger fires a refetch
     // while keeping old tile content visible until new tiles are ready.
@@ -314,6 +322,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 
     let resolvedTerrain: TileResult | null = null;
     try {
+      const skipTexture = !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture);
       resolvedTerrain = await this.state.terrainCogTiles.getTile(
         tile.index.x,
         tile.index.y,
@@ -321,6 +330,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         bounds,
         this.props.meshMaxError,
         tile.signal,
+        skipTexture,
       );
     } catch (error) {
       // Tile was cancelled (AbortError) — return null so deck.gl discards it cleanly
@@ -448,6 +458,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
               meshMaxError,
               elevationDecoder,
               terrainCogTiles: this.state.terrainCogTiles,
+              skipTexture: !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture),
 			      },
               renderSubLayers: {
                 disableTexture: this.props.disableTexture,

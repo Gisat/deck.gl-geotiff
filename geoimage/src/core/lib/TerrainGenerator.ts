@@ -91,6 +91,8 @@ export class TerrainGenerator {
     };
 
     // 3. Kernel path: compute slope or hillshade, store as rawDerived, generate texture
+    const shouldSkipTexture = !!options.skipTexture;
+
     if (isKernel && options.useSwissRelief) {
       const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
       
@@ -111,7 +113,7 @@ export class TerrainGenerator {
       );
       tileResult.rawDerived = swissReliefResult;
 
-      if (this.hasVisualizationOptions(options)) {
+      if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
         const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
         const bitmapResult = await BitmapGenerator.generate(
           { width: 256, height: 256, rasters: [cropped, swissReliefResult] },
@@ -155,14 +157,14 @@ export class TerrainGenerator {
 
       tileResult.rawDerived = kernelOutput;
 
-      if (this.hasVisualizationOptions(options)) {
+      if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
         const bitmapResult = await BitmapGenerator.generate(
           { width: 256, height: 256, rasters: [kernelOutput] },
           { ...options, type: 'image' }
         );
         tileResult.texture = bitmapResult.map as ImageBitmap;
       }
-    } else if (this.hasVisualizationOptions(options)) {
+    } else if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
       // 4. Non-kernel path: crop 257→256, generate texture from elevation
       const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
       const bitmapResult = await BitmapGenerator.generate(

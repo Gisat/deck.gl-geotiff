@@ -63,6 +63,8 @@ export type GeoImageOptions = {
     useDataForOpacity?: boolean,
     useSingleColor?: boolean,
     blurredTexture? : boolean,
+    /** When true, skip generating a texture bitmap for this tile (mesh-only path). */
+    skipTexture?: boolean,
     clipLow?: number | null,
     clipHigh?: number | null,
     color?: ChromaColorInput,
@@ -121,6 +123,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     useDataForOpacity: false,
     useSingleColor: false,
     blurredTexture: true,
+    skipTexture: false,
     clipLow: null,
     clipHigh: null,
     color: [255, 0, 255, 255],

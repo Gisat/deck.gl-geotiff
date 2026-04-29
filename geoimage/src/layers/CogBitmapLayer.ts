@@ -299,7 +299,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       return new TileLayer<TileResult>(this.getSubLayerProps({
         id: 'tiles',
       }), {
-        getTileData: this.getTiledBitmapData.bind(this) as (props: TileLoadProps) => Promise<TileResult>,
+        getTileData: (props: TileLoadProps) => this.getTiledBitmapData(props),
         renderSubLayers: this.renderSubLayers.bind(this),
         pickable: this.props.pickable,
         onClick: this.props.onClick,

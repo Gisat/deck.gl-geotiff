@@ -132,6 +132,7 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 | **`meshMaxError`** | `number` | `4.0` | Martini/Delatin error tolerance in meters. Smaller number → more detailed mesh (higher triangle count). **Recommendation:** Set this to approximately your COG's pixel resolution (cellSize) or larger. Setting it significantly lower than the source resolution wastes computation without adding visual detail — the underlying data cannot represent features finer than its own pixel size. |
 | **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 | **`disableTexture`** | `boolean` | `false` | When `true`, suppresses any generated texture and renders the mesh in plain `color`. Useful for showing neutral grey terrain during mode transitions. |
+| **`skipTexture`** | `boolean` | `false` | Internal option: when `true`, prevents texture generation in `TerrainGenerator` and is included in the tile cache key to avoid serving mesh-only tiles to textured requests. Set by `CogTerrainLayer` when `wireframe` is true or `operation === 'terrain'.` |
 
 ---
 
