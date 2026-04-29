@@ -33,31 +33,30 @@ class CogTiles {
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
-  // Stores Promises (not resolved values) so concurrent requests for the same tile share one fetch.
-  // This mirrors the imageCache pattern: the Promise is inserted before await, so any concurrent
-  // call for the same key hits the cache and shares the same in-flight request.
-  private rasterCache: Map<string, Promise<any[]>> = new Map();
+  // Track fetched rasters as {x, y, z, raster} objects
+  private rasterCache: Map<string, any> = new Map();
   private readonly maxCacheSize = 256;
 
   // LRU cache helpers
-  private getCachedRaster(key: string): Promise<any[]> | undefined {
+  private getCachedRaster(key: string): any | undefined {
     const value = this.rasterCache.get(key);
     if (value !== undefined) {
-      // Refresh LRU order: delete and re-set
+      // Refresh order: delete and re-set
       this.rasterCache.delete(key);
       this.rasterCache.set(key, value);
     }
     return value;
   }
 
-  private setCachedRaster(key: string, promise: Promise<any[]>): void {
-    this.rasterCache.set(key, promise);
+  private setCachedRaster(key: string, value: any): void {
+    this.rasterCache.set(key, value);
     if (this.rasterCache.size > this.maxCacheSize) {
       // Evict oldest
       const oldestKey = this.rasterCache.keys().next().value;
       if (typeof oldestKey === 'string') {
         this.rasterCache.delete(oldestKey);
       }
+
     }
   }
 
@@ -262,16 +261,12 @@ class CogTiles {
     }
     const localSignal = controller.signal;
 
-    // Check if raster is already cached (stores Promises to deduplicate concurrent requests)
+    // Check if raster is already cached
     const cacheKey = `${zoom}/${tileX}/${tileY}/${fetchSize ?? this.tileSize}`;
-    const cachedPromise = this.getCachedRaster(cacheKey);
-    if (cachedPromise) {
-      return cachedPromise;
+    const cachedRaster = this.getCachedRaster(cacheKey);
+    if (cachedRaster) {
+      return [cachedRaster];
     }
-
-    // Build the fetch Promise and store it immediately — before any await — so concurrent
-    // requests for the same tile hit the cache and share this single in-flight request.
-    const fetchPromise = (async () => {
     try {
       const imageIndex = this.getImageIndexForZoomLevel(zoom);
       
@@ -391,12 +386,15 @@ class CogTiles {
         }
       }
       // Mark raster as cached after successful fetch
+      this.setCachedRaster(cacheKey, validImageData); // for partial overlap
       return [validImageData];
     }
 
     // Case B: Perfect Match (Optimization)
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
     const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
+    // Mark raster as cached after successful fetch
+    this.setCachedRaster(cacheKey, tileData); // for perfect match
     return [tileData];
   } catch (error) {
     // If the signal was aborted (or geotiff.js threw AggregateError wrapping an abort),
@@ -410,18 +408,10 @@ class CogTiles {
       || (error instanceof Error && error.message === 'Request was aborted');
 
     if (isAbortRelated) {
-      // Remove the cached Promise on abort so the next request for this tile starts fresh
-      this.rasterCache.delete(cacheKey);
       throw new DOMException('Tile request aborted', 'AbortError');
     }
-    // Remove failed Promise from cache so a retry can attempt the fetch again
-    this.rasterCache.delete(cacheKey);
     throw error;
   }
-  })();
-
-  this.setCachedRaster(cacheKey, fetchPromise);
-  return fetchPromise;
 }
 
   /**
