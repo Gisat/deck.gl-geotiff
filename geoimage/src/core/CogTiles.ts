@@ -2,7 +2,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geoti
 
 // Bitmap styling
 import GeoImage from './GeoImage';
-import { GeoImageOptions, TileResult } from './types';
+import { GeoImageOptions, TileResult, TypedArray } from './types';
 import { ReliefCompositor } from './lib/ReliefCompositor';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
@@ -33,12 +33,13 @@ class CogTiles {
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
-  // Track fetched rasters as {x, y, z, raster} objects
-  private rasterCache: Map<string, any> = new Map();
+  // Cache fetched rasters in an LRU-style Map keyed by `${z}/${x}/${y}/${fetchSize}`,
+  // with each value holding the cached raster for that tile request.
+  private rasterCache: Map<string, TypedArray> = new Map();
   private readonly maxCacheSize = 256;
 
   // LRU cache helpers
-  private getCachedRaster(key: string): any | undefined {
+  private getCachedRaster(key: string): TypedArray | undefined {
     const value = this.rasterCache.get(key);
     if (value !== undefined) {
       // Refresh order: delete and re-set
@@ -48,7 +49,7 @@ class CogTiles {
     return value;
   }
 
-  private setCachedRaster(key: string, value: any): void {
+  private setCachedRaster(key: string, value: TypedArray): void {
     this.rasterCache.set(key, value);
     if (this.rasterCache.size > this.maxCacheSize) {
       // Evict oldest
@@ -67,6 +68,9 @@ class CogTiles {
   // Store initialization promise to prevent concurrent duplicate initializations
   private initializePromise?: Promise<void>;
 
+  // Track the last successfully initialized URL to detect URL changes
+  private lastInitializedUrl?: string;
+
   constructor(options: GeoImageOptions) {
     this.options = { ...CogTilesGeoImageOptionsDefaults, ...options };
   }
@@ -74,7 +78,10 @@ class CogTiles {
   async initializeCog(url: string) {
     // Return existing initialization promise if already in progress (prevents concurrent duplicates)
     if (this.initializePromise) return this.initializePromise;
-    this.rasterCache.clear(); // Clear stale cache in case instance is re-used with a new URL
+    // Clear cache only if URL changed (preserves cache on idempotent re-init)
+    if (this.lastInitializedUrl !== url) {
+      this.rasterCache.clear();
+    }
     if (this.cog) return;
 
     this.initializePromise = (async () => {
@@ -116,6 +123,9 @@ class CogTiles {
         );
 
         this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
+
+        // Mark initialization complete for this URL (used to detect URL changes)
+        this.lastInitializedUrl = url;
       } catch (error) {
         // Reset initialization promise on error so retry can be attempted
         this.initializePromise = undefined;
@@ -241,11 +251,21 @@ class CogTiles {
 
     // For zoom levels within the available range, find the exact or closest matching index.
     const exactMatchIndex = this.cogZoomLookup.indexOf(zoom);
-    if (exactMatchIndex === -1) {
-      // TO DO improve the condition if the match index is not found
-      console.error('[CogTiles] getImageIndexForZoomLevel: image index not found for zoom', zoom);
+    if (exactMatchIndex !== -1) {
+      return exactMatchIndex;
     }
-    return exactMatchIndex;
+
+    // No exact match: find the closest zoom level
+    let closestIndex = 0;
+    let minDistance = Math.abs(this.cogZoomLookup[0] - zoom);
+    for (let i = 1; i < this.cogZoomLookup.length; i += 1) {
+      const distance = Math.abs(this.cogZoomLookup[i] - zoom);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+    return closestIndex;
   }
 
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
