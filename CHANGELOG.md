@@ -1,3 +1,16 @@
+## [2.5.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.3...v2.5.0-dev.4) (2026-04-29)
+
+### Features
+
+* implement Item 3 - AbortSignal propagation for tile cancellation ([c288c4e](https://github.com/Gisat/deck.gl-geotiff/commit/c288c4eb6e01e93d6c831a7cac4519e54e57ed0c))
+
+### Bug Fixes
+
+* add abort guard before geo.getMap() in getTile ([67527b8](https://github.com/Gisat/deck.gl-geotiff/commit/67527b861b449c6770ae6b33364c45ed8d0026e3))
+* Address PR [#143](https://github.com/Gisat/deck.gl-geotiff/issues/143) code review comments ([964a69d](https://github.com/Gisat/deck.gl-geotiff/commit/964a69d26acd1847ca2a6ed701bc29d65e8b36ac))
+* Address PR [#143](https://github.com/Gisat/deck.gl-geotiff/issues/143) second code review comments ([4bbc8b9](https://github.com/Gisat/deck.gl-geotiff/commit/4bbc8b97e5773715230fe24c05ca81e447fdea9f))
+* fix abort signal causing tile holes on zoom ([06c5266](https://github.com/Gisat/deck.gl-geotiff/commit/06c5266ec87b6ca2160ae636472066e3bded8f44))
+
 ## [2.5.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.2...v2.5.0-dev.3) (2026-04-28)
 
 ### Features
