@@ -293,7 +293,7 @@ This wastes CPU on tiles outside the COG extent or masked areas.
 
 After `getTileFromImage` returns, perform a fast no-data check on the selected elevation channel. If the raster contains only noData values, return `null` from `getTile()` early — no mesh, no texture, no cache entry.
 
-**Default heuristic:** `'border+center'` probes tile borders and a few interior points (fast, low false-negative rate). Use `'full'` for an exhaustive scan when correctness trumps CPU.
+**Default heuristic:** runtime default is `'full'` (safe): it scans every pixel to avoid false-empty tiles. Use `'border+center'` when you prefer a faster heuristic; note it may miss small isolated land masses (e.g., archipelagos).
 
 ### 6.2 — Detect partially-noData tiles (optional / stretch)
 

@@ -524,7 +524,7 @@ class CogTiles {
           let useChannelIndex = this.options.useChannelIndex ?? (this.options.useChannel ? (this.options.useChannel - 1) : 0);
           if (useChannelIndex == null) useChannelIndex = 0;
 
-          const checkStrategy = this.options.noDataCheck ?? 'border+center';
+          const checkStrategy = this.options.noDataCheck ?? 'full';
 
           const width = requiredSize;
           const height = requiredSize;

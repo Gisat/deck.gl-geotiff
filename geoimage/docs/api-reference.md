@@ -96,7 +96,7 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 
 > **Performance and `terrainSkirtHeight`:** The skirt (enabled by default at 100 meters) prevents visible cracks at tile boundaries by adding vertical walls. This requires deduplicating mesh boundary edges during generation, which has a small CPU cost. For typical configurations (meshMaxError: 4.0), this is negligible (~5ms per tile). For very fine meshes or performance-critical applications, you can disable skirts with `terrainSkirtHeight: 0` to save the edge deduplication cost, accepting tile boundary cracks as a trade-off.
 
-Additionally, as a performance optimization, tiles whose elevation channel contains only the configured `noDataValue` are detected early — in such cases no mesh or texture is generated and the tile loader returns `null`, avoiding expensive tessellation. The detection strategy can be configured via `terrainOptions.noDataCheck` with values `'full'` or `'border+center'`. The default `'border+center'` probes tile borders and a few interior points for a fast, robust heuristic.
+Additionally, as a performance optimization, tiles whose elevation channel contains only the configured `noDataValue` are detected early — in such cases no mesh or texture is generated and the tile loader returns `null`, avoiding expensive tessellation. The detection strategy can be configured via `terrainOptions.noDataCheck` with values `'full'` or `'border+center'`. The default is `'full'` (safe): it scans every pixel to avoid false-empty tiles. Use `'border+center'` when you prefer a faster heuristic; note it may miss small isolated land masses (e.g., archipelagos).
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |

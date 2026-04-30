@@ -129,7 +129,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     blurredTexture: true,
     skipTexture: false,
     /** Strategy for noData detection: 'full' | 'border+center' */
-    noDataCheck: 'border+center',
+    noDataCheck: 'full',
     clipLow: null,
     clipHigh: null,
     color: [255, 0, 255, 255],
