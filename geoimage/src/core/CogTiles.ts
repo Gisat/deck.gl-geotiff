@@ -21,6 +21,7 @@ class CogTiles {
 
   cogZoomLookup: number[] = [];
   cogResolutionLookup: number[] = [];
+  cogMeshMaxErrorLookup: number[] = [];
 
   cogOrigin: number[] = [0, 0];
 
@@ -124,6 +125,11 @@ class CogTiles {
 
         [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
 
+    // Only compute quantized meshMaxError lookup for terrain COGs
+    if (this.options.type === 'terrain') {
+      this.computeMeshMaxErrorLookup();
+    }
+
         this.tileSize = image.getTileWidth();
 
         // 1. Validation: Ensure the image is tiled
@@ -196,8 +202,37 @@ class CogTiles {
 
     return [lon, lat] as [number, number];
   }
-    // return cartographicPositionAdjusted;
-  // }
+
+  /**
+   * Calculates the error multiplier based on zoom level and COG zoom range.
+   * - z >= maxZ: multiplier = 0.5 (fine meshes at high zoom, maximum precision)
+   * - z <= minZ: multiplier = 3.0 (coarse meshes at low zoom, maximum performance)
+   * - Otherwise: linear interpolation between 3.0 and 0.5
+   */
+  private getErrorMultiplierForZoom(z: number, minZ: number, maxZ: number): number {
+    if (z >= maxZ) return 0.5;
+    if (z <= minZ) return 3.0;
+    // Linear interpolation: 3.0 - ((z - minZ) / (maxZ - minZ)) * 2.5
+    return 3.0 - ((z - minZ) / (maxZ - minZ)) * 2.5;
+  }
+
+  /**
+   * Calculates dynamic meshMaxError for a given zoom level and resolution.
+   * Formula: resolution * errorMultiplier, where multiplier scales from 3.0 (low zoom) to 0.5 (high zoom).
+   * Results are rounded to nearest integer.
+   */
+  private calculateDynamicMeshMaxError(z: number, resolution: number, minZ: number, maxZ: number): number {
+    const multiplier = this.getErrorMultiplierForZoom(z, minZ, maxZ);
+    return Math.round(resolution * multiplier);
+  }
+
+  /**
+   * Gets the auto meshMaxError for a given overview index.
+   * Returns undefined if auto lookup has not been computed.
+   */
+  getMeshMaxErrorForImageIndex(imageIndex: number): number | undefined {
+    return this.cogMeshMaxErrorLookup[imageIndex];
+  }
 
   /**
    * Builds lookup tables for zoom levels and estimated resolutions from a Cloud Optimized GeoTIFF (COG) object.
@@ -245,6 +280,22 @@ class CogTiles {
     }
 
     return [zoomLookup, resolutionLookup];
+  }
+
+  /**
+   * Computes dynamic meshMaxError values for each overview based on COG resolution and zoom level.
+   * Called only for terrain COGs after buildCogZoomResolutionLookup() completes.
+   * Each overview's meshMaxError is calculated as: resolution * zoom-based multiplier, rounded to nearest integer.
+   * Multiplier ranges from 3.0 at minZ (coarse meshes) to 0.5 at maxZ (fine meshes).
+   */
+  private computeMeshMaxErrorLookup(): void {
+    const minZ = this.cogZoomLookup[this.cogZoomLookup.length - 1];
+    const maxZ = this.cogZoomLookup[0];
+
+    this.cogMeshMaxErrorLookup = this.cogResolutionLookup.map((resolution, idx) => {
+      const zoom = this.cogZoomLookup[idx];
+      return this.calculateDynamicMeshMaxError(zoom, resolution, minZ, maxZ);
+    });
   }
 
   /**
@@ -467,12 +518,22 @@ class CogTiles {
     const isTerrain = this.options.type === 'terrain';
     const isGlaze = this.options.type === 'image' && this.options.useReliefGlaze;
 
+    // Resolve meshMaxError: if not provided or 0, use auto quantized value; otherwise use explicit value
+    let resolvedMeshMaxError = meshMaxError;
+    if (isTerrain && (!meshMaxError || meshMaxError === 0)) {
+      const imageIndex = this.getImageIndexForZoomLevel(z);
+      const autoMeshMaxError = this.getMeshMaxErrorForImageIndex(imageIndex);
+      resolvedMeshMaxError = autoMeshMaxError ?? 4.0;
+    } else {
+      resolvedMeshMaxError = meshMaxError ?? 4.0;
+    }
+
     // ── PATH A: Terrain ──────────────────────────────────────────────────────────
     // Full TileResult (mesh + raw + texture) cached with ref-counted abort so that
     // panning cancels in-flight fetches only when ALL callers have cancelled.
     if (isTerrain) {
       const skipTextureFlag = skipTexture ?? this.options.skipTexture ?? false;
-      const cacheKey = this.getTileResultCacheKey(x, y, z, meshMaxError ?? 4.0, skipTextureFlag);
+      const cacheKey = this.getTileResultCacheKey(x, y, z, resolvedMeshMaxError, skipTextureFlag);
       const existing = this.tileResultCache.get(cacheKey);
 
       if (existing) {
@@ -610,7 +671,7 @@ class CogTiles {
           height: requiredSize,
           bounds: bounds ?? [0, 0, 0, 0],
           cellSizeMeters,
-        }, this.options, meshMaxError ?? 4.0);
+        }, this.options, resolvedMeshMaxError);
       })();
 
       entry.promise = pipeline;

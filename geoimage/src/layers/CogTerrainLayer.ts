@@ -56,6 +56,13 @@ export const urlType = {
   },
 };
 
+const meshMaxErrorValidation = {
+  type: 'object' as const,
+  value: 'auto' as const,
+  validate: (value: any) => typeof value === 'number' || value === 'auto',
+  equal: (v1: any, v2: any) => v1 === v2,
+};
+
 const DUMMY_DATA = [1];
 
 const defaultProps: DefaultProps<_CogTerrainLayerProps> = {
@@ -65,7 +72,9 @@ const defaultProps: DefaultProps<_CogTerrainLayerProps> = {
   // Image url to use as texture
   texture: { ...urlType, optional: true },
   // Martini error tolerance in meters, smaller number -> more detailed mesh
-  meshMaxError: { type: 'number', value: 4.0 },
+  // Set to a number for fixed tessellation across all zooms, or 'auto' (default)
+  // for zoom-adaptive meshMaxError based on COG resolution
+  meshMaxError: meshMaxErrorValidation,
   // Bounding box of the terrain image, [minX, minY, maxX, maxY] in world coordinates
   bounds: {
     type: 'array', value: null, optional: true, compare: true,
@@ -125,8 +134,8 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
 	/** Image url to use as texture. * */
 	texture?: URLTemplate;
 
-	/** Martini error tolerance in meters, smaller number -> more detailed mesh. * */
-	meshMaxError?: number;
+  /** Martini error tolerance in meters, smaller number -> more detailed mesh. Set to 'auto' for dynamic per-zoom quantization. * */
+	meshMaxError?: number | 'auto';
 
 	/** Bounding box of the terrain image, [minX, minY, maxX, maxY] in world coordinates. * */
 	bounds?: Bounds | null;
@@ -323,12 +332,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     let resolvedTerrain: TileResult | null = null;
     try {
       const skipTexture = !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture);
+      // Convert 'auto' to undefined so CogTiles.getTile uses the quantized meshMaxError for the zoom level
+      const meshMaxErrorValue = this.props.meshMaxError === 'auto' ? undefined : (this.props.meshMaxError as number | undefined);
       resolvedTerrain = await this.state.terrainCogTiles.getTile(
         tile.index.x,
         tile.index.y,
         tile.index.z,
         bounds,
-        this.props.meshMaxError,
+        meshMaxErrorValue,
         tile.signal,
         skipTexture,
       );
