@@ -515,6 +515,95 @@ class CogTiles {
         const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
         const requiredSize = this.tileSize + (isKernel ? 2 : 1);
         const tileData = await this.getTileFromImage(x, y, z, requiredSize, controller.signal);
+
+        // === Step F: detect all-noData tiles before tessellation ===
+        const raster = tileData[0];
+        const noData = this.options.noDataValue;
+        if (noData !== undefined && raster) {
+          const numChannels = this.options.numOfChannels || 1;
+          let useChannelIndex = this.options.useChannelIndex ?? (this.options.useChannel ? (this.options.useChannel - 1) : 0);
+          if (useChannelIndex == null) useChannelIndex = 0;
+
+          const checkStrategy = this.options.noDataCheck ?? 'border+center';
+
+          const width = requiredSize;
+          const height = requiredSize;
+
+          const isNoValue = (v: number) => (Number.isNaN(noData) ? Number.isNaN(v) : v === noData);
+
+          let allNoData = true;
+
+          if (checkStrategy === 'full') {
+            // Full linear scan (safe)
+            if (numChannels > 1) {
+              for (let i = useChannelIndex; i < (raster as any).length; i += numChannels) {
+                const v = (raster as any)[i];
+                if (!isNoValue(v)) { allNoData = false; break; }
+              }
+            } else {
+              for (let i = 0; i < (raster as any).length; i++) {
+                const v = (raster as any)[i];
+                if (!isNoValue(v)) { allNoData = false; break; }
+              }
+            }
+          } else if (checkStrategy === 'border+center') {
+            // Border scan: iterate over top/bottom rows and left/right cols
+            const stepX = numChannels;
+            // Top row
+            for (let x = 0; x < width; x++) {
+              const idx = x * stepX + useChannelIndex;
+              const v = (raster as any)[idx];
+              if (!isNoValue(v)) { allNoData = false; break; }
+            }
+            // Bottom row
+            if (allNoData) {
+              for (let x = 0; x < width; x++) {
+                const idx = ((height - 1) * width + x) * stepX + useChannelIndex;
+                const v = (raster as any)[idx];
+                if (!isNoValue(v)) { allNoData = false; break; }
+              }
+            }
+            // Left/Right cols
+            if (allNoData) {
+              for (let y = 1; y < height - 1; y++) {
+                const leftIdx = (y * width) * stepX + useChannelIndex;
+                const rightIdx = (y * width + (width - 1)) * stepX + useChannelIndex;
+                const vl = (raster as any)[leftIdx];
+                const vr = (raster as any)[rightIdx];
+                if (!isNoValue(vl) || !isNoValue(vr)) { allNoData = false; break; }
+              }
+            }
+
+            // Center probe + 4 quadrant probes
+            if (allNoData) {
+              const probes: [number, number][] = [
+                [Math.floor(width / 2), Math.floor(height / 2)],
+                [Math.floor(width / 4), Math.floor(height / 4)],
+                [Math.floor((3 * width) / 4), Math.floor(height / 4)],
+                [Math.floor(width / 4), Math.floor((3 * height) / 4)],
+                [Math.floor((3 * width) / 4), Math.floor((3 * height) / 4)],
+              ];
+              for (const [px, py] of probes) {
+                const idx = (py * width + px) * stepX + useChannelIndex;
+                const v = (raster as any)[idx];
+                if (!isNoValue(v)) { allNoData = false; break; }
+              }
+            }
+          } else {
+            // Unknown strategy — fallback to full
+            for (let i = 0; i < (raster as any).length; i++) {
+              const v = (raster as any)[i];
+              if (!isNoValue(v)) { allNoData = false; break; }
+            }
+          }
+
+          if (allNoData) {
+            // Do not cache all-noData result; remove cache entry so future requests re-evaluate if COG/metadata changes.
+            this.tileResultCache.delete(cacheKey);
+            return null;
+          }
+        }
+
         return this.geo.getMap({
           rasters: [tileData[0]],
           width: requiredSize,

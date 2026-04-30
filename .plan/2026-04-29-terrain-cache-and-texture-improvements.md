@@ -289,10 +289,11 @@ Currently, tiles that are fully or partially covered by noData values still run 
 tessellation pipeline (Martini/Delatin) even when every vertex would be a discard/fill value.
 This wastes CPU on tiles outside the COG extent or masked areas.
 
-### 6.1 — Detect all-noData tiles before tessellation
+### 6.1 — Detect all-noData tiles before tessellation ✅
 
-After `getTileFromImage` returns, check if the raster contains only noData values.
-If so, return `null` from `getTile()` early — no mesh, no texture, no cache entry.
+After `getTileFromImage` returns, perform a fast no-data check on the selected elevation channel. If the raster contains only noData values, return `null` from `getTile()` early — no mesh, no texture, no cache entry.
+
+**Default heuristic:** `'border+center'` probes tile borders and a few interior points (fast, low false-negative rate). Use `'full'` for an exhaustive scan when correctness trumps CPU.
 
 ### 6.2 — Detect partially-noData tiles (optional / stretch)
 
@@ -322,5 +323,5 @@ Separate PR, after Steps A–F are stable and merged.
 | C | Include `skipTexture` in cache key; detect `wireframe`/`operation='terrain'` condition | `CogTiles.ts`, `CogTerrainLayer.ts` | High | feat/terrain-perf-tileresult-cache | ✅ Done |
 | D | Skip `BitmapGenerator` in pipeline when `skipTexture=true` | `GeoImage.ts`, `TerrainGenerator.ts`, `types.ts` | High | feat/terrain-perf-tileresult-cache | ⬜ Pending |
 | E | Per-type bitmap caching (raster + relief mask) | `CogTiles.ts` | Medium | feat/terrain-perf-tileresult-cache | ✅ Done |
-| F | Skip mesh for noData/discard tiles | `TerrainGenerator.ts`, `CogTiles.ts` | Medium | feat/terrain-perf-tileresult-cache | ⬜ Pending |
+| F | Skip mesh for noData/discard tiles | `TerrainGenerator.ts`, `CogTiles.ts` | Medium | feat/terrain-perf-tileresult-cache | ✅ Done |
 | G | Web Worker tessellation | `TerrainGenerator.ts`, Rollup | Low | separate PR | ⬜ Pending |

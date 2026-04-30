@@ -96,6 +96,8 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 
 > **Performance and `terrainSkirtHeight`:** The skirt (enabled by default at 100 meters) prevents visible cracks at tile boundaries by adding vertical walls. This requires deduplicating mesh boundary edges during generation, which has a small CPU cost. For typical configurations (meshMaxError: 4.0), this is negligible (~5ms per tile). For very fine meshes or performance-critical applications, you can disable skirts with `terrainSkirtHeight: 0` to save the edge deduplication cost, accepting tile boundary cracks as a trade-off.
 
+Additionally, as a performance optimization, tiles whose elevation channel contains only the configured `noDataValue` are detected early — in such cases no mesh or texture is generated and the tile loader returns `null`, avoiding expensive tessellation. The detection strategy can be configured via `terrainOptions.noDataCheck` with values `'full'` or `'border+center'`. The default `'border+center'` probes tile borders and a few interior points for a fast, robust heuristic.
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`tesselator`** | `'martini'` \| `'delatin'` | `'martini'` | The algorithm used for terrain mesh generation. 'Martini' is generally faster, 'Delatin' may produce higher quality meshes. |

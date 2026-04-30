@@ -91,6 +91,10 @@ export type GeoImageOptions = {
     swissSlopeWeight?: number,
     useReliefGlaze?: boolean,
 
+    // --- noData detection strategy ---
+    /** Strategy for detecting all-noData tiles. Options: 'full' | 'border+center' */
+    noDataCheck?: 'full' | 'border+center',
+
     // --- Lighting control ---
     disableLighting?: boolean,
 }
@@ -124,6 +128,8 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     useSingleColor: false,
     blurredTexture: true,
     skipTexture: false,
+    /** Strategy for noData detection: 'full' | 'border+center' */
+    noDataCheck: 'border+center',
     clipLow: null,
     clipHigh: null,
     color: [255, 0, 255, 255],
