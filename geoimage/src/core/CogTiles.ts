@@ -497,19 +497,42 @@ class CogTiles {
     const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
     return [tileData];
   } catch (error) {
-    // If the signal was aborted (or geotiff.js threw AggregateError wrapping an abort),
-    // re-throw as a standard AbortError so deck.gl handles tile cancellation gracefully
-    // and suppressGlobalAbortErrors() can suppress the unhandled rejection noise.
+    // If it's a single-error AggregateError, unwrap to the inner error for clearer diagnostics
+    if (error instanceof AggregateError && error.errors.length === 1) {
+      const innerError = error.errors[0];
+      
+      // Check if the unwrapped error is an abort — if so, throw it as AbortError
+      if (innerError instanceof DOMException && innerError.name === 'AbortError') {
+        throw innerError;
+      }
+      if (innerError instanceof Error && innerError.message === 'Request was aborted') {
+        throw new DOMException('Tile request aborted', 'AbortError');
+      }
+      
+      // Unwrap single error for better diagnostics (throw the real error, not the wrapper)
+      throw innerError;
+    }
+
+    // Handle regular abort cases
     const isAbortRelated = localSignal.aborted
-      || (error instanceof AggregateError && error.errors?.some(
-        (e: any) => e?.name === 'AbortError' || e?.message?.includes('aborted') || e?.message?.includes('abort')
-      ))
       || (error instanceof DOMException && error.name === 'AbortError')
       || (error instanceof Error && error.message === 'Request was aborted');
 
     if (isAbortRelated) {
       throw new DOMException('Tile request aborted', 'AbortError');
     }
+
+    // For multi-error AggregateError, check if ANY error is abort-related
+    if (error instanceof AggregateError) {
+      const hasAbort = error.errors.some(
+        (e: any) => (e instanceof DOMException && e.name === 'AbortError') 
+                  || (e instanceof Error && e.message === 'Request was aborted')
+      );
+      if (hasAbort) {
+        throw new DOMException('Tile request aborted', 'AbortError');
+      }
+    }
+
     throw error;
   }
 }
