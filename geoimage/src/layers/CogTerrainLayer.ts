@@ -121,8 +121,9 @@ function urlTemplateToUpdateTrigger(template: URLTemplate): string {
 
 /** All properties supported by CogTerrainLayer */
 export type CogTerrainLayerProps = _CogTerrainLayerProps &
-	TileLayerProps<MeshAndTexture> &
+	TileLayerProps<MeshAndTexture | null> &
 	CompositeLayerProps;
+
 
   /** Props added by the CogTerrainLayer */
   type _CogTerrainLayerProps = {
@@ -178,7 +179,7 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
 
 /** Render mesh surfaces from height map images. */
 export default class CogTerrainLayer<ExtraPropsT extends object = object> extends CompositeLayer<
-	ExtraPropsT & Required<_CogTerrainLayerProps & Required<TileLayerProps<MeshAndTexture>>>
+	ExtraPropsT & Required<_CogTerrainLayerProps & Required<TileLayerProps<MeshAndTexture | null>>>
   > {
   static defaultProps = defaultProps;
 
@@ -313,7 +314,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     });
   }
 
-  async getTiledTerrainData(tile: TileLoadProps): Promise<MeshAndTexture> {
+  async getTiledTerrainData(tile: TileLoadProps): Promise<MeshAndTexture | null> {
 	  const { viewport } = this.context;
 	  let bottomLeft = [0, 0] as [number, number];
 	  let topRight = [0, 0] as [number, number];
@@ -346,7 +347,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     } catch (error) {
       // Tile was cancelled (AbortError) — return null so deck.gl discards it cleanly
       if (error instanceof DOMException && error.name === 'AbortError') {
-        return null as unknown as MeshAndTexture;
+        return null;
       }
       throw error;
     }
@@ -355,14 +356,15 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         resolvedTerrain.raw = null;
       }
 
-      return Promise.all([resolvedTerrain, null]) as unknown as Promise<MeshAndTexture>;
+      // Return a tuple [TileResult|null, Texture|null] when data is available, otherwise null
+      return resolvedTerrain ? [resolvedTerrain, null] : null;
   }
 
   renderSubLayers(
-	  props: TileLayerProps<MeshAndTexture> & {
+	  props: TileLayerProps<MeshAndTexture | null> & {
 		id: string;
-		data: MeshAndTexture;
-		tile: Tile2DHeader<MeshAndTexture>;
+		data: MeshAndTexture | null;
+		tile: Tile2DHeader<MeshAndTexture | null>;
 	  },
   ) {
 	  const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
@@ -407,7 +409,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   }
 
   // Update zRange of viewport
-  onViewportLoad(tiles?: Tile2DHeader<MeshAndTexture>[]): void {
+  onViewportLoad(tiles?: Tile2DHeader<MeshAndTexture | null>[]): void {
 	  if (!tiles) {
       return;
 	  }
@@ -454,7 +456,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  } = this.props;
 
 	  if (this.state.isTiled && this.state.initialized) {
-      return new TileLayer<MeshAndTexture>(
+      return new TileLayer<MeshAndTexture | null>(
 		  this.getSubLayerProps({
           id: 'tiles',
 		  }),

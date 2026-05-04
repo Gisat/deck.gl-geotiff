@@ -17,7 +17,7 @@ const CogTilesGeoImageOptionsDefaults = {
 };
 
 class CogTiles {
-  cog!: GeoTIFF;
+  cog?: GeoTIFF;
 
   cogZoomLookup: number[] = [];
   cogResolutionLookup: number[] = [];
@@ -91,15 +91,35 @@ class CogTiles {
   }
 
   async initializeCog(url: string) {
-    // Return existing initialization promise if already in progress (prevents concurrent duplicates)
-    if (this.initializePromise) return this.initializePromise;
-    // Clear all caches only if URL changed (preserves cache on idempotent re-init)
-    if (this.lastInitializedUrl !== url) {
+    // Reuse existing initialization while it is in progress, or when the same URL
+    // was already initialized on this instance.
+    if (this.initializePromise && (!this.cog || this.lastInitializedUrl === url)) {
+      return this.initializePromise;
+    }
+
+    // Fully reset COG-derived state when the URL changes so the instance can be
+    // safely reinitialized against a different source.
+    if (this.lastInitializedUrl !== undefined && this.lastInitializedUrl !== url) {
       this.clearTileResultCache();
       this.rasterCache.clear();
       this.reliefMaskCache.clear();
+      this.imageCache.clear();
+      this.cog = undefined;
+      this.cogOrigin = [0, 0];
+      this.cogZoomLookup = [];
+      this.cogResolutionLookup = [];
+      this.cogMeshMaxErrorLookup = [];
+      this.tileSize = 256;
+      this.zoomRange = [0, 0];
+      this.bounds = [0, 0, 0, 0];
+      this.initializePromise = undefined;
+      this.lastInitializedUrl = undefined;
     }
-    if (this.cog) return;
+
+    // If COG already loaded and URL matches, return the existing promise
+    if (this.cog && this.lastInitializedUrl === url) {
+      return this.initializePromise ?? Promise.resolve();
+    }
 
     this.initializePromise = (async () => {
       try {
@@ -110,7 +130,7 @@ class CogTiles {
         // blockSize defaults to 65536 (64KB) and can be tuned via GeoImageOptions.
         const blockSize = this.options.blockSize ?? 65536;
         this.cog = await (fromUrl as any)(url, { blockSize } as BlockedSourceOptions);
-        const imagePromise = this.cog.getImage();
+        const imagePromise = this.cog!.getImage();
         this.imageCache.set(0, imagePromise);  // Cache base image (index 0) to avoid re-fetching during getTileFromImage
         const image = await imagePromise;
         const fileDirectory = image.fileDirectory;
@@ -123,7 +143,7 @@ class CogTiles {
         this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
         this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
 
-        [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog);
+        [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog!);
 
     // Only compute quantized meshMaxError lookup for terrain COGs
     if (this.options.type === 'terrain') {
@@ -141,7 +161,7 @@ class CogTiles {
         }
 
         this.zoomRange = this.calculateZoomRange(
-          this.tileSize, image.getResolution()[0], await this.cog.getImageCount()
+          this.tileSize, image.getResolution()[0], await this.cog!.getImageCount()
         );
 
         this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
@@ -219,11 +239,14 @@ class CogTiles {
   /**
    * Calculates dynamic meshMaxError for a given zoom level and resolution.
    * Formula: resolution * errorMultiplier, where multiplier scales from 3.0 (low zoom) to 0.5 (high zoom).
-   * Results are rounded to nearest integer.
+   * Results are clamped to 0.5–100 meters to prevent pathological tessellation:
+   * - Min 0.5m ensures simplification always happens (no rounding to 0 with sub-meter pixels)
+   * - Max 100m prevents excessive simplification at low zoom with low-resolution COGs
    */
   private calculateDynamicMeshMaxError(z: number, resolution: number, minZ: number, maxZ: number): number {
     const multiplier = this.getErrorMultiplierForZoom(z, minZ, maxZ);
-    return Math.round(resolution * multiplier);
+    const errorValue = resolution * multiplier;
+    return Math.max(0.5, Math.min(100, errorValue));
   }
 
   /**
@@ -354,7 +377,7 @@ class CogTiles {
       // Cache Promises to share in-flight requests across concurrent tiles at the same overview
       let imagePromise = this.imageCache.get(imageIndex);
       if (!imagePromise) {
-        imagePromise = this.cog.getImage(imageIndex);
+        imagePromise = this.cog!.getImage(imageIndex);
         this.imageCache.set(imageIndex, imagePromise);
       }
       const targetImage = await imagePromise;
@@ -535,6 +558,11 @@ class CogTiles {
       const skipTextureFlag = skipTexture ?? this.options.skipTexture ?? false;
       const cacheKey = this.getTileResultCacheKey(x, y, z, resolvedMeshMaxError, skipTextureFlag);
       const existing = this.tileResultCache.get(cacheKey);
+      if (existing) {
+        // LRU touch — move the key to the end of the Map to mark as recently used
+        this.tileResultCache.delete(cacheKey);
+        this.tileResultCache.set(cacheKey, existing);
+      }
 
       if (existing) {
         if (existing.settled) {
@@ -556,21 +584,6 @@ class CogTiles {
       }
 
       const controller = new AbortController();
-      const entry = {
-        promise: null as unknown as Promise<TileResult | null>,
-        controller,
-        callerCount: 1,
-        settled: false,
-      };
-
-      if (signal && !signal.aborted) {
-        signal.addEventListener('abort', () => {
-          entry.callerCount -= 1;
-          if (entry.callerCount <= 0 && !entry.settled) {
-            entry.controller.abort();
-          }
-        }, { once: true });
-      }
 
       const pipeline: Promise<TileResult | null> = (async () => {
         const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
@@ -665,14 +678,36 @@ class CogTiles {
           }
         }
 
+        // Create generator options with skipTextureFlag applied (don't mutate shared this.options)
+        const generatorOptions: GeoImageOptions = {
+          ...this.options,
+          skipTexture: skipTextureFlag,
+        };
+
         return this.geo.getMap({
           rasters: [tileData[0]],
           width: requiredSize,
           height: requiredSize,
           bounds: bounds ?? [0, 0, 0, 0],
           cellSizeMeters,
-        }, this.options, resolvedMeshMaxError);
+        }, generatorOptions, resolvedMeshMaxError);
       })();
+
+      const entry = {
+        promise: pipeline,
+        controller,
+        callerCount: 1,
+        settled: false,
+      };
+
+      if (signal && !signal.aborted) {
+        signal.addEventListener('abort', () => {
+          entry.callerCount -= 1;
+          if (entry.callerCount <= 0 && !entry.settled) {
+            entry.controller.abort();
+          }
+        }, { once: true });
+      }
 
       entry.promise = pipeline;
       this.tileResultCache.set(cacheKey, entry);
@@ -706,6 +741,11 @@ class CogTiles {
     if (isGlaze) {
       const maskKey = this.getTileCacheKey(x, y, z);
       let maskPromise = this.reliefMaskCache.get(maskKey);
+      if (maskPromise) {
+        // LRU touch — move the key to the end of the Map to mark as recently used
+        this.reliefMaskCache.delete(maskKey);
+        this.reliefMaskCache.set(maskKey, maskPromise);
+      }
 
       if (!maskPromise) {
         maskPromise = (async (): Promise<Uint8ClampedArray> => {
@@ -748,6 +788,11 @@ class CogTiles {
     // Signal is passed so cancelled tiles abort cleanly; cache entry deleted on abort/error.
     const rasterKey = this.getTileCacheKey(x, y, z);
     let rasterPromise = this.rasterCache.get(rasterKey);
+    if (rasterPromise) {
+      // LRU touch — move the key to the end of the Map to mark as recently used
+      this.rasterCache.delete(rasterKey);
+      this.rasterCache.set(rasterKey, rasterPromise);
+    }
 
     if (!rasterPromise) {
       rasterPromise = this.getTileFromImage(x, y, z, this.tileSize, signal) as Promise<TypedArray[]>;

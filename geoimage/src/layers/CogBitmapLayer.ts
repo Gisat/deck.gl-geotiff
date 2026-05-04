@@ -103,7 +103,7 @@ const defaultProps: DefaultProps<CogBitmapLayerProps> = {
 //   return template || '';
 // }
 
-type MeshAndTexture = TileResult;
+type MeshAndTexture = TileResult | null;
 
 /** Props added by the CogBitmapLayer */
 type _CogBitmapLayerProps = {
@@ -227,7 +227,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       );
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        return null as unknown as TileResult;
+        return null;
       }
       throw error;
     }
@@ -239,10 +239,10 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
   }
 
   renderSubLayers(
-    props: TileLayerProps<TileResult> & {
+    props: TileLayerProps<TileResult | null> & {
         id: string;
-        data: TileResult;
-        tile: Tile2DHeader<TileResult>;
+        data: TileResult | null;
+        tile: Tile2DHeader<TileResult | null>;
       },
   ) {
     const SubLayerClass = this.getSubLayerClass('image', BitmapLayer);
@@ -296,10 +296,10 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     if (this.state.isTiled && this.state.initialized) {
       const { tileSize } = this.state.bitmapCogTiles;
 
-      return new TileLayer<TileResult>(this.getSubLayerProps({
+      return new TileLayer<TileResult | null>(this.getSubLayerProps({
         id: 'tiles',
       }), {
-        getTileData: (props: TileLoadProps) => this.getTiledBitmapData(props) as Promise<TileResult>,
+        getTileData: this.getTiledBitmapData.bind(this),
         renderSubLayers: this.renderSubLayers.bind(this),
         pickable: this.props.pickable,
         onClick: this.props.onClick,

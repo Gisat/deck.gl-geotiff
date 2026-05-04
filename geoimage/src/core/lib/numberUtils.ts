@@ -1,5 +1,5 @@
 export function toF32(n: number): number {
-  return new Float32Array([n])[0];
+  return Math.fround(n);
 }
 
 export function isF32NoData(val: number, noData?: number | null): boolean {

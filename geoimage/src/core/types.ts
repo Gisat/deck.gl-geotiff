@@ -201,9 +201,11 @@ export interface TileResult {
 }
 
 /**
- * Cacheable subset of TileResult — excludes `texture` (ImageBitmap) because
- * ImageBitmaps are frame-specific GPU resources that can be closed/invalidated
- * and are cheap to regenerate from `raw`. Everything else (mesh, raw data,
- * derived arrays, overlay bitmap) is safe to cache long-term.
+ * Stores full TileResult including texture because:
+ * - Kernel computations (slope/hillshade/swiss relief → rawDerived) are expensive and cached
+ * - Texture generation from rawDerived is cheap (colorization only)
+ * - But caching texture avoids ImageBitmap regeneration overhead
+ * - For BitmapLayer: texture IS the primary output (must cache)
+ * Cache is cleared on URL/meshMaxError changes.
  */
-export type CachedTileResult = Omit<TileResult, 'texture'>;
+export type CachedTileResult = TileResult;
