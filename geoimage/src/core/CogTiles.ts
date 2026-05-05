@@ -56,7 +56,6 @@ class CogTiles {
   }
 
   async initializeCog(url: string) {
-    console.log("hello v 355")
     // Reuse existing initialization while it is in progress, or when the same URL
     // was already initialized on this instance.
     if (this.initializePromise && (!this.cog || this.lastInitializedUrl === url)) {
