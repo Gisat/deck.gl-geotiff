@@ -2,7 +2,7 @@ import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geoti
 
 // Bitmap styling
 import GeoImage from './GeoImage';
-import { GeoImageOptions, TileResult } from './types';
+import { GeoImageOptions, TileResult, TypedArray } from './types';
 import { ReliefCompositor } from './lib/ReliefCompositor';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
@@ -33,12 +33,43 @@ class CogTiles {
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
+  // Cache fetched rasters in an LRU-style Map keyed by `${z}/${x}/${y}/${fetchSize}`,
+  // with each value holding the cached raster for that tile request.
+  private rasterCache: Map<string, TypedArray> = new Map();
+  private readonly maxCacheSize = 256;
+
+  // LRU cache helpers
+  private getCachedRaster(key: string): TypedArray | undefined {
+    const value = this.rasterCache.get(key);
+    if (value !== undefined) {
+      // Refresh order: delete and re-set
+      this.rasterCache.delete(key);
+      this.rasterCache.set(key, value);
+    }
+    return value;
+  }
+
+  private setCachedRaster(key: string, value: TypedArray): void {
+    this.rasterCache.set(key, value);
+    if (this.rasterCache.size > this.maxCacheSize) {
+      // Evict oldest
+      const oldestKey = this.rasterCache.keys().next().value;
+      if (typeof oldestKey === 'string') {
+        this.rasterCache.delete(oldestKey);
+      }
+
+    }
+  }
+
   // Cache GeoTIFFImage Promises by index to prevent redundant HTTP requests from geotiff 3.0.4+ eager loading
   // Stores Promises (not resolved values) so concurrent requests share the same getImage() call
   private imageCache: Map<number, Promise<GeoTIFFImage>> = new Map();
 
   // Store initialization promise to prevent concurrent duplicate initializations
   private initializePromise?: Promise<void>;
+
+  // Track the last successfully initialized URL to detect URL changes
+  private lastInitializedUrl?: string;
 
   constructor(options: GeoImageOptions) {
     this.options = { ...CogTilesGeoImageOptionsDefaults, ...options };
@@ -47,6 +78,10 @@ class CogTiles {
   async initializeCog(url: string) {
     // Return existing initialization promise if already in progress (prevents concurrent duplicates)
     if (this.initializePromise) return this.initializePromise;
+    // Clear cache only if URL changed (preserves cache on idempotent re-init)
+    if (this.lastInitializedUrl !== url) {
+      this.rasterCache.clear();
+    }
     if (this.cog) return;
 
     this.initializePromise = (async () => {
@@ -88,6 +123,9 @@ class CogTiles {
         );
 
         this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
+
+        // Mark initialization complete for this URL (used to detect URL changes)
+        this.lastInitializedUrl = url;
       } catch (error) {
         // Reset initialization promise on error so retry can be attempted
         this.initializePromise = undefined;
@@ -213,12 +251,21 @@ class CogTiles {
 
     // For zoom levels within the available range, find the exact or closest matching index.
     const exactMatchIndex = this.cogZoomLookup.indexOf(zoom);
-    if (exactMatchIndex === -1) {
-      // TO DO improve the condition if the match index is not found
-      /* eslint-disable no-console */
-      console.log('getImageIndexForZoomLevel: error in retrieving image by zoom index');
+    if (exactMatchIndex !== -1) {
+      return exactMatchIndex;
     }
-    return exactMatchIndex;
+
+    // No exact match: find the closest zoom level
+    let closestIndex = 0;
+    let minDistance = Math.abs(this.cogZoomLookup[0] - zoom);
+    for (let i = 1; i < this.cogZoomLookup.length; i += 1) {
+      const distance = Math.abs(this.cogZoomLookup[i] - zoom);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+    return closestIndex;
   }
 
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
@@ -234,6 +281,12 @@ class CogTiles {
     }
     const localSignal = controller.signal;
 
+    // Check if raster is already cached
+    const cacheKey = `${zoom}/${tileX}/${tileY}/${fetchSize ?? this.tileSize}`;
+    const cachedRaster = this.getCachedRaster(cacheKey);
+    if (cachedRaster) {
+      return [cachedRaster];
+    }
     try {
       const imageIndex = this.getImageIndexForZoomLevel(zoom);
       
@@ -344,8 +397,7 @@ class CogTiles {
             if (destRow < FETCH_SIZE && destCol < FETCH_SIZE) {
               tileBuffer[destRowOffset + destCol] = validRasterData[band][srcRowOffset + col];
             } else {
-              /* eslint-disable no-console */
-              console.log(`error in assigning data to tile buffer: destRow ${destRow}, destCol ${destCol}, FETCH_SIZE ${FETCH_SIZE}`);
+              console.error(`[CogTiles] tile buffer bounds exceeded: destRow ${destRow}, destCol ${destCol}, FETCH_SIZE ${FETCH_SIZE}`);
             }
           }
         }
@@ -353,12 +405,16 @@ class CogTiles {
           validImageData[i * numChannels + band] = tileBuffer[i];
         }
       }
+      // Mark raster as cached after successful fetch
+      this.setCachedRaster(cacheKey, validImageData); // for partial overlap
       return [validImageData];
     }
 
     // Case B: Perfect Match (Optimization)
     // If the read window is exactly 256x256 and aligned, we can read directly interleaved.
     const tileData = await targetImage.readRasters({ window, interleave: true, signal: localSignal });
+    // Mark raster as cached after successful fetch
+    this.setCachedRaster(cacheKey, tileData); // for perfect match
     return [tileData];
   } catch (error) {
     // If the signal was aborted (or geotiff.js threw AggregateError wrapping an abort),
@@ -436,6 +492,11 @@ class CogTiles {
       rasters = [reliefMask as any];
       tileWidth = this.tileSize;
       tileHeight = this.tileSize;
+    }
+
+    // Guard against abort race condition: if signal aborted after cache hit but before expensive geo.getMap()
+    if (signal?.aborted) {
+      return null;
     }
 
     return this.geo.getMap({
