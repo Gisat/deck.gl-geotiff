@@ -12,6 +12,7 @@ import { getDataTypeFromTags, getNoDataValue } from '../utils/tiffUtils';
 import { buildCogZoomResolutionLookup, calculateDynamicMeshMaxError as lodCalculateDynamicMeshMaxError, getImageIndexForZoomLevel as lodGetImageIndexForZoomLevel } from '../utils/lod';
 import TileCacheManager from './lib/TileCacheManager';
 import TileReader from './lib/TileReader';
+import { isF32NoData } from './lib/numberUtils';
 
 const CogTilesGeoImageOptionsDefaults = {
   blurredTexture: true,
@@ -451,7 +452,7 @@ class CogTiles {
         const width = requiredSize;
         const height = requiredSize;
 
-        const isNoValue = (v: number) => (Number.isNaN(noData) ? Number.isNaN(v) : v === noData);
+        const isNoValue = (v: number) => isF32NoData(v, noData);
 
         let allNoData = true;
 
@@ -577,8 +578,9 @@ class CogTiles {
     let maskPromise = this.cache.getReliefMask(maskKey);
 
     if (!maskPromise) {
+      const controller = new AbortController();
       maskPromise = (async (): Promise<Uint8ClampedArray> => {
-        const tileData = await this.getTileFromImage(x, y, z, this.tileSize + 2, signal);
+        const tileData = await this.getTileFromImage(x, y, z, this.tileSize + 2, controller.signal);
         return ReliefCompositor.composeSwissRelief(
           tileData[0] as Float32Array,
           this.options,
@@ -609,7 +611,8 @@ class CogTiles {
     let rasterPromise = this.cache.getRaster(rasterKey);
 
     if (!rasterPromise) {
-      rasterPromise = this.getTileFromImage(x, y, z, this.tileSize, signal) as Promise<TypedArray[]>;
+      const controller = new AbortController();
+      rasterPromise = this.getTileFromImage(x, y, z, this.tileSize, controller.signal) as Promise<TypedArray[]>;
       this.cache.setRaster(rasterKey, rasterPromise);
       rasterPromise.catch(() => this.cache.deleteRaster(rasterKey));
     }

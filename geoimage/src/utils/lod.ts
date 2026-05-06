@@ -14,7 +14,7 @@ export function getErrorMultiplierForZoom(z: number, minZ: number, maxZ: number)
 export function calculateDynamicMeshMaxError(z: number, resolution: number, minZ: number, maxZ: number): number {
   const multiplier = getErrorMultiplierForZoom(z, minZ, maxZ);
   const errorValue = resolution * multiplier;
-  return Math.max(0.5, Math.min(100, errorValue));
+  return Math.round(Math.max(0.5, Math.min(100, errorValue)));
 }
 
 export async function buildCogZoomResolutionLookup(cog: GeoTIFF): Promise<[number[], number[]]> {
