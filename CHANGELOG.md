@@ -1,3 +1,15 @@
+## [2.5.0-dev.5](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.4...v2.5.0-dev.5) (2026-05-06)
+
+### Features
+
+* add raster tile caching with LRU eviction to CogTiles ([8660328](https://github.com/Gisat/deck.gl-geotiff/commit/86603281b7c50b799ff31e2e6953dadd14bb9686))
+
+### Bug Fixes
+
+* Address PR [#144](https://github.com/Gisat/deck.gl-geotiff/issues/144) code review comments ([6782557](https://github.com/Gisat/deck.gl-geotiff/commit/678255749436ccebfc4567a6f17a11de9c826793))
+* remove console.log spam and add abort guard in CogTiles ([1d1cdcf](https://github.com/Gisat/deck.gl-geotiff/commit/1d1cdcf023c29411fdf12ddc014358251b174688))
+* wire LRU eviction, fetchSize cache key, and debug log cleanup in CogTiles ([9d55c30](https://github.com/Gisat/deck.gl-geotiff/commit/9d55c3075872fcebfb5cd602e358065cd9594ae5))
+
 ## [2.5.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.3...v2.5.0-dev.4) (2026-04-29)
 
 ### Features
