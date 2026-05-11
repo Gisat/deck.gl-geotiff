@@ -7,7 +7,7 @@ import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
-type KernelMode = 'elevation' | 'slope' | 'hillshade';
+type KernelMode = 'elevation' | 'slope' | 'hillshade' | 'swissrelief';
 
 const MODE_OPTIONS: Record<KernelMode, Partial<GeoImageOptions>> = {
   elevation: {
@@ -24,7 +24,7 @@ const MODE_OPTIONS: Record<KernelMode, Partial<GeoImageOptions>> = {
         [245, 245, 240],  // Bright mist
         [255, 255, 255],  // Pure peak white
       ] as any,
-      colorScaleValueRange: [1000, 6500],
+      colorScaleValueRange: [0 , 6500],
     },
   slope: {
     useSlope: true,
@@ -47,6 +47,26 @@ const MODE_OPTIONS: Record<KernelMode, Partial<GeoImageOptions>> = {
     colorScaleValueRange: [0, 255],
     hillshadeAzimuth: 315,
     hillshadeAltitude: 45,
+  },
+  swissrelief: {
+    useSwissRelief: true,
+    useHeatMap: true,
+    // Uses the same palette and value range as elevation
+    colorScale: [
+        [75, 120, 90],    // Brightened forest green
+        [100, 145, 100],  // Soft meadow green
+        [130, 170, 110],  // Bright moss
+        [185, 210, 145],  // Sunny sage
+        [235, 235, 185],  // Pale primrose (transitional)
+        [225, 195, 160],  // Sand / light terracotta (matches slope)
+        [195, 160, 130],  // Warm clay brown
+        [170, 155, 150],  // Warm slate grey
+        [245, 245, 240],  // Bright mist
+        [255, 255, 255],  // Pure peak white
+    ] as any,
+    colorScaleValueRange: [0, 6500],
+    swissSlopeWeight: 0.5,
+    zFactor: 2
   },
 };
 
@@ -103,15 +123,30 @@ function CogTerrainKernelExample() {
   const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_NEPAL_DEM;
   const [viewState, setViewState] = useState<any>(null);
   const [mode, setMode] = useState<KernelMode>('elevation');
+  // Map of CogTiles instances, one per mode, to enable caching and reuse
+  const [cogTilesCache] = useState(
+    new Map<KernelMode, CogTiles>([
+      ['elevation', new CogTiles(buildTerrainOptions('elevation'))],
+      ['slope', new CogTiles(buildTerrainOptions('slope'))],
+      ['hillshade', new CogTiles(buildTerrainOptions('hillshade'))],
+      ['swissrelief', new CogTiles(buildTerrainOptions('swissrelief'))],
+    ])
+  );
   // cogState pairs CogTiles with the mode it was initialized for.
   // null while reinitializing — prevents layers from rendering with wrong CogTiles.
   const [cogState, setCogState] = useState<{ cog: CogTiles; mode: KernelMode } | null>(null);
 
-  // Initial load: set viewState and first cogTiles
+  // Initial load: set viewState and initialize all CogTiles instances
   useEffect(() => {
     const init = async () => {
-      const cog = new CogTiles(buildTerrainOptions(mode));
-      await cog.initializeCog(mainCog.url);
+      // Initialize all three CogTiles instances in parallel
+      await Promise.all(
+        Array.from(cogTilesCache.values()).map((cog) =>
+          cog.initializeCog(mainCog.url)
+        )
+      );
+
+      const cog = cogTilesCache.get(mode)!;
       const bounds = cog.getBoundsAsLatLon();
 
       const viewport = new WebMercatorViewport({
@@ -130,17 +165,13 @@ function CogTerrainKernelExample() {
     init();
   }, []);
 
-  // Reinitialize CogTiles on mode change.
-  // Does NOT clear cogState — old layer stays mounted so deck.gl keeps tile content visible
-  // while new tiles are being computed (kernel calculation).
+  // Switch to the appropriate CogTiles instance on mode change.
+  // Since instances are pre-initialized and cached, switching is instant with no re-fetching.
   useEffect(() => {
-    if (!viewState) return; // Don't reinit before initial load completes
-    const options = buildTerrainOptions(mode);
-    const cog = new CogTiles(options);
-    cog.initializeCog(mainCog.url).then(() => {
-      setCogState({ cog, mode });
-    });
-  }, [mode]);
+    if (!viewState || !cogTilesCache.has(mode)) return;
+    const cog = cogTilesCache.get(mode)!;
+    setCogState({ cog, mode });
+  }, [mode, viewState]);
 
   const layers = useMemo(() => {
     if (!viewState || !cogState) return [];
@@ -207,10 +238,10 @@ function CogTerrainKernelExample() {
             }} />
           )}
         </div>
-        {(['elevation', 'slope', 'hillshade'] as KernelMode[]).map((m) => (
+        {(['elevation', 'slope', 'hillshade', 'swissrelief'] as KernelMode[]).map((m) => (
           <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 14 }}>
             <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} />
-            {m.charAt(0).toUpperCase() + m.slice(1)}
+            {m === 'swissrelief' ? 'Swiss Relief' : m.charAt(0).toUpperCase() + m.slice(1)}
           </label>
         ))}
       </div>

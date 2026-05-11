@@ -13,13 +13,39 @@ export type ClampToTerrainOptions = {
 export type GeoImageOptions = {
     // --- Shared / Data ---
     type: 'image' | 'terrain',
+    /**
+     * Block size in bytes for the internal HTTP range-request cache (BlockedSource).
+     * Increasing this reduces the number of HTTP requests at the cost of fetching more data per request.
+     * Set to 0 to disable block caching entirely (not recommended for most COG servers).
+     * Defaults to 65536 (64 KB) — the geotiff.js BlockedSource default.
+     */
+    blockSize?: number,
     format?: 'uint8' | 'uint16' | 'uint32' |'int8' | 'int16' | 'int32' | 'float32' | 'float64',
     /** 1-based index of the channel to visualize (e.g. 1 for the first channel). */
     useChannel?: number | null, // Note: 0 is not a valid channel; this is enforced at runtime.
     /** 0-based index of the channel to visualize (e.g. 0 for the first channel). Alternative to useChannel. */
     useChannelIndex?: number | null,
     noDataValue?: number,
+    /**
+     * Scalar applied to raw raster values before Martini/Delatin tessellation.
+     * Use this to convert or normalize source elevation values into the units that
+     * should be seen by the tessellator (e.g. convert raw values to metres).
+     * Because the scaled values are used during tessellation, changing `multiplier`
+     * also changes the effective mesh density unless `meshMaxError` is adjusted.
+     * `meshMaxError` must be specified in the same units as the post-`multiplier`
+     * elevation values.
+     * Default: 1.0
+     */
     multiplier?: number,
+    /**
+     * Vertical scale factor applied **only** to mesh vertex z positions, after
+     * tessellation. Use this for **visual exaggeration** (make terrain look taller).
+     * Unlike `multiplier`, this does not affect `meshMaxError` — the error threshold
+     * is always evaluated against real-world (post-`multiplier`) elevation values.
+     * The skirt height is scaled by this factor automatically.
+     * Default: 1.0
+     */
+    verticalExaggeration?: number,
     numOfChannels?: number,
     planarConfig?: number,
 
@@ -37,6 +63,8 @@ export type GeoImageOptions = {
     useDataForOpacity?: boolean,
     useSingleColor?: boolean,
     blurredTexture? : boolean,
+    /** When true, skip generating a texture bitmap for this tile (mesh-only path). */
+    skipTexture?: boolean,
     clipLow?: number | null,
     clipHigh?: number | null,
     color?: ChromaColorInput,
@@ -44,34 +72,49 @@ export type GeoImageOptions = {
     colorScaleValueRange?: number[],
     colorsBasedOnValues?: Array<[number, ChromaColorInput]>,
     colorClasses?: Array<[ChromaColorInput, [number, number], [boolean?, boolean?]?]>,
+    /** General layer opacity (0-100). Used for all rendering modes except glaze. */
     alpha?: number,
+    /** Intensity ceiling for the relief glaze (0-255). 0 is fully transparent; 255 is maximum theoretical opacity. Recommended range for satellite overlays: 120-160. Only used with useReliefGlaze. */
+    maxGlazeAlpha?: number,
     nullColor?: ChromaColorInput,
     unidentifiedColor?: ChromaColorInput,
     clippedColor?: ChromaColorInput,
     clampToTerrain?: ClampToTerrainOptions | boolean, // terrainDrawMode: 'drape',
 
-    // --- Kernel-specific (terrain only) ---
+    // --- Kernel-specific (terrain only + swiss relief) ---
     useSlope?: boolean,
     useHillshade?: boolean,
     hillshadeAzimuth?: number,
     hillshadeAltitude?: number,
     zFactor?: number,
+    useSwissRelief?: boolean,
+    swissSlopeWeight?: number,
+    useReliefGlaze?: boolean,
+
+    // --- noData detection strategy ---
+    /** Strategy for detecting all-noData tiles. Options: 'full' | 'border+center' */
+    noDataCheck?: 'full' | 'border+center',
+
+    // --- Lighting control ---
+    disableLighting?: boolean,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
     // --- Shared / Data ---
     type: 'image',
+    blockSize: 65536,
     format: undefined,
     useChannel: null,
     useChannelIndex: null,
     noDataValue: undefined,
     multiplier: 1.0,
+    verticalExaggeration: 1.0,
     numOfChannels: undefined,
     planarConfig: undefined,
 
     // --- Mesh generation (terrain only) ---
     tesselator: 'martini',
-    terrainColor: [133, 133, 133, 255],
+    terrainColor: [200, 200, 200, 255],
     terrainSkirtHeight: 100,
     // Default fallback for invalid/nodata elevations. Should be configured based on the dataset's actual range.
     terrainMinValue: 0,
@@ -84,14 +127,31 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     useDataForOpacity: false,
     useSingleColor: false,
     blurredTexture: true,
+    skipTexture: false,
+    /** Strategy for noData detection: 'full' | 'border+center' */
+    noDataCheck: 'full',
     clipLow: null,
     clipHigh: null,
     color: [255, 0, 255, 255],
     colorScale: chroma.brewer.YlOrRd,
     colorScaleValueRange: [0, 255],
+    //     colorScale: [
+    //     [75, 120, 90],    // Brightened forest green
+    //     [100, 145, 100],  // Soft meadow green
+    //     [130, 170, 110],  // Bright moss
+    //     [185, 210, 145],  // Sunny sage
+    //     [235, 235, 185],  // Pale primrose (transitional)
+    //     [225, 195, 160],  // Sand / light terracotta (matches slope)
+    //     [195, 160, 130],  // Warm clay brown
+    //     [170, 155, 150],  // Warm slate grey
+    //     [245, 245, 240],  // Bright mist
+    //     [255, 255, 255],  // Pure peak white
+    // ],
+    // colorScaleValueRange: [0, 6500],
     colorsBasedOnValues: undefined,
     colorClasses: undefined,
     alpha: 100,
+    maxGlazeAlpha: 128,
     nullColor: [0, 0, 0, 0],
     unidentifiedColor: [0, 0, 0, 0],
     clippedColor: [0, 0, 0, 0],
@@ -102,6 +162,12 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     hillshadeAzimuth: 315,
     hillshadeAltitude: 45,
     zFactor: 1,
+    useSwissRelief: false,
+    swissSlopeWeight: 0.5,
+    useReliefGlaze: false,
+
+    // --- Lighting control ---
+    disableLighting: false,
 };
 
 export type TypedArray =
@@ -130,4 +196,16 @@ export interface TileResult {
     width: number;
     height: number;
     texture?: ImageBitmap;
+    /** Optional: grayscale or color bitmap for Swiss relief or other overlays */
+    bitmap?: Uint8ClampedArray | ImageBitmap;
 }
+
+/**
+ * Stores full TileResult including texture because:
+ * - Kernel computations (slope/hillshade/swiss relief → rawDerived) are expensive and cached
+ * - Texture generation from rawDerived is cheap (colorization only)
+ * - But caching texture avoids ImageBitmap regeneration overhead
+ * - For BitmapLayer: texture IS the primary output (must cache)
+ * Cache is cleared on URL/meshMaxError changes.
+ */
+export type CachedTileResult = TileResult;
