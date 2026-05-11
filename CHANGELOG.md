@@ -1,3 +1,21 @@
+## [2.5.0-dev.6](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.5...v2.5.0-dev.6) (2026-05-11)
+
+### Features
+
+* add per-type caching (raster/relief mask/TileResult), abort handling, and update plan ([9de1791](https://github.com/Gisat/deck.gl-geotiff/commit/9de1791f7a8a73b383d1135fc33f7b8407350be2))
+* dynamic mesh max error based on zoom level ([83bbc79](https://github.com/Gisat/deck.gl-geotiff/commit/83bbc797fc7e461101b9f7607411b063014ab273))
+* replace raster cache with Promise-based TileResult cache in CogTiles ([2cbd850](https://github.com/Gisat/deck.gl-geotiff/commit/2cbd850ef2a1d187dfcee403bf12494430afaf4d))
+* **terrain:** default noDataCheck to 'full' and document border+center caveat ([a80c29d](https://github.com/Gisat/deck.gl-geotiff/commit/a80c29d33a986a8af66d09737cfcdae99ed47562))
+* **terrain:** respect skipTexture and include in TileResult cache key ([321c2ea](https://github.com/Gisat/deck.gl-geotiff/commit/321c2ea08ad373a149e685c6daee8c7428ca8c26))
+* **terrain:** skip tessellation for all-noData tiles ([ff24d73](https://github.com/Gisat/deck.gl-geotiff/commit/ff24d73aea128134b6c9032cbaae4e145657d8ca))
+
+### Bug Fixes
+
+* Address PR [#145](https://github.com/Gisat/deck.gl-geotiff/issues/145) code review comments ([e088e18](https://github.com/Gisat/deck.gl-geotiff/commit/e088e18596164a2b55997f3cc2d578d4ce91a7d2))
+* resolve TypeScript build errors in CogTiles and CogBitmapLayer ([e713078](https://github.com/Gisat/deck.gl-geotiff/commit/e71307811d6e04579a05486a8248dca915d93dbd))
+* unwrap single-error AggregateErrors for clearer diagnostics in tile fetch ([a0b3ea6](https://github.com/Gisat/deck.gl-geotiff/commit/a0b3ea611822b5808be19fadea0a5da89c6feb97))
+* use NaN-aware noData detection across all generators ([ad7ed95](https://github.com/Gisat/deck.gl-geotiff/commit/ad7ed9501fed3239c06df36fd7312d845577a1f0))
+
 ## [2.5.0-dev.5](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0-dev.4...v2.5.0-dev.5) (2026-05-06)
 
 ### Features
