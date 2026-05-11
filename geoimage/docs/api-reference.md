@@ -96,6 +96,8 @@ These options apply specifically to `CogTerrainLayer` or when generating heightm
 
 > **Performance and `terrainSkirtHeight`:** The skirt (enabled by default at 100 meters) prevents visible cracks at tile boundaries by adding vertical walls. This requires deduplicating mesh boundary edges during generation, which has a small CPU cost. For typical configurations (meshMaxError: 4.0), this is negligible (~5ms per tile). For very fine meshes or performance-critical applications, you can disable skirts with `terrainSkirtHeight: 0` to save the edge deduplication cost, accepting tile boundary cracks as a trade-off.
 
+Additionally, as a performance optimization, tiles whose elevation channel contains only the configured `noDataValue` are detected early — in such cases no mesh or texture is generated and the tile loader returns `null`, avoiding expensive tessellation. The detection strategy can be configured via `terrainOptions.noDataCheck` with values `'full'` or `'border+center'`. The default is `'full'` (safe): it scans every pixel to avoid false-empty tiles. Use `'border+center'` when you prefer a faster heuristic; note it may miss small isolated land masses (e.g., archipelagos).
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`tesselator`** | `'martini'` \| `'delatin'` | `'martini'` | The algorithm used for terrain mesh generation. 'Martini' is generally faster, 'Delatin' may produce higher quality meshes. |
@@ -129,9 +131,10 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **`meshMaxError`** | `number` | `4.0` | Martini/Delatin error tolerance in meters. Smaller number → more detailed mesh (higher triangle count). **Recommendation:** Set this to approximately your COG's pixel resolution (cellSize) or larger. Setting it significantly lower than the source resolution wastes computation without adding visual detail — the underlying data cannot represent features finer than its own pixel size. |
+| **`meshMaxError`** | `number \| 'auto'` | `'auto'` | Martini/Delatin error tolerance in meters, or `'auto'` for zoom-adaptive scaling. **Modes:** (1) Explicit numeric value (e.g. `10`): Fixed meshMaxError for all zoom levels; user has full control. (2) `'auto'`: Dynamically scales meshMaxError based on zoom level and the COG's tile resolution. The scaling uses a linear interpolation multiplier that ranges from **3.0× at the COG's minimum zoom** (coarse meshes for performance when viewing entire regions) to **0.5× at the COG's maximum zoom** (fine meshes for detail when viewing local features). Formula: `meshMaxError = tileResolution × errorMultiplier`. This provides significant performance improvements at low zooms (fewer triangles, faster tessellation) while maintaining pixel-perfect detail at high zooms (no slivers). **Recommendation:** `'auto'` is the default and recommended for most cases. Explicit numbers are useful for fine-tuning if you want consistent tessellation across all zoom levels. |
 | **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 | **`disableTexture`** | `boolean` | `false` | When `true`, suppresses any generated texture and renders the mesh in plain `color`. Useful for showing neutral grey terrain during mode transitions. |
+| **`skipTexture`** | `boolean` | `false` | Internal option: when `true`, prevents texture generation in `TerrainGenerator` and is included in the tile cache key to avoid serving mesh-only tiles to textured requests. Set by `CogTerrainLayer` when `wireframe` is true or `operation === 'terrain'.` |
 
 ---
 

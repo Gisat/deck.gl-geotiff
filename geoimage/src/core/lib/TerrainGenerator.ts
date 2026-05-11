@@ -6,6 +6,7 @@ import { GeoImageOptions, Bounds, TypedArray, TileResult } from '../types';
 import { BitmapGenerator } from './BitmapGenerator';
 import { KernelGenerator } from './KernelGenerator';
 import { ReliefCompositor } from './ReliefCompositor';
+import { isF32NoData } from './numberUtils';
 
 export class TerrainGenerator {
   static async generate(
@@ -91,6 +92,8 @@ export class TerrainGenerator {
     };
 
     // 3. Kernel path: compute slope or hillshade, store as rawDerived, generate texture
+    const shouldSkipTexture = !!options.skipTexture;
+
     if (isKernel && options.useSwissRelief) {
       const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
       
@@ -111,7 +114,7 @@ export class TerrainGenerator {
       );
       tileResult.rawDerived = swissReliefResult;
 
-      if (this.hasVisualizationOptions(options)) {
+      if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
         const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
         const bitmapResult = await BitmapGenerator.generate(
           { width: 256, height: 256, rasters: [cropped, swissReliefResult] },
@@ -155,19 +158,48 @@ export class TerrainGenerator {
 
       tileResult.rawDerived = kernelOutput;
 
-      if (this.hasVisualizationOptions(options)) {
+      if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
         const bitmapResult = await BitmapGenerator.generate(
           { width: 256, height: 256, rasters: [kernelOutput] },
           { ...options, type: 'image' }
         );
         tileResult.texture = bitmapResult.map as ImageBitmap;
       }
-    } else if (this.hasVisualizationOptions(options)) {
-      // 4. Non-kernel path: crop 257→256, generate texture from elevation
-      const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
+    } else if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
+      // 4. Non-kernel path: build texture raster from the ORIGINAL source data, preserving
+      // noData sentinels so BitmapGenerator renders those pixels as transparent (via nullColor).
+      // meshTerrain substitutes noData with terrainMinValue for mesh stability — we intentionally
+      // avoid using it for texture generation to prevent fill values being coloured.
+      const multiplier = options.multiplier ?? 1;
+      const noDataValue = options.noDataValue;
+
+      const srcRaster = input.rasters[0] as TypedArray | any;
+      const srcWidth = input.width;
+      const srcHeight = input.height;
+
+      // Determine samplesPerPixel for interleaved buffers (fallback to 1)
+      const samplesPerPixel = Math.max(1, Math.round((srcRaster.length) / (srcWidth * srcHeight)));
+
+      const channelIndex = options.useChannelIndex ?? (options.useChannel != null ? options.useChannel - 1 : 0);
+
+      const textureRaster = new Float32Array(256 * 256);
+      for (let ty = 0; ty < 256; ty++) {
+        for (let tx = 0; tx < 256; tx++) {
+          // Guard: if srcWidth < 256 (shouldn't happen), clamp indices
+          const srcX = Math.min(tx, srcWidth - 1);
+          const srcY = Math.min(ty, srcHeight - 1);
+          const srcIdx = (srcY * srcWidth + srcX) * samplesPerPixel + channelIndex;
+          const v = srcRaster[srcIdx];
+          const isNoData = isF32NoData(v, noDataValue);
+          textureRaster[ty * 256 + tx] = isNoData ? (noDataValue as number) * multiplier : v * multiplier;
+        }
+      }
+
+      const bitmapOptions: GeoImageOptions = { ...options, type: 'image', useChannelIndex: 0, numOfChannels: 1, noDataValue: noDataValue !== undefined ? (noDataValue as number) * multiplier : undefined };
+
       const bitmapResult = await BitmapGenerator.generate(
-        { width: 256, height: 256, rasters: [cropped] },
-        { ...options, type: 'image' }
+        { width: 256, height: 256, rasters: [textureRaster] },
+        bitmapOptions
       );
       tileResult.texture = bitmapResult.map as ImageBitmap;
     }
@@ -215,12 +247,9 @@ export class TerrainGenerator {
       sourceRaster &&
       sourceRaster.length === terrain.length
     ) {
-      const preserveNaNNoData = Number.isNaN(noDataValue);
       for (let i = 0; i < terrain.length; i++) {
         const sourceValue = (sourceRaster as any)[i];
-        const isNoData = preserveNaNNoData
-          ? Number.isNaN(sourceValue)
-          : sourceValue === noDataValue;
+        const isNoData = isF32NoData(sourceValue, noDataValue);
 
         kernelTerrain[i] = isNoData ? (noDataValue as number) : terrain[i];
       }
@@ -285,9 +314,7 @@ export class TerrainGenerator {
       for (let x = 0; x < width; x++) {
         const multiplier = options.multiplier ?? 1;
         let elevationValue =
-          (options.noDataValue !== undefined &&
-            options.noDataValue !== null &&
-            channel[pixel] === options.noDataValue)
+          isF32NoData(channel[pixel], options.noDataValue)
             ? fallbackValue
             : channel[pixel] * multiplier;
 

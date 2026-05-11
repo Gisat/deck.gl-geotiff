@@ -56,6 +56,13 @@ export const urlType = {
   },
 };
 
+const meshMaxErrorValidation = {
+  type: 'object' as const,
+  value: 'auto' as const,
+  validate: (value: any) => typeof value === 'number' || value === 'auto',
+  equal: (v1: any, v2: any) => v1 === v2,
+};
+
 const DUMMY_DATA = [1];
 
 const defaultProps: DefaultProps<_CogTerrainLayerProps> = {
@@ -65,7 +72,9 @@ const defaultProps: DefaultProps<_CogTerrainLayerProps> = {
   // Image url to use as texture
   texture: { ...urlType, optional: true },
   // Martini error tolerance in meters, smaller number -> more detailed mesh
-  meshMaxError: { type: 'number', value: 4.0 },
+  // Set to a number for fixed tessellation across all zooms, or 'auto' (default)
+  // for zoom-adaptive meshMaxError based on COG resolution
+  meshMaxError: meshMaxErrorValidation,
   // Bounding box of the terrain image, [minX, minY, maxX, maxY] in world coordinates
   bounds: {
     type: 'array', value: null, optional: true, compare: true,
@@ -112,8 +121,9 @@ function urlTemplateToUpdateTrigger(template: URLTemplate): string {
 
 /** All properties supported by CogTerrainLayer */
 export type CogTerrainLayerProps = _CogTerrainLayerProps &
-	TileLayerProps<MeshAndTexture> &
+	TileLayerProps<MeshAndTexture | null> &
 	CompositeLayerProps;
+
 
   /** Props added by the CogTerrainLayer */
   type _CogTerrainLayerProps = {
@@ -125,8 +135,8 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
 	/** Image url to use as texture. * */
 	texture?: URLTemplate;
 
-	/** Martini error tolerance in meters, smaller number -> more detailed mesh. * */
-	meshMaxError?: number;
+  /** Martini error tolerance in meters, smaller number -> more detailed mesh. Set to 'auto' for dynamic per-zoom quantization. * */
+	meshMaxError?: number | 'auto';
 
 	/** Bounding box of the terrain image, [minX, minY, maxX, maxY] in world coordinates. * */
 	bounds?: Bounds | null;
@@ -169,7 +179,7 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
 
 /** Render mesh surfaces from height map images. */
 export default class CogTerrainLayer<ExtraPropsT extends object = object> extends CompositeLayer<
-	ExtraPropsT & Required<_CogTerrainLayerProps & Required<TileLayerProps<MeshAndTexture>>>
+	ExtraPropsT & Required<_CogTerrainLayerProps & Required<TileLayerProps<MeshAndTexture | null>>>
   > {
   static defaultProps = defaultProps;
 
@@ -236,6 +246,12 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 		|| props.elevationDecoder !== oldProps.elevationDecoder
 		|| props.bounds !== oldProps.bounds;
 
+    // When meshMaxError changes, cached meshes are stale — clear so new tiles are tessellated
+    // at the correct error tolerance
+    if (props.meshMaxError !== oldProps.meshMaxError && this.state.terrainCogTiles) {
+      this.state.terrainCogTiles.clearTileResultCache();
+    }
+
 	  if (!this.state.isTiled && shouldReload) {
       // When state.isTiled, elevationData cannot be an array
       // const terrain = this.loadTerrain(props as TerrainLoadProps);
@@ -247,6 +263,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       this.state.terrainCogTiles.options.useChannel = props.terrainOptions.useChannel;
       // Trigger a refresh of the tiles
       this.state.terrainCogTiles.options.useChannelIndex = null; // Clear cached index
+    }
+
+    // Update skipTexture when wireframe/operation/disableTexture changes so cache keys are correct
+    const newSkipTexture = !!(props?.wireframe || props?.operation === 'terrain' || props?.disableTexture);
+    const oldSkipTexture = !!(oldProps?.wireframe || oldProps?.operation === 'terrain' || oldProps?.disableTexture);
+    if (newSkipTexture !== oldSkipTexture && this.state.terrainCogTiles) {
+      this.state.terrainCogTiles.options.skipTexture = newSkipTexture;
+      this.state.terrainCogTiles.clearTileResultCache();
     }
 
     // When the external cogTiles instance is swapped (e.g. mode switch), update state so
@@ -290,7 +314,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     });
   }
 
-  async getTiledTerrainData(tile: TileLoadProps): Promise<MeshAndTexture> {
+  async getTiledTerrainData(tile: TileLoadProps): Promise<MeshAndTexture | null> {
 	  const { viewport } = this.context;
 	  let bottomLeft = [0, 0] as [number, number];
 	  let topRight = [0, 0] as [number, number];
@@ -306,27 +330,41 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  }
 	  const bounds: Bounds = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
 
-    const resolvedTerrain = await this.state.terrainCogTiles.getTile(
-      tile.index.x,
-      tile.index.y,
-      tile.index.z,
-      bounds,
-      this.props.meshMaxError,
-      tile.signal,
-    );
+    let resolvedTerrain: TileResult | null = null;
+    try {
+      const skipTexture = !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture);
+      // Convert 'auto' to undefined so CogTiles.getTile uses the quantized meshMaxError for the zoom level
+      const meshMaxErrorValue = this.props.meshMaxError === 'auto' ? undefined : (this.props.meshMaxError as number | undefined);
+      resolvedTerrain = await this.state.terrainCogTiles.getTile(
+        tile.index.x,
+        tile.index.y,
+        tile.index.z,
+        bounds,
+        meshMaxErrorValue,
+        tile.signal,
+        skipTexture,
+      );
+    } catch (error) {
+      // Tile was cancelled (AbortError) — return null so deck.gl discards it cleanly
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return null;
+      }
+      throw error;
+    }
 
       if (resolvedTerrain && !this.props.pickable) {
         resolvedTerrain.raw = null;
       }
 
-      return Promise.all([resolvedTerrain, null]) as unknown as Promise<MeshAndTexture>;
+      // Return a tuple [TileResult|null, Texture|null] when data is available, otherwise null
+      return resolvedTerrain ? [resolvedTerrain, null] : null;
   }
 
   renderSubLayers(
-	  props: TileLayerProps<MeshAndTexture> & {
+	  props: TileLayerProps<MeshAndTexture | null> & {
 		id: string;
-		data: MeshAndTexture;
-		tile: Tile2DHeader<MeshAndTexture>;
+		data: MeshAndTexture | null;
+		tile: Tile2DHeader<MeshAndTexture | null>;
 	  },
   ) {
 	  const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
@@ -371,7 +409,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   }
 
   // Update zRange of viewport
-  onViewportLoad(tiles?: Tile2DHeader<MeshAndTexture>[]): void {
+  onViewportLoad(tiles?: Tile2DHeader<MeshAndTexture | null>[]): void {
 	  if (!tiles) {
       return;
 	  }
@@ -418,7 +456,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  } = this.props;
 
 	  if (this.state.isTiled && this.state.initialized) {
-      return new TileLayer<MeshAndTexture>(
+      return new TileLayer<MeshAndTexture | null>(
 		  this.getSubLayerProps({
           id: 'tiles',
 		  }),
@@ -433,6 +471,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
               meshMaxError,
               elevationDecoder,
               terrainCogTiles: this.state.terrainCogTiles,
+              skipTexture: !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture),
 			      },
               renderSubLayers: {
                 disableTexture: this.props.disableTexture,

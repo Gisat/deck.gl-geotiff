@@ -103,7 +103,7 @@ const defaultProps: DefaultProps<CogBitmapLayerProps> = {
 //   return template || '';
 // }
 
-type MeshAndTexture = TileResult;
+type MeshAndTexture = TileResult | null;
 
 /** Props added by the CogBitmapLayer */
 type _CogBitmapLayerProps = {
@@ -214,15 +214,23 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     }
   }
 
-  async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
-    const resolvedTileData = await this.state.bitmapCogTiles.getTile(
-      tile.index.x,
-      tile.index.y,
-      tile.index.z,
-      undefined,
-      undefined,
-      tile.signal,
-    );
+  async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult | null> {
+    let resolvedTileData: TileResult | null;
+    try {
+      resolvedTileData = await this.state.bitmapCogTiles.getTile(
+        tile.index.x,
+        tile.index.y,
+        tile.index.z,
+        undefined,
+        undefined,
+        tile.signal,
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return null;
+      }
+      throw error;
+    }
 
     if (resolvedTileData && !this.props.pickable) {
       resolvedTileData.raw = null;
@@ -231,10 +239,10 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
   }
 
   renderSubLayers(
-    props: TileLayerProps<TileResult> & {
+    props: TileLayerProps<TileResult | null> & {
         id: string;
-        data: TileResult;
-        tile: Tile2DHeader<TileResult>;
+        data: TileResult | null;
+        tile: Tile2DHeader<TileResult | null>;
       },
   ) {
     const SubLayerClass = this.getSubLayerClass('image', BitmapLayer);
@@ -288,7 +296,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     if (this.state.isTiled && this.state.initialized) {
       const { tileSize } = this.state.bitmapCogTiles;
 
-      return new TileLayer<TileResult>(this.getSubLayerProps({
+      return new TileLayer<TileResult | null>(this.getSubLayerProps({
         id: 'tiles',
       }), {
         getTileData: this.getTiledBitmapData.bind(this),

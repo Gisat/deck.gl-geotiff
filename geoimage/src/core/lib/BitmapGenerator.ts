@@ -1,6 +1,7 @@
 import chroma from 'chroma-js';
 import { GeoImageOptions, TypedArray, TileResult } from '../types';
 import { scale } from './DataUtils';
+import { isF32NoData } from './numberUtils';
 
 export class BitmapGenerator {
   /**
@@ -202,11 +203,7 @@ export class BitmapGenerator {
         const elevationVal = primaryBuffer[sampleIndex];
         
         // NaN-aware noData check for Swiss relief
-        const isNoData = options.noDataValue !== undefined && (
-          Number.isNaN(options.noDataValue)
-            ? Number.isNaN(elevationVal)
-            : elevationVal === options.noDataValue
-        );
+        const isNoData = isF32NoData(elevationVal, options.noDataValue);
         if (Number.isNaN(elevationVal) || isNoData) {
           colorsArray.set(options.nullColor as number[], i);
           continue;
@@ -436,7 +433,7 @@ export class BitmapGenerator {
   }
 
   private static isInvalid(val: number, options: GeoImageOptions): boolean {
-    return Number.isNaN(val) || (options.noDataValue !== undefined && val === options.noDataValue);
+    return Number.isNaN(val) || isF32NoData(val, options.noDataValue);
   }
 
   private static getInvalidColor(val: number, options: GeoImageOptions): number[] {
@@ -460,6 +457,6 @@ export class BitmapGenerator {
   }
 
   static hasPixelsNoData(pixels: number[], noData: number | undefined) {
-    return noData !== undefined && pixels.every(p => p === noData);
+    return noData !== undefined && pixels.every(p => isF32NoData(p, noData));
   }
 }

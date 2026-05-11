@@ -160,79 +160,90 @@ to `types.ts`.
 
 ---
 
-## Step C — Skip Texture for `wireframe` / `disableTexture` (Part 2 from review)
+## Step C — Include `skipTexture` in TileResult Cache Key
 
-_Files: `GeoImage.ts`, `TerrainGenerator.ts`, `CogTerrainLayer.ts`, `types.ts`_
+_Files: `CogTiles.ts`_
 
-Currently `resolveVisualizationMode` always injects `useSingleColor = true` for plain
-terrain, so `BitmapGenerator.generate()` always runs — even when the texture is discarded
-immediately (wireframe, disableTexture, geometry-only operation).
+The `tileResultCache` key must include whether the tile was rendered with or without texture.
+Without this, a mesh-only tile (cached without texture) could be served to a `terrain+draw`
+request, producing a grey mesh, or a textured tile could be returned when wireframe was
+expected.
 
-### 3.1 — Add flags to `GeoImageOptions`
+### 3.1 — Extend `getTileResultCacheKey` with `skipTexture` flag
+
+```ts
+private getTileResultCacheKey(
+  x: number, y: number, z: number,
+  meshMaxError: number,
+  skipTexture: boolean
+): string {
+  return `${z}/${x}/${y}/${meshMaxError}/${skipTexture ? '1' : '0'}`;
+}
+```
+
+### 3.2 — Detect `skipTexture` condition in `CogTerrainLayer`
+
+`skipTexture` is `true` when:
+- `this.props.wireframe === true` — mesh drawn as lines, no face texture needed, OR
+- `this.props.operation === 'terrain'` — deck.gl geometry-only pass, color buffer not written
+
+Compute in `CogTerrainLayer` and write into `cogTiles.options.skipTexture`. Add to
+`updateTriggers.getTileData` so tile data is refetched (using the correct cache key) when
+either prop changes. Call `clearTileResultCache()` on change (both the `skipTexture=0` and
+`skipTexture=1` halves of the cache remain valid and can be reused if the user switches back).
+
+### 3.3 — Pass `skipTexture` through `getTile()` signature
+
+`getTile(x, y, z, bounds, meshMaxError, signal)` → add `skipTexture: boolean` parameter so
+the cache key and the downstream `TerrainGenerator` call both receive it.
+
+---
+
+## Step D — Skip Texture Calculation in Pipeline
+
+_Files: `GeoImage.ts`, `TerrainGenerator.ts`, `types.ts`_
+
+When `skipTexture` is set (wireframe mode or `operation: 'terrain'`), `BitmapGenerator.generate()`
+runs inside `TerrainGenerator` but its output is immediately discarded at render time.
+This step removes that wasted work.
+
+### 4.1 — Add `skipTexture` to `GeoImageOptions`
 
 ```ts
 // types.ts
-wireframe?: boolean;       // mesh drawn as lines — no face texture needed
-disableTexture?: boolean;  // texture suppressed at render time — no point computing it
+skipTexture?: boolean; // when true, BitmapGenerator is not called; texture will be undefined
 ```
 
-### 3.2 — Guard in `resolveVisualizationMode` (`GeoImage.ts`)
+### 4.2 — Guard in `TerrainGenerator.generate()`
+
+```ts
+if (!options.skipTexture) {
+  if (isKernel && options.useSwissRelief) { ... }
+  else if (isKernel && (options.useSlope || options.useHillshade)) { ... }
+  else if (this.hasVisualizationOptions(options)) { ... }
+}
+// tileResult.texture remains undefined when skipTexture=true
+```
+
+### 4.3 — Guard in `resolveVisualizationMode` (`GeoImage.ts`)
 
 ```ts
 } else if (mergedOptions.type === 'terrain') {
-  const shouldSkipTexture = mergedOptions.wireframe || mergedOptions.disableTexture;
-  if (!hasKernelMode && !shouldSkipTexture) {
+  if (!mergedOptions.skipTexture && !hasKernelMode) {
     resolved.useSingleColor = true;
     resolved.color = mergedOptions.terrainColor;
   }
 }
 ```
 
-### 3.3 — Guard in `TerrainGenerator.generate()`
+### 4.4 — Propagate `skipTexture` into `CogTiles.options` from `CogTerrainLayer`
 
-```ts
-const shouldSkipTexture = options.wireframe || options.disableTexture;
+In `updateState`: whenever `wireframe` or `operation` changes, recompute
+`skipTexture = wireframe || operation === 'terrain'` and update `cogTiles.options.skipTexture`.
 
-if (isKernel && options.useSwissRelief && !shouldSkipTexture) { ... }
-else if (isKernel && (options.useSlope || options.useHillshade) && !shouldSkipTexture) { ... }
-else if (this.hasVisualizationOptions(options) && !shouldSkipTexture) { ... }
-```
-
-### 3.4 — Propagate into `CogTiles.options` and `updateTriggers`
-
-In `CogTerrainLayer.updateState` / `initState`:
-- Copy `this.props.wireframe` and `this.props.disableTexture` into `cogTiles.options`
-- Add both to `updateTriggers.getTileData` (not just `renderSubLayers`) so tile data is
-  reloaded when either changes
-
-### 3.5 — Document `disableTexture: true` as the `operation: 'terrain'` pattern
-
-`operation: 'terrain'` is a deck.gl extension prop (geometry-only rendering). Recommend
-users set `disableTexture: true` as the explicit opt-out. Add a JSDoc example.
-
----
-
-## Step D — `wireframeOverlay` Prop (Part 4 from review)
-
-_Files: `CogTerrainLayer.ts`_
-
-Add a `wireframeOverlay: boolean` prop that conditionally renders a second `SimpleMeshLayer`
-per tile on top of the textured surface. Useful for inspecting mesh density and
-`meshMaxError` tuning in development.
-
-### 4.1 — Add prop
-
-```ts
-wireframeOverlay?: boolean; // default false
-```
-
-### 4.2 — Render overlay layer
-
-In `renderSubLayers`, when `wireframeOverlay` is true, push a second `SimpleMeshLayer` with:
-- `wireframe: true`
-- `getColor: [0, 0, 0, 80]`
-- Same mesh data as the primary layer
-- No texture
+> **Note:** `operation` is a standard `CompositeLayerProps` field — accessible via
+> `this.props.operation`. The values that imply no texture output are `'terrain'` and
+> `'mask'`; `'terrain+draw'` and `'draw'` (default) require texture.
 
 ---
 
@@ -270,26 +281,47 @@ Clear `reliefMaskCache` in `initializeCog` and on URL change.
 
 ---
 
-## Step F — Web Workers for Tessellation (Deferred)
+## Step F — Skip Mesh Calculation for noData / Discard Values ✅ **PLANNED**
+
+_Files: `TerrainGenerator.ts`, `CogTiles.ts`_
+
+Currently, tiles that are fully or partially covered by noData values still run the full
+tessellation pipeline (Martini/Delatin) even when every vertex would be a discard/fill value.
+This wastes CPU on tiles outside the COG extent or masked areas.
+
+### 6.1 — Detect all-noData tiles before tessellation ✅
+
+After `getTileFromImage` returns, perform a fast no-data check on the selected elevation channel. If the raster contains only noData values, return `null` from `getTile()` early — no mesh, no texture, no cache entry.
+
+**Default heuristic:** runtime default is `'full'` (safe): it scans every pixel to avoid false-empty tiles. Use `'border+center'` when you prefer a faster heuristic; note it may miss small isolated land masses (e.g., archipelagos).
+
+### 6.2 — Detect partially-noData tiles (optional / stretch)
+
+For tiles partially covered by noData, consider clamping noData pixels to the nearest valid
+elevation before tessellation (avoids spikes/holes at COG boundaries).
+
+### 6.3 — Integration with TileResult cache
+
+All-noData result (`null`) should NOT be stored in `tileResultCache` — if the COG extent
+changes or options change, the tile should be re-evaluated. Only non-null results are cached.
+
+---
+
+## Step G — Web Workers for Tessellation (Deferred)
 
 _See `2026-04-20-terrain-performance-plan.md` Item 5 for full spec._  
-Separate PR, after Steps A–E are stable and merged.
+Separate PR, after Steps A–F are stable and merged.
 
 ---
 
 ## Implementation Order & Priority
 
-| Step | What | Files | Priority | Branch |
-|---|---|---|---|---|
-| A | Fix raster cache bugs + remove console.logs | `CogTiles.ts` | **Before merge** | current |
-| B | Replace raster cache → TileResult cache | `CogTiles.ts`, `types.ts` | High | new branch |
-| C | Skip texture for wireframe / disableTexture | `GeoImage.ts`, `TerrainGenerator.ts`, `CogTerrainLayer.ts`, `types.ts` | High | same as B |
-| D | `wireframeOverlay` prop | `CogTerrainLayer.ts` | Medium | follow-up |
-| E | `reliefGlaze` mask cache | `CogTiles.ts` | Medium | follow-up |
-| F | Web Worker tessellation | `TerrainGenerator.ts`, Rollup | Low | separate PR |
-
-**Recommended grouping:**
-- **PR 1 (current branch):** Step A only — unblock merge
-- **PR 2:** Steps B + C together — TileResult cache + texture skip (interact via `disableTexture` invalidating the cache)
-- **PR 3:** Steps D + E — wireframe overlay + glaze mask cache (self-contained)
-- **PR 4:** Step F — Web Workers (significant scope, own PR)
+| Step | What | Files | Priority | Branch | Status |
+|---|---|---|---|---|---|
+| A | Fix raster cache bugs + remove console.logs | `CogTiles.ts` | **Before merge** | feat/terrain-perf-item4-raster-cache | ✅ Done |
+| B | TileResult cache with ref-counted abort (terrain) | `CogTiles.ts`, `types.ts` | High | feat/terrain-perf-tileresult-cache | ✅ Done |
+| C | Include `skipTexture` in cache key; detect `wireframe`/`operation='terrain'` condition | `CogTiles.ts`, `CogTerrainLayer.ts` | High | feat/terrain-perf-tileresult-cache | ✅ Done |
+| D | Skip `BitmapGenerator` in pipeline when `skipTexture=true` | `GeoImage.ts`, `TerrainGenerator.ts`, `types.ts` | High | feat/terrain-perf-tileresult-cache | ⬜ Pending |
+| E | Per-type bitmap caching (raster + relief mask) | `CogTiles.ts` | Medium | feat/terrain-perf-tileresult-cache | ✅ Done |
+| F | Skip mesh for noData/discard tiles | `TerrainGenerator.ts`, `CogTiles.ts` | Medium | feat/terrain-perf-tileresult-cache | ✅ Done |
+| G | Web Worker tessellation | `TerrainGenerator.ts`, Rollup | Low | separate PR | ⬜ Pending |

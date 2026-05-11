@@ -88,15 +88,16 @@ export default class GeoImage {
     } else if (mergedOptions.type === 'terrain') {
       // Terrain with no explicit coloring mode.
       const hasKernelMode = userOptions.useSwissRelief || userOptions.useSlope || userOptions.useHillshade;
-      if (!hasKernelMode) {
-        // No kernel mode: enable useSingleColor with terrainColor as the default.
+      // If skipTexture is requested, force single-color mesh rendering regardless of kernel modes.
+      if (!hasKernelMode || mergedOptions.skipTexture) {
+        // No kernel mode OR skipTexture: enable useSingleColor with terrainColor as the default.
         // This renders the mesh in the documented colour without a data-driven texture.
         resolved.useHeatMap = false;
         resolved.useSingleColor = true;
         resolved.color = mergedOptions.terrainColor;
       }
       // When a kernel mode is present without an explicit coloring mode, keep
-      // useHeatMap: true from defaults so the kernel output is colourised.
+      // useHeatMap: true from defaults so the kernel output is colourised (unless skipTexture).
     }
     // For 'image' with no explicit coloring mode: keep useHeatMap: true from DefaultGeoImageOptions.
 

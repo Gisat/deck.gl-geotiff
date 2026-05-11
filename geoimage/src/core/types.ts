@@ -63,6 +63,8 @@ export type GeoImageOptions = {
     useDataForOpacity?: boolean,
     useSingleColor?: boolean,
     blurredTexture? : boolean,
+    /** When true, skip generating a texture bitmap for this tile (mesh-only path). */
+    skipTexture?: boolean,
     clipLow?: number | null,
     clipHigh?: number | null,
     color?: ChromaColorInput,
@@ -88,6 +90,10 @@ export type GeoImageOptions = {
     useSwissRelief?: boolean,
     swissSlopeWeight?: number,
     useReliefGlaze?: boolean,
+
+    // --- noData detection strategy ---
+    /** Strategy for detecting all-noData tiles. Options: 'full' | 'border+center' */
+    noDataCheck?: 'full' | 'border+center',
 
     // --- Lighting control ---
     disableLighting?: boolean,
@@ -121,6 +127,9 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
     useDataForOpacity: false,
     useSingleColor: false,
     blurredTexture: true,
+    skipTexture: false,
+    /** Strategy for noData detection: 'full' | 'border+center' */
+    noDataCheck: 'full',
     clipLow: null,
     clipHigh: null,
     color: [255, 0, 255, 255],
@@ -190,3 +199,13 @@ export interface TileResult {
     /** Optional: grayscale or color bitmap for Swiss relief or other overlays */
     bitmap?: Uint8ClampedArray | ImageBitmap;
 }
+
+/**
+ * Stores full TileResult including texture because:
+ * - Kernel computations (slope/hillshade/swiss relief → rawDerived) are expensive and cached
+ * - Texture generation from rawDerived is cheap (colorization only)
+ * - But caching texture avoids ImageBitmap regeneration overhead
+ * - For BitmapLayer: texture IS the primary output (must cache)
+ * Cache is cleared on URL/meshMaxError changes.
+ */
+export type CachedTileResult = TileResult;
