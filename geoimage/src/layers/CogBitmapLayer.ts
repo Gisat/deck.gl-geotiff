@@ -103,7 +103,7 @@ const defaultProps: DefaultProps<CogBitmapLayerProps> = {
 //   return template || '';
 // }
 
-type MeshAndTexture = TileResult;
+type MeshAndTexture = TileResult | null;
 
 /** Props added by the CogBitmapLayer */
 type _CogBitmapLayerProps = {
@@ -214,27 +214,35 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     }
   }
 
-  async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult> {
-    // TODO - pass signal to getTile
-    // abort request if signal is aborted
-    const tileData = await this.state.bitmapCogTiles.getTile(
-      tile.index.x,
-      tile.index.y,
-      tile.index.z,
-      // bounds,
-      // this.props.meshMaxError,
-    );
-    if (tileData && !this.props.pickable) {
-      tileData.raw = null;
+  async getTiledBitmapData(tile: TileLoadProps): Promise<TileResult | null> {
+    let resolvedTileData: TileResult | null;
+    try {
+      resolvedTileData = await this.state.bitmapCogTiles.getTile(
+        tile.index.x,
+        tile.index.y,
+        tile.index.z,
+        undefined,
+        undefined,
+        tile.signal,
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return null;
+      }
+      throw error;
     }
-    return tileData;
+
+    if (resolvedTileData && !this.props.pickable) {
+      resolvedTileData.raw = null;
+    }
+    return resolvedTileData;
   }
 
   renderSubLayers(
-    props: TileLayerProps<TileResult> & {
+    props: TileLayerProps<TileResult | null> & {
         id: string;
-        data: TileResult;
-        tile: Tile2DHeader<TileResult>;
+        data: TileResult | null;
+        tile: Tile2DHeader<TileResult | null>;
       },
   ) {
     const SubLayerClass = this.getSubLayerClass('image', BitmapLayer);
@@ -288,7 +296,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
     if (this.state.isTiled && this.state.initialized) {
       const { tileSize } = this.state.bitmapCogTiles;
 
-      return new TileLayer<TileResult>(this.getSubLayerProps({
+      return new TileLayer<TileResult | null>(this.getSubLayerProps({
         id: 'tiles',
       }), {
         getTileData: this.getTiledBitmapData.bind(this),

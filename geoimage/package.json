@@ -1,6 +1,6 @@
 {
   "name": "@gisatcz/deckgl-geolib",
-  "version": "2.4.0",
+  "version": "2.5.0-dev.6",
   "description": "Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data",
   "keywords": [
     "deck.gl",
@@ -51,7 +51,7 @@
   "dependencies": {
     "@mapbox/martini": "^0.2.0",
     "chroma-js": "^3.2.0",
-    "geotiff": "3.0.3"
+    "geotiff": "^3.0.5"
   },
   "peerDependencies": {
     "@deck.gl/core": ">=9.0.0",

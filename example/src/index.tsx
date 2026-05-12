@@ -14,7 +14,9 @@ const root = createRoot(container!);
  * due to resource contention during the simultaneous boot of two GL contexts.
  */
 root.render(
-  <RecoilRoot>
-    <Routing />
-  </RecoilRoot>
+  React.createElement(
+    RecoilRoot as any,
+    null,
+    React.createElement(Routing)
+  )
 );

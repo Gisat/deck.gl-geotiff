@@ -24,6 +24,14 @@ These options select which band of the GeoTIFF to use. Shared by both Bitmap and
 | **`useChannelIndex`** | `number` \| `null` | `null` | **Optional**. 0-based index of the channel to visualize (e.g. `0` for the first channel). Alternative to `useChannel`. |
 | **`format`** | `string` \| `undefined` | `undefined` | **Optional**. Explicit data type hint: `'uint8'`, `'uint16'`, `'uint32'`, `'int8'`, `'int16'`, `'int32'`, `'float32'`, `'float64'`. Auto-detected from the GeoTIFF when omitted. |
 
+## COG Fetching Options
+
+These options control how raw bytes are fetched from the remote COG file. **All parameters are optional.**
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **`blockSize`** | `number` | `65536` | Block size in bytes for the internal HTTP range-request cache. The COG source is wrapped in a `BlockedSource` that fetches and caches data in fixed-size blocks. Larger values reduce the number of HTTP requests at the cost of fetching more data per request. Set to `0` to disable block caching entirely (not recommended for standard COG servers). The default of `65536` (64 KB) matches the geotiff.js internal default. |
+
 ## Bitmap Specific Options
 
 These options apply to `CogBitmapLayer` (via `cogBitmapOptions`) and to `CogTerrainLayer` (via `terrainOptions`). When passed in `terrainOptions`, a texture is automatically generated from the elevation data and applied to the 3D mesh — no separate `CogBitmapLayer` needed. **All parameters are optional.**
@@ -69,7 +77,7 @@ Used for categorical data (land cover, classification).
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **`alpha`** | `number` | `100` | Global opacity (0-100) if `useDataForOpacity` is false. |
+| **`alpha`** | `number` | `100` | Global opacity (0-100) if `useDataForOpacity` is false. **Note:** Ignored when `useReliefGlaze: true` (glaze mode uses `maxGlazeAlpha` instead). |
 | **`useDataForOpacity`** | `boolean` | `false` | Maps pixel intensity to opacity (0=transparent, max=opaque). |
 
 ---
@@ -78,17 +86,30 @@ Used for categorical data (land cover, classification).
 
 These options apply specifically to `CogTerrainLayer` or when generating heightmaps. **All parameters are optional.**
 
+> **`multiplier` vs. `verticalExaggeration`:** These are two separate concerns.
+> - **`multiplier`** is for unit conversion (e.g. cm → m) and affects how Martini/Delatin compare the error threshold against the terrain mesh.
+> - **`verticalExaggeration`** is for visual appearance only and stretches the final mesh vertically without changing the error tolerance or mesh density.
+> 
+> Example: If your data is in centimetres, set `multiplier: 0.01` to convert to metres. To make the terrain look 3× taller for visualization, set `verticalExaggeration: 3.0`. These changes are independent — changing `verticalExaggeration` will never cause over-tessellation.
+
+> **`meshMaxError` and COG Resolution:** Set `meshMaxError` to approximately your COG's ground resolution (pixel size in meters), or larger. Your COG has a native resolution — trying to represent finer detail than this via smaller `meshMaxError` values creates unnecessary vertices without improving visual quality. For example, if your COG pixels are 38 meters, setting `meshMaxError: 40` uses the native resolution efficiently. Setting `meshMaxError: 1` wastes computation by creating a much finer mesh than the source data can support.
+
+> **Performance and `terrainSkirtHeight`:** The skirt (enabled by default at 100 meters) prevents visible cracks at tile boundaries by adding vertical walls. This requires deduplicating mesh boundary edges during generation, which has a small CPU cost. For typical configurations (meshMaxError: 4.0), this is negligible (~5ms per tile). For very fine meshes or performance-critical applications, you can disable skirts with `terrainSkirtHeight: 0` to save the edge deduplication cost, accepting tile boundary cracks as a trade-off.
+
+Additionally, as a performance optimization, tiles whose elevation channel contains only the configured `noDataValue` are detected early — in such cases no mesh or texture is generated and the tile loader returns `null`, avoiding expensive tessellation. The detection strategy can be configured via `terrainOptions.noDataCheck` with values `'full'` or `'border+center'`. The default is `'full'` (safe): it scans every pixel to avoid false-empty tiles. Use `'border+center'` when you prefer a faster heuristic; note it may miss small isolated land masses (e.g., archipelagos).
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`tesselator`** | `'martini'` \| `'delatin'` | `'martini'` | The algorithm used for terrain mesh generation. 'Martini' is generally faster, 'Delatin' may produce higher quality meshes. |
-| **`multiplier`** | `number` | `1.0` | Multiplies each data value by this factor (e.g. vertical exaggeration). Used in calculating elevation. |
-| **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks. |
+| **`multiplier`** | `number` | `1.0` | Scales each raw elevation value before Martini/Delatin tessellation. Use this for unit conversion into metres when needed (e.g. `0.01` to convert cm to m). `meshMaxError` must be specified in the same units as these scaled elevation values (typically meters after conversion), so changing `multiplier` without adjusting `meshMaxError` will change tessellation density. |
+| **`verticalExaggeration`** | `number` | `1.0` | **Visual exaggeration only.** Scales vertex z positions after mesh generation, making terrain appear taller. Unlike `multiplier`, this does **not** affect `meshMaxError` — the error threshold is always evaluated against real-world (post-`multiplier`) elevation values. The skirt height is automatically scaled by this factor. |
+| **`terrainSkirtHeight`** | `number` | `100` | Height (in meters) of the "skirt" around tiles to hide cracks at tile boundaries. Automatically scaled by `verticalExaggeration`. Set to `0` to disable. **Performance note:** Adding skirts has a small CPU cost during mesh generation (edge deduplication), roughly proportional to the number of triangles. For typical use cases with the default `meshMaxError: 4.0`, this cost is negligible (~5ms per tile). For very fine meshes (small `meshMaxError`), disabling skirts entirely (`terrainSkirtHeight: 0`) can improve performance if tile boundary cracks are acceptable. |
 | **`terrainMinValue`** | `number` | `0` | Default value to use if elevation data is missing. |
-| **`terrainColor`** | `number[]` \| `ChromaColor` | `[133, 133, 133, 255]` | Base RGBA color of the terrain mesh when no texture or visualization options are set. |
+| **`terrainColor`** | `number[]` \| `ChromaColor` | `[200, 200, 200, 255]` | Base RGBA color of the terrain mesh when no texture or visualization options are set. |
 
-### Kernel / Derived Analysis Options
+### Kernel / Derived / Glaze Analysis Options
 
-These options activate 3×3 neighborhood kernel calculations on the elevation raster, producing slope or hillshade as the tile texture. **Mutually exclusive** — set either `useSlope` or `useHillshade`, not both. Requires `useHeatMap: true` and a `colorScale` to control the output visualization.
+These options activate 3×3 neighborhood kernel calculations on the elevation raster, producing slope, hillshade, or Swiss relief glaze as the tile texture. **Mutually exclusive** — set either `useSlope` or `useHillshade`, not both. For slope and hillshade heatmap-style visualization, use `useHeatMap: true` together with a `colorScale` to control the output. **For Swiss relief (baked or glaze mode):** use `useSwissRelief` or `useReliefGlaze` with any visualization option — these modes do not require `useHeatMap`.
 
 When active, tiles are fetched at 258×258 (one pixel border beyond the 256 output) to provide edge neighbors for the kernel, and the derived values are stored in `TileResult.rawDerived` alongside the original elevation in `TileResult.raw`. **All parameters are optional.**
 
@@ -99,6 +120,10 @@ When active, tiles are fetched at 258×258 (one pixel border beyond the 256 outp
 | **`hillshadeAzimuth`** | `number` | `315` | Sun azimuth in degrees (0 = North, clockwise). Only used when `useHillshade: true`. |
 | **`hillshadeAltitude`** | `number` | `45` | Sun altitude above the horizon in degrees (0 = horizon, 90 = zenith). Only used when `useHillshade: true`. |
 | **`zFactor`** | `number` | `1` | Vertical exaggeration applied before gradient calculation. Useful when horizontal and vertical units differ significantly (e.g. degrees vs. metres). |
+| **`swissSlopeWeight`** | `number` | `0.5` | Controls the influence of slope on the final appearance for both kernel and Swiss relief glaze. Lower values (0.2–0.5) favor hillshade, higher values (0.5–1.0) emphasize slope contrast. |
+| **`useSwissRelief`** | `boolean` | `false` | Enables Swiss-style shaded relief (composited slope + multi-directional hillshade) for terrain visualization. Automatically disables lighting on `CogTerrainLayer`. Applies relief mask as a texture overlay. |
+| **`useReliefGlaze`** | `boolean` | `false` | *(Bitmap layers only)* Generates a transparent Swiss relief glaze overlay (0–255 mask) that can be composited over external rasters or basemaps. Relief is computed from the elevation channel selected via `useChannel`/`useChannelIndex`. Ignores global `alpha` setting (uses `maxGlazeAlpha` instead). |
+| **`maxGlazeAlpha`** | `number` | `128` | Intensity ceiling for relief glaze (0-255). 0 is fully transparent; 255 is maximum theoretical opacity. Only used with `useReliefGlaze`. Recommended range for satellite overlays: 120-160. |
 
 ### Layer Props (CogTerrainLayer)
 
@@ -106,9 +131,10 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| **`meshMaxError`** | `number` | `4.0` | Martini/Delatin error tolerance in meters. Smaller number -> more detailed mesh (higher triangle count). |
+| **`meshMaxError`** | `number \| 'auto'` | `'auto'` | Martini/Delatin error tolerance in meters, or `'auto'` for zoom-adaptive scaling. **Modes:** (1) Explicit numeric value (e.g. `10`): Fixed meshMaxError for all zoom levels; user has full control. (2) `'auto'`: Dynamically scales meshMaxError based on zoom level and the COG's tile resolution. The scaling uses a linear interpolation multiplier that ranges from **3.0× at the COG's minimum zoom** (coarse meshes for performance when viewing entire regions) to **0.5× at the COG's maximum zoom** (fine meshes for detail when viewing local features). Formula: `meshMaxError = tileResolution × errorMultiplier`. This provides significant performance improvements at low zooms (fewer triangles, faster tessellation) while maintaining pixel-perfect detail at high zooms (no slivers). **Recommendation:** `'auto'` is the default and recommended for most cases. Explicit numbers are useful for fine-tuning if you want consistent tessellation across all zoom levels. |
 | **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 | **`disableTexture`** | `boolean` | `false` | When `true`, suppresses any generated texture and renders the mesh in plain `color`. Useful for showing neutral grey terrain during mode transitions. |
+| **`skipTexture`** | `boolean` | `false` | Internal option: when `true`, prevents texture generation in `TerrainGenerator` and is included in the tile cache key to avoid serving mesh-only tiles to textured requests. Set by `CogTerrainLayer` when `wireframe` is true or `operation === 'terrain'.` |
 
 ---
 
@@ -127,7 +153,7 @@ When a tile is loaded, both generators bundle the raw raster data alongside the 
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `map` | `ImageBitmap \| MeshAttributes` | The visual artifact sent to the GPU. |
-| `raw` | `TypedArray` | The original raster data, kept on the CPU. For terrain this is elevation in metres. |
+| `raw` | `TypedArray` | The original raster data after `multiplier` scaling (used by Martini/Delatin). For terrain this is elevation in metres (if `multiplier: 1.0`). **Note:** Does not include `verticalExaggeration` — the z values in the mesh vertices are exaggerated, but `raw` contains only the base elevation values. |
 | `width` | `number` | Tile width in pixels. |
 | `height` | `number` | Tile height in pixels. |
 | `texture` | `ImageBitmap \| undefined` | *(Terrain only)* Generated texture bitmap from elevation data. Present when at least one visualization option is active in `terrainOptions` (`useHeatMap`, `colorScale`, `useSingleColor`, `useColorsBasedOnValues`, or `useColorClasses`). `undefined` when no visualization options are set. |

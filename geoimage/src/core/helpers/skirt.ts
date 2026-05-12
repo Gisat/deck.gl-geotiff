@@ -88,26 +88,35 @@ export function addSkirt(attributes: any, triangles: any, skirtHeight: number, o
  * @returns {number[][]} - outside edges data
  */
 function getOutsideEdgesFromTriangles(triangles: any): number[][] {
-  const edges: number[][] = [];
-  for (let i = 0; i < triangles.length; i += 3) {
-    edges.push([triangles[i], triangles[i + 1]]);
-    edges.push([triangles[i + 1], triangles[i + 2]]);
-    edges.push([triangles[i + 2], triangles[i]]);
-  }
+  // Use BigInt keys to avoid collisions for large meshes.
+  // Pack min and max into a single BigInt key: (min << 32) | max
+  const edgeMap = new Map<bigint, number[]>();
 
-  edges.sort((a, b) => Math.min(...a) - Math.min(...b) || Math.max(...a) - Math.max(...b));
+  const processEdge = (a: number, b: number) => {
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
+    // Pack indices into a single BigInt key to avoid string allocation and collisions
+    const key = (BigInt(min) << 32n) | BigInt(max);
 
-  const outsideEdges: number[][] = [];
-  let index = 0;
-  while (index < edges.length) {
-    if (edges[index][0] === edges[index + 1]?.[1] && edges[index][1] === edges[index + 1]?.[0]) {
-      index += 2;
+    if (edgeMap.has(key)) {
+      edgeMap.delete(key); // Interior edge, remove
     } else {
-      outsideEdges.push(edges[index]);
-      index++;
+      edgeMap.set(key, [a, b]);
     }
+  };
+
+  for (let i = 0; i < triangles.length; i += 3) {
+    const v0 = triangles[i];
+    const v1 = triangles[i + 1];
+    const v2 = triangles[i + 2];
+
+    // Process each edge inline — no temporary array allocation per triangle
+    processEdge(v0, v1);
+    processEdge(v1, v2);
+    processEdge(v2, v0);
   }
-  return outsideEdges;
+
+  return Array.from(edgeMap.values());
 }
 
 /**

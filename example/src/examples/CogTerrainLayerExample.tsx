@@ -37,8 +37,19 @@ function CogTerrainLayerExample() {
     ...mainCog.defaultOptions as GeoImageOptions,
     type: 'terrain',
     useHeatMap: true,
-    colorScale: [[65, 182, 196], [254, 254, 191], [215, 25, 28]] as any,
-    colorScaleValueRange: [0, 255],
+    colorScale: [
+        [75, 120, 90],    // Brightened forest green
+        [100, 145, 100],  // Soft meadow green
+        [130, 170, 110],  // Bright moss
+        [185, 210, 145],  // Sunny sage
+        [235, 235, 185],  // Pale primrose (transitional)
+        [225, 195, 160],  // Sand / light terracotta (matches slope)
+        [195, 160, 130],  // Warm clay brown
+        [170, 155, 150],  // Warm slate grey
+        [245, 245, 240],  // Bright mist
+        [255, 255, 255],  // Pure peak white
+      ] as any,
+    colorScaleValueRange: [0, 4000],
     useChannel: 1,
   };
 
@@ -103,7 +114,7 @@ function CogTerrainLayerExample() {
       cogTiles: initializedCog,
       isTiled: true,
       tileSize: 256,
-      // meshMaxError: 1,
+      meshMaxError: 'auto',
       operation: 'terrain+draw',
       terrainOptions,
       pickable: true,

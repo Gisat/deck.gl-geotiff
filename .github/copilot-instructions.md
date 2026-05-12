@@ -119,7 +119,7 @@ import type { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 | `terrainOptions` | `GeoImageOptions` | Must have `type: 'terrain'` |
 | `isTiled` | `boolean` | Set to `true` for COG tiles |
 | `cogTiles` | `CogTiles` (optional) | Pre-initialized instance |
-| `meshMaxError` | `number` | Default `4.0` m, smaller = more detail |
+| `meshMaxError` | `number \| 'auto'` | Default `4.0` m (fixed) or `'auto'` for dynamic per-zoom quantization |
 
 ### `GeoImageOptions` key fields
 

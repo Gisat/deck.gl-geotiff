@@ -134,3 +134,41 @@ flowchart LR
     *   `map` — the visual artifact (`ImageBitmap` or mesh) sent to the GPU.
     *   `raw` — the original raster/elevation data kept on the CPU (RAM).
     *   Stored in `tile.content` by deck.gl's `TileLayer`, enabling raw value picking via `onClick`/`onHover` without additional network requests.
+
+## AbortSignal Propagation & Tile Cancellation
+
+### How It Works
+
+To optimize network usage with large COGs, the library uses **AbortSignal** to cancel in-flight tile requests when the viewport changes and tiles are no longer visible.
+
+**The control flow:**
+
+1. **Deck.gl creates an AbortSignal** for each tile and passes it via `tile.signal`
+2. **Our layers pass the signal** to `CogTiles.getTile(signal)`
+3. **CogTiles propagates it** to `geotiff.js` via `readRasters({ signal })`
+4. **When deck.gl prunes the tile**, it calls `signal.abort()`
+5. **Geotiff.js detects the abort** and throws `AbortError`
+6. **We normalize abort errors** in `getTileFromImage()` by rethrowing a standard `DOMException('AbortError')`. This ensures deck.gl treats the request as a cancellation and keeps parent tiles visible as placeholders rather than leaving holes.
+7. **Result**: Network request is cancelled, WebGL resources freed, and deck.gl keeps parent tiles as placeholders ✅
+
+### Handling Deck.gl's Internal AbortErrors
+
+When panning and zooming rapidly with large datasets, deck.gl aggressively prunes tiles from the viewport. This triggers AbortErrors in two places:
+
+- ✅ **In geotiff.js** (caught by our try/catch)
+- ❌ **In deck.gl's `Tile2DHeader.abort()`** (deck.gl's internal error handling)
+
+**Why deck.gl's error escapes:**
+
+Deck.gl's abort error originates outside its promise chain that has the `.catch()` handler, causing it to escape as an "Uncaught (in promise)" rejection. This is an architectural quirk in deck.gl, not a bug in our library.
+
+**How this library handles it:**
+
+When you import `@gisatcz/deckgl-geolib`, the library automatically registers a single global `unhandledrejection` handler that suppresses `AbortError` events. This is:
+
+- ✅ **Automatic** — no user configuration needed
+- ✅ **Safe** — only suppresses `AbortError`, not other exceptions
+- ✅ **Idempotent** — registered exactly once, even with multiple imports
+- ✅ **Correct** — AbortError is control flow (normal tile cancellation), not an application error
+
+See `geoimage/src/utils/suppressAbortErrors.ts` for the implementation.

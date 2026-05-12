@@ -5,6 +5,8 @@ import { addSkirt } from '../helpers/skirt';
 import { GeoImageOptions, Bounds, TypedArray, TileResult } from '../types';
 import { BitmapGenerator } from './BitmapGenerator';
 import { KernelGenerator } from './KernelGenerator';
+import { ReliefCompositor } from './ReliefCompositor';
+import { isF32NoData } from './numberUtils';
 
 export class TerrainGenerator {
   static async generate(
@@ -26,7 +28,7 @@ export class TerrainGenerator {
     const meshHeight = isKernel ? 257 : height;
 
     // 2. Tesselate (Generate Mesh)
-    const { terrainSkirtHeight } = options;
+    const { terrainSkirtHeight, verticalExaggeration = 1.0 } = options;
 
     let mesh;
     switch (options.tesselator) {
@@ -45,18 +47,22 @@ export class TerrainGenerator {
 
     const { vertices } = mesh;
     let { triangles } = mesh;
-    let attributes = this.getMeshAttributes(vertices, meshTerrain, meshWidth, meshHeight, input.bounds);
+    let attributes = this.getMeshAttributes(vertices, meshTerrain, meshWidth, meshHeight, input.bounds, verticalExaggeration);
     // Compute bounding box before adding skirt so that z values are not skewed
     const boundingBox = getMeshBoundingBox(attributes);
 
     if (terrainSkirtHeight) {
-      const { attributes: newAttributes, triangles: newTriangles } = addSkirt(
-        attributes,
-        triangles,
-        terrainSkirtHeight,
-      );
-      attributes = newAttributes;
-      triangles = newTriangles;
+      const scaledSkirtHeight = terrainSkirtHeight * verticalExaggeration;
+      // Skip skirt generation if scaled height is zero (e.g., verticalExaggeration = 0)
+      if (scaledSkirtHeight > 0) {
+        const { attributes: newAttributes, triangles: newTriangles } = addSkirt(
+          attributes,
+          triangles,
+          scaledSkirtHeight,
+        );
+        attributes = newAttributes;
+        triangles = newTriangles;
+      }
     }
 
     const map = {
@@ -86,7 +92,38 @@ export class TerrainGenerator {
     };
 
     // 3. Kernel path: compute slope or hillshade, store as rawDerived, generate texture
-    if (isKernel && (options.useSlope || options.useHillshade)) {
+    const shouldSkipTexture = !!options.skipTexture;
+
+    if (isKernel && options.useSwissRelief) {
+      const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
+      
+      // Build a separate raster for kernel computation that preserves noData samples.
+      const kernelTerrain = this.preserveNoDataForKernel(
+        terrain,
+        input.rasters[0],
+        options.noDataValue
+      );
+
+      // Compose Swiss relief using ReliefCompositor
+      const swissReliefResult = ReliefCompositor.composeSwissRelief(
+        kernelTerrain,
+        options,
+        cellSize,
+        256,
+        256,
+      );
+      tileResult.rawDerived = swissReliefResult;
+
+      if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
+        const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
+        const bitmapResult = await BitmapGenerator.generate(
+          { width: 256, height: 256, rasters: [cropped, swissReliefResult] },
+          { ...options, type: 'image' }
+        );
+        tileResult.texture = bitmapResult.map as ImageBitmap;
+      }
+    }
+    else if (isKernel && (options.useSlope || options.useHillshade)) {
       // Use pre-computed geographic cellSize (meters/pixel) from tile indices.
       // Falls back to bounds-derived estimate if not provided.
       const cellSize = input.cellSizeMeters ?? ((input.bounds[2] - input.bounds[0]) / 256);
@@ -100,25 +137,11 @@ export class TerrainGenerator {
       }
 
       // Build a separate raster for kernel computation that preserves noData samples.
-      const kernelTerrain = new Float32Array(terrain.length);
-      const sourceRaster = input.rasters[0];
-      const noData = options.noDataValue;
-      if (
-        noData !== undefined &&
-        noData !== null &&
-        sourceRaster &&
-        sourceRaster.length === terrain.length
-      ) {
-        for (let i = 0; i < terrain.length; i++) {
-          // If the source raster marks this sample as noData, keep it as noData for the kernel.
-          // Otherwise, use the processed terrain elevation value.
-           
-          kernelTerrain[i] = (sourceRaster as any)[i] == noData ? (noData as number) : terrain[i];
-        }
-      } else {
-        // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
-        kernelTerrain.set(terrain);
-      }
+      const kernelTerrain = this.preserveNoDataForKernel(
+        terrain,
+        input.rasters[0],
+        options.noDataValue
+      );
       let kernelOutput: Float32Array;
       if (options.useSlope) {
         kernelOutput = KernelGenerator.calculateSlope(kernelTerrain, cellSize, zFactor, options.noDataValue);
@@ -135,19 +158,48 @@ export class TerrainGenerator {
 
       tileResult.rawDerived = kernelOutput;
 
-      if (this.hasVisualizationOptions(options)) {
+      if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
         const bitmapResult = await BitmapGenerator.generate(
           { width: 256, height: 256, rasters: [kernelOutput] },
           { ...options, type: 'image' }
         );
         tileResult.texture = bitmapResult.map as ImageBitmap;
       }
-    } else if (this.hasVisualizationOptions(options)) {
-      // 4. Non-kernel path: crop 257→256, generate texture from elevation
-      const cropped = this.cropRaster(meshTerrain, gridWidth, gridHeight, 256, 256);
+    } else if (!shouldSkipTexture && this.hasVisualizationOptions(options)) {
+      // 4. Non-kernel path: build texture raster from the ORIGINAL source data, preserving
+      // noData sentinels so BitmapGenerator renders those pixels as transparent (via nullColor).
+      // meshTerrain substitutes noData with terrainMinValue for mesh stability — we intentionally
+      // avoid using it for texture generation to prevent fill values being coloured.
+      const multiplier = options.multiplier ?? 1;
+      const noDataValue = options.noDataValue;
+
+      const srcRaster = input.rasters[0] as TypedArray | any;
+      const srcWidth = input.width;
+      const srcHeight = input.height;
+
+      // Determine samplesPerPixel for interleaved buffers (fallback to 1)
+      const samplesPerPixel = Math.max(1, Math.round((srcRaster.length) / (srcWidth * srcHeight)));
+
+      const channelIndex = options.useChannelIndex ?? (options.useChannel != null ? options.useChannel - 1 : 0);
+
+      const textureRaster = new Float32Array(256 * 256);
+      for (let ty = 0; ty < 256; ty++) {
+        for (let tx = 0; tx < 256; tx++) {
+          // Guard: if srcWidth < 256 (shouldn't happen), clamp indices
+          const srcX = Math.min(tx, srcWidth - 1);
+          const srcY = Math.min(ty, srcHeight - 1);
+          const srcIdx = (srcY * srcWidth + srcX) * samplesPerPixel + channelIndex;
+          const v = srcRaster[srcIdx];
+          const isNoData = isF32NoData(v, noDataValue);
+          textureRaster[ty * 256 + tx] = isNoData ? (noDataValue as number) * multiplier : v * multiplier;
+        }
+      }
+
+      const bitmapOptions: GeoImageOptions = { ...options, type: 'image', useChannelIndex: 0, numOfChannels: 1, noDataValue: noDataValue !== undefined ? (noDataValue as number) * multiplier : undefined };
+
       const bitmapResult = await BitmapGenerator.generate(
-        { width: 256, height: 256, rasters: [cropped] },
-        { ...options, type: 'image' }
+        { width: 256, height: 256, rasters: [textureRaster] },
+        bitmapOptions
       );
       tileResult.texture = bitmapResult.map as ImageBitmap;
     }
@@ -155,7 +207,6 @@ export class TerrainGenerator {
     return tileResult;
   }
 
-  /** Extracts rows 1–257, cols 1–257 from a 258×258 terrain array → 257×257 for mesh generation. */
   private static extractMeshRaster(terrain258: Float32Array): Float32Array {
     const MESH = 257;
     const IN = 258;
@@ -168,12 +219,46 @@ export class TerrainGenerator {
     return out;
   }
 
-  private static hasVisualizationOptions(options: GeoImageOptions): boolean {    return !!(
-      options.useHeatMap ||
+  private static hasVisualizationOptions(options: GeoImageOptions): boolean {
+    return !!(
       options.useSingleColor ||
+      options.useHeatMap ||
+      options.useSwissRelief ||
       options.useColorsBasedOnValues ||
       options.useColorClasses
     );
+  }
+
+  /**
+   * Preserve noData values in a separate raster for kernel computation.
+   * If the source raster marks a sample as noData, keep it as noData.
+   * Otherwise, use the processed terrain elevation value.
+   */
+  private static preserveNoDataForKernel(
+    terrain: Float32Array,
+    sourceRaster: TypedArray | undefined,
+    noDataValue: number | undefined
+  ): Float32Array {
+    const kernelTerrain = new Float32Array(terrain.length);
+
+    if (
+      noDataValue !== undefined &&
+      noDataValue !== null &&
+      sourceRaster &&
+      sourceRaster.length === terrain.length
+    ) {
+      for (let i = 0; i < terrain.length; i++) {
+        const sourceValue = (sourceRaster as any)[i];
+        const isNoData = isF32NoData(sourceValue, noDataValue);
+
+        kernelTerrain[i] = isNoData ? (noDataValue as number) : terrain[i];
+      }
+    } else {
+      // Fallback: no usable noData metadata or mismatched lengths; mirror existing behavior.
+      kernelTerrain.set(terrain);
+    }
+
+    return kernelTerrain;
   }
 
   private static cropRaster(
@@ -229,9 +314,7 @@ export class TerrainGenerator {
       for (let x = 0; x < width; x++) {
         const multiplier = options.multiplier ?? 1;
         let elevationValue =
-          (options.noDataValue !== undefined &&
-            options.noDataValue !== null &&
-            channel[pixel] === options.noDataValue)
+          isF32NoData(channel[pixel], options.noDataValue)
             ? fallbackValue
             : channel[pixel] * multiplier;
 
@@ -288,10 +371,11 @@ export class TerrainGenerator {
     width: number,
     height: number,
     bounds: Bounds | number[],
+    verticalExaggeration: number = 1.0,
   ) {
     const gridSize = width === 257 ? 257 : width + 1;
     const numOfVerticies = vertices.length / 2;
-    // vec3. x, y in pixels, z in meters
+    // vec3. x, y in pixels, z in meters (scaled by verticalExaggeration)
     const positions = new Float32Array(numOfVerticies * 3);
     // vec2. 1 to 1 relationship with position. represents the uv on the texture image. 0,0 to 1,1.
     const texCoords = new Float32Array(numOfVerticies * 2);
@@ -312,7 +396,7 @@ export class TerrainGenerator {
 
       positions[3 * i] = x * xScale + minX;
       positions[3 * i + 1] = -y * yScale + maxY;
-      positions[3 * i + 2] = terrain[pixelIdx];
+      positions[3 * i + 2] = terrain[pixelIdx] * verticalExaggeration;
 
       texCoords[2 * i] = x / effectiveWidth;
       texCoords[2 * i + 1] = y / effectiveHeight;
