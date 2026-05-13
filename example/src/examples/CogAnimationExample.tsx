@@ -29,6 +29,8 @@ function CogAnimationExample() {
   const [currentBandIndex, setCurrentBandIndex] = useState(0);
   const [isFetched, setIsFetched] = useState(false); // Lazy-load: false until user clicks button
   const totalBands = cogInstance?.getNumChannels?.() || 30; // Dynamically read from COG, fallback to 30
+  const bandDescriptions = cogInstance?.getBandDescriptions?.() ?? [];
+  const currentDescription = bandDescriptions[currentBandIndex] || '';
 
   // Initialize the CogTiles instance once to read metadata
   useEffect(() => {
@@ -159,6 +161,11 @@ function CogAnimationExample() {
         <div style={{ marginBottom: '12px' }}>
           <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: '500' }}>
             Band: {currentBandIndex + 1} / {totalBands}
+            {currentDescription && (
+              <span style={{ marginLeft: '8px', color: '#555', fontWeight: 'normal' }}>
+                — {currentDescription}
+              </span>
+            )}
           </div>
           <input
             type="range"

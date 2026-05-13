@@ -40,6 +40,8 @@ class CogTiles {
 
   bounds: [number, number, number, number] = [0, 0, 0, 0];
 
+  bandDescriptions: string[] = [];
+
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
@@ -82,6 +84,7 @@ class CogTiles {
       this.tileSize = 256;
       this.zoomRange = [0, 0];
       this.bounds = [0, 0, 0, 0];
+      this.bandDescriptions = [];
       this.initializePromise = undefined;
       this.lastInitializedUrl = undefined;
     }
@@ -112,6 +115,26 @@ class CogTiles {
 
         this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
         this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
+
+        // Load per-band descriptions from GDAL_METADATA tag
+        const numBands = this.options.numOfChannels ?? 1;
+        let descriptions: string[] = Array(numBands).fill('');
+        
+        if (image.fileDirectory.hasTag('GDAL_METADATA')) {
+          const gdalMetadataStr = await image.fileDirectory.loadValue('GDAL_METADATA');
+          // Parse XML GDAL metadata to extract per-band descriptions
+          // Format: <Item name="DESCRIPTION" sample="0" role="description">20170101</Item>
+          const bandDescRegex = /<Item[^>]*name="DESCRIPTION"[^>]*sample="(\d+)"[^>]*>([^<]*)<\/Item>/g;
+          let match;
+          while ((match = bandDescRegex.exec(gdalMetadataStr as string)) !== null) {
+            const bandIdx = parseInt(match[1], 10);
+            const desc = match[2];
+            if (bandIdx < numBands) {
+              descriptions[bandIdx] = desc;
+            }
+          }
+        }
+        this.bandDescriptions = descriptions;
 
         [this.cogZoomLookup, this.cogResolutionLookup] = await buildCogZoomResolutionLookup(this.cog!);
 
@@ -170,6 +193,14 @@ class CogTiles {
    */
   getNumChannels(): number {
     return this.options.numOfChannels || 1;
+  }
+
+  /**
+   * Returns per-band descriptions loaded from GDAL_METADATA during initialization.
+   * Index is 0-based. Returns an empty string for bands without a description.
+   */
+  getBandDescriptions(): string[] {
+    return this.bandDescriptions;
   }
 
   /**

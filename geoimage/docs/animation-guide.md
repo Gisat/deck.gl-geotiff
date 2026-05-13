@@ -315,6 +315,68 @@ updateTriggers: {
 
 ---
 
+## Band Descriptions (Metadata Labels)
+
+Each band in a COG can have a description stored in GDAL metadata. This is automatically loaded during `initializeCog()` and can be displayed in your UI (e.g., to show dates, measurement years, or variable names).
+
+### Loading Band Descriptions
+
+Band descriptions are loaded automatically—no extra configuration needed:
+
+```tsx
+const cogInstance = new CogTiles({ type: 'terrain', /* ... */ });
+await cogInstance.initializeCog(coiUrl);
+
+// Get all band descriptions (0-based array)
+const descriptions = cogInstance.getBandDescriptions();
+// Result: ['20170101', '20170411', '20170720', ...]
+```
+
+### Displaying in the UI
+
+Show the description for the current band in your slider label:
+
+```tsx
+const bandDescriptions = cogInstance?.getBandDescriptions?.() ?? [];
+const currentDescription = bandDescriptions[currentBandIndex] || '';
+
+return (
+  <div>
+    <label>
+      Band: {currentBandIndex + 1} / {totalBands}
+      {currentDescription && ` — ${currentDescription}`}
+    </label>
+    <input 
+      type="range" 
+      value={currentBandIndex} 
+      onChange={(e) => setCurrentBandIndex(parseInt(e.target.value))}
+    />
+  </div>
+);
+```
+
+### Format Flexibility
+
+Band descriptions can contain any text—dates, years, variable names, or custom labels:
+- **Time-series:** `20170101`, `2017-01-01`, or `Jan 2017`
+- **Measurements:** `Temperature (°C)`, `Precipitation (mm)`, `Snow Depth`
+- **Versions:** `v1.0`, `v1.1`, `final`
+
+The library does no formatting; use the description as-is or parse/format it in your app.
+
+### Storage in COG Files
+
+Descriptions are stored in the GDAL metadata XML tag within the GeoTIFF. Most remote-sensing tools (GDAL, rasterio) support setting descriptions when creating COGs:
+
+```bash
+# Example: rasterio (Python)
+with rasterio.open(output_path, 'w', **profile) as dst:
+    dst.descriptions = ('20170101', '20170411', '20170720', ...)
+    dst.write(data)
+```
+
+---
+
 ## Advanced: Custom Cache Management
 
 The global cache lives at module scope in `CogTiles.ts`. If you need to clear it (e.g., swap datasets), you can access it like this:
