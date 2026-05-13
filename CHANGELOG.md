@@ -1,3 +1,9 @@
+## [2.5.1-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0...v2.5.1-dev.1) (2026-05-13)
+
+### Bug Fixes
+
+* Address PR [#146](https://github.com/Gisat/deck.gl-geotiff/issues/146) code review comments ([9b12a55](https://github.com/Gisat/deck.gl-geotiff/commit/9b12a558a807cd513b4234b1b1a9e41ab14a45a7))
+
 ## [2.5.0](https://github.com/Gisat/deck.gl-geotiff/compare/v2.4.0...v2.5.0) (2026-05-12)
 
 ### Features
