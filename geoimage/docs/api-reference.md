@@ -135,6 +135,14 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 | **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 | **`disableTexture`** | `boolean` | `false` | When `true`, suppresses any generated texture and renders the mesh in plain `color`. Useful for showing neutral grey terrain during mode transitions. |
 
+## Animation & Caching Options
+
+These options control multi-band caching for smooth animation and real-time band switching. **All parameters are optional.**
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **`cacheAllBands`** | `boolean` | `false` | **Enable multi-band caching for smooth animation.** When `true`, on first tile access, fetches and caches all bands in a single HTTP request. Subsequent band changes (via `useChannel`) instantly return cached meshes from memory — zero network latency. **Use case:** Multi-temporal elevation data (time series, 4D monitoring) or multi-variable analysis (different scalar fields). **Lazy-load pattern:** Start with `cacheAllBands: false`, let users click a "Fetch All Bands" button to enable caching on demand. **Memory trade-off:** Each tile caches all bands in RAM (e.g., 30 bands × 256KB = ~7.7 MB per tile for Float32 data). **Recommendation:** Enable only for COGs with <50 bands to avoid memory bloat over long sessions. See [Animation Guide](animation-guide.md) for implementation details and performance tuning. |
+
 ---
 
 ## Picking & Raw Value Access

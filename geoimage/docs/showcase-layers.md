@@ -532,3 +532,208 @@ const layer = new CogTerrainLayer({
 ```
 
 > **Known limitation:** Terrain picking does not work when an overlay (OSM/XYZ or `CogBitmapLayer` with `clampToTerrain`) is active. Fix planned for a future release.
+
+---
+
+## Time-Series Animation Example
+
+**Use Case:** Render multi-temporal elevation data (e.g., 30 daily models stacked in a COG) and smoothly animate through them with a slider.
+
+**Key Features:**
+- Lazy-load pattern: user clicks "Fetch All Bands" button
+- Global cache stores all bands after first fetch
+- Slider instantly switches between cached bands (zero network latency)
+- Works on large datasets (30+ bands)
+
+### Setup
+
+```tsx
+import React, { useMemo, useState, useEffect } from 'react';
+import DeckGL from '@deck.gl/react';
+import { MapView } from '@deck.gl/core';
+import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+
+const MULTIBAND_COG_URL = 'https://example.com/elevation-time-series-30-days.tif';
+
+function TimeSeriesAnimationExample() {
+  const [viewState, setViewState] = useState({
+    longitude: -66.33,
+    latitude: -17.09,
+    zoom: 12,
+  });
+
+  // 1. Slider state (0-based index)
+  const [currentBandIndex, setCurrentBandIndex] = useState(0);
+
+  // 2. Caching state (lazy-load pattern)
+  const [isFetched, setIsFetched] = useState(false);
+
+  // 3. Pre-initialize CogTiles to read band count
+  const [cogInstance, setCogInstance] = useState(null);
+  useEffect(() => {
+    if (!cogInstance) {
+      const cog = new CogTiles({
+        type: 'terrain',
+        noDataValue: -32768.0,
+        terrainSkirtHeight: 0,
+        useChannel: 1,
+        meshMaxError: 650,
+        color: [0, 105, 148, 180],
+        cacheAllBands: false, // Start false; enable on button click
+      });
+
+      cog.initializeCog(MULTIBAND_COG_URL).then(() => {
+        setCogInstance(cog);
+      });
+    }
+  }, []);
+
+  const totalBands = cogInstance?.getNumChannels?.() || 30;
+
+  const layers = useMemo(() => {
+    return [
+      new CogTerrainLayer({
+        id: 'time-series-terrain',
+        elevationData: MULTIBAND_COG_URL,
+        isTiled: true,
+        tileSize: 256,
+        cogTiles: cogInstance || undefined,
+        terrainOptions: {
+          type: 'terrain',
+          noDataValue: -32768.0,
+          terrainSkirtHeight: 0,
+          useChannel: currentBandIndex + 1, // 1-based
+          meshMaxError: 650,
+          useSingleColor: true,
+          color: [0, 105, 148, 180],
+          cacheAllBands: isFetched, // Dynamic: only cache after button click
+        },
+        updateTriggers: {
+          getTileData: [currentBandIndex, isFetched],
+        },
+      }),
+    ];
+  }, [currentBandIndex, cogInstance, isFetched]);
+
+  return (
+    <div style={{ width: '100%', height: '100vh', position: 'relative' }}>
+      <DeckGL
+        viewState={viewState}
+        onViewStateChange={({ viewState: v }) => setViewState(v)}
+        controller
+        layers={layers}
+        views={[new MapView({ controller: true })]}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+      />
+
+      {/* Control Panel */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          background: 'rgba(255, 255, 255, 0.95)',
+          padding: '16px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#333',
+          width: '260px',
+          zIndex: 1000,
+        }}
+      >
+        <div style={{ marginBottom: '16px', fontWeight: 'bold', fontSize: '16px' }}>
+          Time-Series Terrain
+        </div>
+
+        {/* Fetch All Bands Button */}
+        <button
+          onClick={() => setIsFetched(true)}
+          disabled={isFetched}
+          style={{
+            width: '100%',
+            padding: '8px',
+            marginBottom: '12px',
+            backgroundColor: isFetched ? '#e0e0e0' : '#4CAF50',
+            color: isFetched ? '#999' : 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontWeight: '500',
+            cursor: isFetched ? 'default' : 'pointer',
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {isFetched ? '✅ All Bands Cached' : '⬇️ Fetch All Bands (~10 MB)'}
+        </button>
+
+        {/* Slider */}
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: '500' }}>
+            Day: {currentBandIndex + 1} / {totalBands}
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={totalBands - 1}
+            value={currentBandIndex}
+            disabled={!isFetched}
+            onChange={(e) => setCurrentBandIndex(parseInt(e.target.value, 10))}
+            onMouseUp={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
+            onTouchEnd={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
+            style={{
+              width: '100%',
+              cursor: isFetched ? 'pointer' : 'not-allowed',
+              opacity: isFetched ? 1 : 0.5,
+            }}
+          />
+        </div>
+
+        {/* Help Text */}
+        <div style={{ fontSize: '12px', color: '#666', marginTop: '10px', lineHeight: '1.4' }}>
+          {!isFetched ? (
+            <>
+              💡 Click "Fetch All Bands" to cache 30 days of elevation data. Then use the slider for smooth animation.
+            </>
+          ) : (
+            <>
+              ✅ Move the slider for instant animation! Each day is cached and instantly served from memory.
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default TimeSeriesAnimationExample;
+```
+
+### Result
+
+**Before clicking "Fetch All Bands":**
+- Map shows day 1 instantly
+- Slider is disabled
+- No network overhead
+
+**After clicking "Fetch All Bands":**
+- Takes 3–5 seconds to fetch all 30 days
+- Slider enables
+- Moving slider is instant (no network latency)
+- Each day is served from the global cache
+
+### Performance
+
+| Metric | Single-Band Mode | Multi-Band Cache |
+|---|---|---|
+| Initial load | < 1 sec (1 band) | 3–5 sec (all 30 bands) |
+| Per slider move (no cache) | 0.5–2 sec (network) | N/A |
+| Per slider move (cached) | N/A | < 50 ms (memory) |
+| Memory per tile | 256 KB | 7.7 MB |
+| Total for 4 tiles | 1 MB | ~31 MB |
+
+### See Also
+
+- [Animation Guide](animation-guide.md) — Full details on configuration and troubleshooting
+- [API Reference: cacheAllBands](api-reference.md#animation--caching-options)
+- [Example: CogAnimationExample.tsx in the example app](../../example/src/examples/CogAnimationExample.tsx)
