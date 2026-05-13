@@ -14,8 +14,15 @@ import TileCacheManager from './lib/TileCacheManager';
 import TileReader from './lib/TileReader';
 import { isF32NoData } from './lib/numberUtils';
 
+// ── Global Multi-Band Cache ──
+// Survives across CogTiles instance recreations (e.g., during React re-renders).
+// Keyed by ${z}_${x}_${y}_band_${channel} (channel is 1-based).
+const GLOBAL_MULTI_BAND_CACHE = new Map<string, TileResult>();
+
 const CogTilesGeoImageOptionsDefaults = {
   blurredTexture: true,
+  // When true, log per-tile per-band min/max values for debugging (disabled by default)
+  debugTileStats: false,
 };
 
 class CogTiles {
@@ -157,12 +164,18 @@ class CogTiles {
     return this.bounds;
   }
 
-  
+  /**
+   * Gets the number of channels/bands in the COG.
+   * Returns the value from COG metadata, or 1 if not initialized.
+   */
+  getNumChannels(): number {
+    return this.options.numOfChannels || 1;
+  }
 
   /**
-   * Gets the auto meshMaxError for a given overview index.
-   * Returns undefined if auto lookup has not been computed.
-   */
+    * Gets the auto meshMaxError for a given overview index.
+    * Returns undefined if auto lookup has not been computed.
+    */
   getMeshMaxErrorForImageIndex(imageIndex: number): number | undefined {
     return this.cogMeshMaxErrorLookup[imageIndex];
   }
@@ -410,6 +423,62 @@ class CogTiles {
 
   private async getTerrainTile(x: number, y: number, z: number, bounds: Bounds | undefined, resolvedMeshMaxError: number, cellSizeMeters: number, signal?: AbortSignal, skipTexture?: boolean): Promise<TileResult | null> {
     const skipTextureFlag = skipTexture ?? this.options.skipTexture ?? false;
+
+    // ── Multi-Band Cache Check ──
+    // If cacheAllBands is enabled, check if this tile+band combination is in the cache.
+    // If so, return it instantly. If not, fetch all bands and populate the cache.
+    if (this.options.cacheAllBands) {
+      if (signal?.aborted) {
+        return null; // Early exit if already aborted
+      }
+
+      const currentChannel = this.options.useChannel || 1; // 1-based
+      const multiBandCacheKey = `${z}_${x}_${y}_band_${currentChannel}`;
+
+      // Check if this specific band is already cached
+      if (GLOBAL_MULTI_BAND_CACHE.has(multiBandCacheKey)) {
+        const cached = GLOBAL_MULTI_BAND_CACHE.get(multiBandCacheKey);
+        if (cached) {
+          return cached;
+        }
+      }
+
+      // Not in cache — fetch all bands for this tile and populate the cache
+      try {
+        // Pass NO signal to getTileAllBands to avoid early abortion
+        // The tile lifecycle is managed by TileLayer, we want this fetch to complete
+        const allBands = await this.getTileAllBands(x, y, z, resolvedMeshMaxError, undefined, bounds);
+        
+        // Only cache and return if we got valid data
+        if (allBands && allBands.length > 0) {
+          if (signal?.aborted) {
+            return null; // Check abort after fetch completes
+          }
+
+          // Cache all bands (indexed by 1-based channel: band 1, band 2, ..., band N)
+          allBands.forEach((bandResult, idx) => {
+            const bandChannel = idx + 1; // Convert 0-based index to 1-based channel
+            const cacheKey = `${z}_${x}_${y}_band_${bandChannel}`;
+            GLOBAL_MULTI_BAND_CACHE.set(cacheKey, bandResult);
+          });
+
+          // Return the requested band
+          const requestedBandIndex = (currentChannel || 1) - 1; // Convert 1-based to 0-based
+          if (requestedBandIndex < 0 || requestedBandIndex >= allBands.length) {
+            // eslint-disable-next-line no-console
+            console.error(`[CogTiles] Requested band index ${requestedBandIndex} out of range (0-${allBands.length - 1})`);
+            return null;
+          }
+          return allBands[requestedBandIndex];
+        }
+        // If getTileAllBands returned empty, fall through to normal fetch
+      } catch (error) {
+        // If multi-band fetch fails, fall through to normal tile fetch
+        // eslint-disable-next-line no-console
+        console.warn('[CogTiles] Multi-band fetch failed, falling back to single-band:', error);
+      }
+    }
+
     const cacheKey = this.cache.getTileResultCacheKey(x, y, z, resolvedMeshMaxError, skipTextureFlag);
     const existing = this.cache.getTileResult(cacheKey);
 
@@ -628,6 +697,133 @@ class CogTiles {
       bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
     }, this.options, meshMaxError ?? 4.0);
+  }
+
+  async getTileAllBands(x: number, y: number, z: number, meshMaxError?: number, signal?: AbortSignal, bounds?: Bounds): Promise<TileResult[]> {
+    if (!this.cog) {
+      return [];
+    }
+
+    // Compute cell size for this tile
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
+    const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
+    const cellSizeMeters = tileWidthMeters / this.tileSize;
+
+    // Resolve meshMaxError
+    let resolvedMeshMaxError: number;
+    if (!meshMaxError || meshMaxError === 0) {
+      const imageIndex = this.getImageIndexForZoomLevel(z);
+      const autoMeshMaxError = this.getMeshMaxErrorForImageIndex(imageIndex);
+      resolvedMeshMaxError = autoMeshMaxError ?? 4.0;
+    } else {
+      resolvedMeshMaxError = meshMaxError;
+    }
+
+    // Create a fresh local AbortController for this fetch
+    const controller = new AbortController();
+    if (signal && !signal.aborted) {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    const localSignal = controller.signal;
+
+    try {
+      const imageIndex = this.getImageIndexForZoomLevel(z);
+      let imagePromise = this.cache.getImage(imageIndex);
+      if (!imagePromise) {
+        imagePromise = this.cog.getImage(imageIndex);
+        this.cache.setImage(imageIndex, imagePromise);
+      }
+      const targetImage = await imagePromise;
+
+      const imageResolution = this.cogResolutionLookup[imageIndex];
+      const imageHeight = targetImage.getHeight();
+      const imageWidth = targetImage.getWidth();
+      const [imgOriginX, imgOriginY] = this.cogOrigin;
+
+      const TILE_SIZE = this.tileSize;
+      const ORIGIN_X = webMercatorOrigin[0];
+      const ORIGIN_Y = webMercatorOrigin[1];
+
+      // ── Martini Grid Size Fix ──
+      // Martini requires 2^n + 1 grid (e.g., 257x257), but we fetch at TILE_SIZE (256).
+      // Add padding for relief kernels (2) or just 1 for basic terrain.
+      const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
+      const FETCH_SIZE = this.tileSize + (isKernel ? 2 : 1);
+
+      const tileGridResolution = (EARTH_CIRCUMFERENCE / TILE_SIZE) / (2 ** z);
+      const tileMinXMeters = ORIGIN_X + (x * TILE_SIZE * tileGridResolution);
+      const tileMaxYMeters = ORIGIN_Y - (y * TILE_SIZE * tileGridResolution);
+
+      const windowMinX = (tileMinXMeters - imgOriginX) / imageResolution;
+      const windowMinY = (imgOriginY - tileMaxYMeters) / imageResolution;
+
+      const startX = Math.round(windowMinX);
+      const startY = Math.round(windowMinY);
+      const endX = startX + FETCH_SIZE;
+      const endY = startY + FETCH_SIZE;
+
+      const validReadX = Math.max(0, startX);
+      const validReadY = Math.max(0, startY);
+      const validReadMaxX = Math.min(imageWidth, endX);
+      const validReadMaxY = Math.min(imageHeight, endY);
+
+      const readWidth = validReadMaxX - validReadX;
+      const readHeight = validReadMaxY - validReadY;
+
+      // If no overlap, return empty array
+      if (readWidth <= 0 || readHeight <= 0) {
+        return [];
+      }
+
+      const missingLeft = validReadX - startX;
+      const missingTop = validReadY - startY;
+      const window = [validReadX, validReadY, validReadMaxX, validReadMaxY];
+
+      const validRasterData = await targetImage.readRasters({ window, signal: localSignal }) as TypedArray[];
+      if (signal?.aborted) return [];
+
+      const results: TileResult[] = [];
+      const numBands = validRasterData.length;
+
+      for (let bandIndex = 0; bandIndex < numBands; bandIndex += 1) {
+        const sourceBandArray = validRasterData[bandIndex];
+        const processedBandRaster: TypedArray = this.tileReader!.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE);
+        if (this.options.noDataValue !== undefined) {
+          processedBandRaster.fill(this.options.noDataValue);
+        }
+
+        for (let row = 0; row < readHeight; row += 1) {
+          const destRow = missingTop + row;
+          const destRowOffset = destRow * FETCH_SIZE;
+          const srcRowOffset = row * readWidth;
+
+          for (let col = 0; col < readWidth; col += 1) {
+            const destCol = missingLeft + col;
+            if (destRow < FETCH_SIZE && destCol < FETCH_SIZE) {
+              processedBandRaster[destRowOffset + destCol] = sourceBandArray[srcRowOffset + col] as any;
+            }
+          }
+        }
+
+        const generatorOptions = { ...this.options, useChannel: 1, useChannelIndex: 0, numOfChannels: 1 };
+        const tileResult = await this.geo.getMap({
+          rasters: [processedBandRaster],
+          width: FETCH_SIZE,
+          height: FETCH_SIZE,
+          bounds: bounds ?? [0, 0, 0, 0],
+          cellSizeMeters,
+        }, generatorOptions, resolvedMeshMaxError);
+
+        if (tileResult) results.push(tileResult);
+      }
+
+      return results;
+
+    } catch (error) {
+      if (signal?.aborted) return [];
+      console.error('[CogTiles.getTileAllBands] Error fetching all bands:', error);
+      return [];
+    }
   }
 
   // Expose legacy API for clearing tile result cache (used by external layers)
