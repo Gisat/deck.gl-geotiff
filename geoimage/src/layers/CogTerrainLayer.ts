@@ -259,10 +259,10 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  }
 
     // Update the useChannel option for terrainCogTiles when terrainOptions.useChannel changes.
-    if (props?.terrainOptions?.useChannel !== oldProps.terrainOptions?.useChannel) {
+    if (props?.terrainOptions?.useChannel !== oldProps.terrainOptions?.useChannel && this.state.terrainCogTiles) {
       this.state.terrainCogTiles.options.useChannel = props.terrainOptions.useChannel;
-      // Trigger a refresh of the tiles
-      this.state.terrainCogTiles.options.useChannelIndex = null; // Clear cached index
+      this.state.terrainCogTiles.options.useChannelIndex = null; // Clear derived channel index
+      this.state.terrainCogTiles.clearTileResultCache(); // Invalidate cached tiles from previous channel
     }
 
     // Update skipTexture when wireframe/operation/disableTexture changes so cache keys are correct
@@ -472,6 +472,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
               elevationDecoder,
               terrainCogTiles: this.state.terrainCogTiles,
               skipTexture: !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture),
+              useChannel: this.props.terrainOptions?.useChannel,
 			      },
               renderSubLayers: {
                 disableTexture: this.props.disableTexture,
