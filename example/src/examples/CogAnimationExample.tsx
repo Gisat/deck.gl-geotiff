@@ -173,6 +173,8 @@ function CogAnimationExample() {
             max={totalBands - 1}
             value={currentBandIndex}
             disabled={!isFetched}
+            // Use onChange for visual feedback during drag, onMouseUp/onTouchEnd for fetching on release
+            onChange={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
             onMouseUp={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
             onTouchEnd={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
             style={{ width: '100%', cursor: isFetched ? 'pointer' : 'not-allowed', opacity: isFetched ? 1 : 0.5 }}
