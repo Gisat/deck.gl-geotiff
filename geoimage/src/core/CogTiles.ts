@@ -118,7 +118,7 @@ class CogTiles {
 
         // Load per-band descriptions from GDAL_METADATA tag
         const numBands = this.options.numOfChannels ?? 1;
-        let descriptions: string[] = Array(numBands).fill('');
+        const descriptions: string[] = Array(numBands).fill('');
         
         if (image.fileDirectory.hasTag('GDAL_METADATA')) {
           const gdalMetadataStr = await image.fileDirectory.loadValue('GDAL_METADATA');
@@ -503,7 +503,7 @@ class CogTiles {
           // Return the requested band
           const requestedBandIndex = (currentChannel || 1) - 1; // Convert 1-based to 0-based
           if (requestedBandIndex < 0 || requestedBandIndex >= allBands.length) {
-            // eslint-disable-next-line no-console
+             
             console.error(`[CogTiles] Requested band index ${requestedBandIndex} out of range (0-${allBands.length - 1})`);
             return null;
           }
@@ -512,7 +512,7 @@ class CogTiles {
         // If getTileAllBands returned empty, fall through to normal fetch
       } catch (error) {
         // If multi-band fetch fails, fall through to normal tile fetch
-        // eslint-disable-next-line no-console
+         
         console.warn('[CogTiles] Multi-band fetch failed, falling back to single-band:', error);
       }
     }
