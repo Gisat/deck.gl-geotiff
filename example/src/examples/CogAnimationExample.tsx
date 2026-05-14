@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
 import { MapView } from '@deck.gl/core';
-import { CogTerrainLayer, GeoImageOptions, CogTiles } from '@gisatcz/deckgl-geolib';
+import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { MaskExtension } from '@deck.gl/extensions';
 import { GeoJsonLayer } from '@deck.gl/layers';
 
@@ -173,11 +173,8 @@ function CogAnimationExample() {
             max={totalBands - 1}
             value={currentBandIndex}
             disabled={!isFetched}
-            // Use onMouseUp (or onTouchEnd) instead of onChange so it only fetches 
-            // the new network data when you STOP dragging the slider.
             onMouseUp={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
             onTouchEnd={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
-            onChange={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
             style={{ width: '100%', cursor: isFetched ? 'pointer' : 'not-allowed', opacity: isFetched ? 1 : 0.5 }}
           />
         </div>

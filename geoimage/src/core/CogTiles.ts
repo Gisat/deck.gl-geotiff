@@ -16,7 +16,9 @@ import { isF32NoData } from './lib/numberUtils';
 
 // ── Global Multi-Band Cache ──
 // Survives across CogTiles instance recreations (e.g., during React re-renders).
-// Keyed by ${z}_${x}_${y}_band_${channel} (channel is 1-based).
+// Keyed by ${url}_${z}_${x}_${y}_${meshMaxError}_${skipTextureFlag}_band_${channel}
+// to account for dataset changes, tessellation options, and rendering modes.
+// Maps to pre-computed terrain meshes (same structure as single-band cache).
 const GLOBAL_MULTI_BAND_CACHE = new Map<string, TileResult>();
 
 const CogTilesGeoImageOptionsDefaults = {
@@ -76,6 +78,15 @@ class CogTiles {
     // safely reinitialized against a different source.
     if (this.lastInitializedUrl !== undefined && this.lastInitializedUrl !== url) {
       this.cache.clearAll();
+      // Clear multi-band cache entries for the old URL to prevent stale data
+      const keysToDelete: string[] = [];
+      GLOBAL_MULTI_BAND_CACHE.forEach((_, key) => {
+        if (key.startsWith(this.lastInitializedUrl!)) {
+          keysToDelete.push(key);
+        }
+      });
+      keysToDelete.forEach(key => GLOBAL_MULTI_BAND_CACHE.delete(key));
+      
       this.cog = undefined;
       this.cogOrigin = [0, 0];
       this.cogZoomLookup = [];
@@ -471,7 +482,8 @@ class CogTiles {
       }
 
       const currentChannel = this.options.useChannel || 1; // 1-based
-      const multiBandCacheKey = `${z}_${x}_${y}_band_${currentChannel}`;
+      // Cache key includes URL, meshMaxError, and skipTexture to account for dataset/option changes
+      const multiBandCacheKey = `${this.lastInitializedUrl}_${z}_${x}_${y}_${resolvedMeshMaxError}_${skipTextureFlag}_band_${currentChannel}`;
 
       // Check if this specific band is already cached
       if (GLOBAL_MULTI_BAND_CACHE.has(multiBandCacheKey)) {
@@ -496,7 +508,7 @@ class CogTiles {
           // Cache all bands (indexed by 1-based channel: band 1, band 2, ..., band N)
           allBands.forEach((bandResult, idx) => {
             const bandChannel = idx + 1; // Convert 0-based index to 1-based channel
-            const cacheKey = `${z}_${x}_${y}_band_${bandChannel}`;
+            const cacheKey = `${this.lastInitializedUrl}_${z}_${x}_${y}_${resolvedMeshMaxError}_${skipTextureFlag}_band_${bandChannel}`;
             GLOBAL_MULTI_BAND_CACHE.set(cacheKey, bandResult);
           });
 

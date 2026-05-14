@@ -216,11 +216,11 @@ export const COG_TERRAIN_EXAMPLES: Record<string, CogDataSource> = {
   },
   // --- MULTIBAND animation terrain ---
   MULTIBAND_DAM_30: {
-    name: 'Multiband Dam Animation',
+    name: 'Multiband Dam Animation (30 bands)',
     url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/test/Misicuni_30_10x10_intermediate_cog.tif',
   },
-    MULTIBAND_DAM_300: {
-    name: 'Multiband Dam Animation',
+  MULTIBAND_DAM_300: {
+    name: 'Multiband Dam Animation (300 bands)',
     url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/test/Misicuni_300_10x10_intermediate_cog.tif',
   },
 };

@@ -325,7 +325,7 @@ Band descriptions are loaded automatically—no extra configuration needed:
 
 ```tsx
 const cogInstance = new CogTiles({ type: 'terrain', /* ... */ });
-await cogInstance.initializeCog(coiUrl);
+await cogInstance.initializeCog(cogUrl);
 
 // Get all band descriptions (0-based array)
 const descriptions = cogInstance.getBandDescriptions();
