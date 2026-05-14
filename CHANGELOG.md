@@ -1,3 +1,16 @@
+## [2.6.0-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.1-dev.1...v2.6.0-dev.1) (2026-05-14)
+
+### Features
+
+* **core:** multi-band terrain caching with lazy-load option ([cb6d541](https://github.com/Gisat/deck.gl-geotiff/commit/cb6d5412343cca31d416033fb38693f440160d48))
+* **example:** terrain animation with band slider ([63f4aa4](https://github.com/Gisat/deck.gl-geotiff/commit/63f4aa41922007b623a351bbe44a7e0547e6a1f9))
+* load band descriptions from GDAL metadata for animation UI ([6c67d47](https://github.com/Gisat/deck.gl-geotiff/commit/6c67d47eb1aa8933bb789162401ec249e4947639))
+
+### Bug Fixes
+
+* Address PR [#148](https://github.com/Gisat/deck.gl-geotiff/issues/148) code review comments ([a7e1f4e](https://github.com/Gisat/deck.gl-geotiff/commit/a7e1f4ec0f759ba834433274e53c32624bfad07c))
+* restore slider visual feedback during drag ([4bfe597](https://github.com/Gisat/deck.gl-geotiff/commit/4bfe597b5660e6f5bde6c39dec69b1293e8372b3))
+
 ## [2.5.1-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0...v2.5.1-dev.1) (2026-05-13)
 
 ### Bug Fixes
