@@ -16,6 +16,7 @@ const SideBar = () => {
       <NavLink to="/cog-terrain-glaze-example">COG Terrain Glaze</NavLink>
       <NavLink to="/cog-terrain-kernel-example">COG Terrain Kernel</NavLink>
       <NavLink to="/cog-multiband-example">COG Multiband</NavLink>
+      <NavLink to="/cog-animation-example">COG Animation</NavLink>
       {
       //<NavLink to="/test-layer-example">Test Layer</NavLink>
       }

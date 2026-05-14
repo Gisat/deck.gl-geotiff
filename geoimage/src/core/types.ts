@@ -97,6 +97,10 @@ export type GeoImageOptions = {
 
     // --- Lighting control ---
     disableLighting?: boolean,
+
+    // --- Animation / Caching ---
+    /** When true, fetch and cache all bands for a tile on first access. Enables instant slider animation. */
+    cacheAllBands?: boolean,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -168,6 +172,9 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
 
     // --- Lighting control ---
     disableLighting: false,
+
+    // --- Animation / Caching ---
+    cacheAllBands: false,
 };
 
 export type TypedArray =
