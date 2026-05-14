@@ -122,7 +122,9 @@ class CogTiles {
         
         if (image.fileDirectory.hasTag('GDAL_METADATA')) {
           const gdalMetadataStr = await image.fileDirectory.loadValue('GDAL_METADATA');
-          // Parse XML GDAL metadata to extract per-band descriptions
+          // Parse XML GDAL metadata to extract per-band descriptions.
+          // Regex is flexible with attribute order; GDAL generates items with name="DESCRIPTION"
+          // before sample="N", but [^>]* allows other attributes to appear in any order.
           // Format: <Item name="DESCRIPTION" sample="0" role="description">20170101</Item>
           const bandDescRegex = /<Item[^>]*name="DESCRIPTION"[^>]*sample="(\d+)"[^>]*>([^<]*)<\/Item>/g;
           let match;
@@ -132,6 +134,11 @@ class CogTiles {
             if (bandIdx < numBands) {
               descriptions[bandIdx] = desc;
             }
+          }
+          // Debug: Log if no descriptions were found in metadata
+          if (descriptions.every(d => d === '')) {
+            // eslint-disable-next-line no-console
+            console.debug('[CogTiles] GDAL_METADATA present but no DESCRIPTION items found');
           }
         }
         this.bandDescriptions = descriptions;
