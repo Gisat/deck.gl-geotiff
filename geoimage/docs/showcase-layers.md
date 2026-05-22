@@ -531,8 +531,6 @@ const layer = new CogTerrainLayer({
 });
 ```
 
-> **Known limitation:** Terrain picking does not work when an overlay (OSM/XYZ or `CogBitmapLayer` with `clampToTerrain`) is active. Fix planned for a future release.
-
 ---
 
 ## Time-Series Animation Example

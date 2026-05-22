@@ -40,7 +40,6 @@ function CogAnimationExample() {
         noDataValue: -32768.0,
         terrainSkirtHeight: 0,
         useChannel: 1,
-        meshMaxError: 650,
         useSingleColor: true,
         color: [0, 105, 148, 180],
         cacheAllBands: false, // Start false for lazy loading
@@ -134,7 +133,7 @@ function CogAnimationExample() {
             width: '100%',
           }),
         ]}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0' }}
       />
 
       {/* Simplified Control Panel */}
