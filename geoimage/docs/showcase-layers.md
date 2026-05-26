@@ -485,15 +485,19 @@ const layer = new CogBitmapLayer({
   isTiled: true,
   pickable: true, // 2D picking is sufficient for flat imagery
   onClick: (info) => {
-    if (info.tile?.content?.raw && info.uv) {
-      const { raw, width, height } = info.tile.content;
-      const [u, v] = info.uv;
-      const x = Math.floor(u * width);
-      const y = Math.floor(v * height);
-      const channels = raw.length / (width * height);
-      const pixelIndex = Math.floor((y * width + x) * channels);
-      const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
-      console.log('Raw values:', rawValues); // e.g. [128, 200, 45] for 3 bands
+    if (info.tile?.content?.raw) {
+      // UV can be in info.uv or info.bitmap.uv depending on layer configuration
+      const uv = info.uv || (info.bitmap && info.bitmap.uv);
+      if (uv) {
+        const { raw, width, height } = info.tile.content;
+        const [u, v] = uv;
+        const x = Math.floor(u * width);
+        const y = Math.floor(v * height);
+        const channels = raw.length / (width * height);
+        const pixelIndex = Math.floor((y * width + x) * channels);
+        const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
+        console.log('Raw values:', rawValues); // e.g. [128, 200, 45] for 3 bands
+      }
     }
   }
 });

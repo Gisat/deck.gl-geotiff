@@ -137,6 +137,12 @@ function CogTerrainLayerExample() {
             latitude: coord.latitude.toFixed(6),
             elevation: coord.elevation.toFixed(2),
           });
+        } else {
+          // Fallback: attempt to get elevation via traditional method
+          const elevation = getElevationAtInfo(info);
+          if (elevation !== null) {
+            console.log('Fallback elevation at click:', elevation);
+          }
         }
       },
 
@@ -172,6 +178,13 @@ function CogTerrainLayerExample() {
         if (coord) {
           return {
             text: `Lat: ${coord.latitude.toFixed(4)}, Lon: ${coord.longitude.toFixed(4)}, Elevation: ${coord.elevation.toFixed(1)}m`,
+          };
+        }
+        // Fallback: show elevation if 3D coordinate extraction not available
+        const elevation = getElevationAtInfo(info);
+        if (elevation !== null) {
+          return {
+            text: `Elevation: ${elevation.toFixed(1)} m`,
           };
         }
         return null;

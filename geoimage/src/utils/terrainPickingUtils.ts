@@ -21,6 +21,7 @@ export interface TerrainCoordinate {
  * @param pickResult - DeckGL pickObject result from terrain-layer pick
  * @returns TerrainCoordinate with lon/lat/elevation, or null if extraction fails
  *
+ * @requires deck.gl >=9.3.0 (for `pickable: '3d'` support)
  * @note Requires `pickable: '3d'` on CogTerrainLayer. With 3D picking enabled,
  * deck.gl's terrain layer provides info.coordinate as a 3-element array [lon, lat, elevation]
  * where elevation is read directly from the terrain mesh at the picked point.
@@ -30,7 +31,7 @@ export interface TerrainCoordinate {
  * ```ts
  * const cogLayer = new CogTerrainLayer({
  *   // ...
- *   pickable: '3d',
+ *   pickable: '3d',  // Requires deck.gl >=9.3.0
  *   onClick: (info) => {
  *     const coord = extractTerrainCoordinate(info);
  *     if (coord) {
@@ -69,12 +70,14 @@ export function extractTerrainCoordinate(pickResult: any): TerrainCoordinate | n
  * Useful for understanding terrain data layout and accuracy
  *
  * @param pickResult - DeckGL pickObject result from terrain-layer pick
- * @param gridSize - Number of samples per dimension (default: 3 for 3x3 grid)
+ * @param gridSize - Odd number for grid dimensions (default: 3 for 3x3 grid).
+ *                   gridSize=3 → 3×3 grid (offset±1), gridSize=5 → 5×5 grid (offset±2).
+ *                   Uses WebMercator projection for accurate latitude mapping.
  * @returns Array of TerrainCoordinate samples, or empty array if extraction fails
  *
  * @example
  * ```ts
- * const samples = sampleTerrainTileCoordinates(info, 5); // 5x5 grid
+ * const samples = sampleTerrainTileCoordinates(info, 5); // 5x5 grid around click
  * samples.forEach(coord => {
  *   console.log(`Sample: ${coord.latitude}, ${coord.longitude}, elev: ${coord.elevation}m`);
  * });
@@ -119,12 +122,21 @@ export function sampleTerrainTileCoordinates(
 
     const [centerLon, centerLat] = coordinate;
 
-    // Calculate grid offset (in pixels)
-    const offset = Math.floor((gridSize - 1) / 2);
+    // Calculate grid offset (in pixels): gridSize must be odd; gridSize=3 → offset=1, gridSize=5 → offset=2
+    const offset = Math.floor(gridSize / 2);
 
-    // Get center pixel from clicked coordinate
+    // Get center pixel from clicked coordinate using WebMercator projection
     const centerNormX = (centerLon - west) / (east - west);
-    const centerNormY = (north - centerLat) / (north - south);
+    
+    // WebMercator non-linear latitude projection
+    const centerLatRad = centerLat * Math.PI / 180;
+    const northRad = north * Math.PI / 180;
+    const southRad = south * Math.PI / 180;
+    const mercatorCenterY = Math.log(Math.tan(Math.PI / 4 + centerLatRad / 2));
+    const mercatorNorth = Math.log(Math.tan(Math.PI / 4 + northRad / 2));
+    const mercatorSouth = Math.log(Math.tan(Math.PI / 4 + southRad / 2));
+    const centerNormY = (mercatorNorth - mercatorCenterY) / (mercatorNorth - mercatorSouth);
+    
     const centerPixelX = Math.floor(centerNormX * (width - 1));
     const centerPixelY = Math.floor(centerNormY * (height - 1));
 
@@ -148,9 +160,13 @@ export function sampleTerrainTileCoordinates(
           continue;
         }
 
-        // Convert pixel to geographic coordinates
+        // Convert pixel to geographic coordinates using WebMercator projection
         const lon = west + (pixelX / (width - 1)) * (east - west);
-        const lat = north - (pixelY / (height - 1)) * (north - south);
+        
+        // Inverse WebMercator transform for latitude
+        const normV = pixelY / (height - 1);
+        const mercatorY = mercatorNorth - normV * (mercatorNorth - mercatorSouth);
+        const lat = (2 * Math.atan(Math.exp(mercatorY)) - Math.PI / 2) * 180 / Math.PI;
 
         samples.push({
           longitude: lon,
