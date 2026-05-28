@@ -474,64 +474,107 @@ const layers = [terrainLayer, satelliteLayer, glazeLayer];
 
 **Use Case:** retrieving the original GeoTIFF raster values (elevation, band values, indices) at a clicked location, without extra network requests.
 
-### A. Bitmap Picking (single or multiband)
+### A. Bitmap Picking (2D scene)
+
+For flat imagery without terrain, `CogBitmapLayer` provides 2D coordinates and UV texture coordinates:
 
 ```typescript
 const layer = new CogBitmapLayer({
   id: 'picking-bitmap',
   rasterData: 'https://example.com/data.tif',
   isTiled: true,
-  pickable: true, // default: false, opt-in required
+  pickable: true, // 2D picking is sufficient for flat imagery
   onClick: (info) => {
-    const uv = info.uv || (info.bitmap && info.bitmap.uv);
-    if (info.tile && info.tile.content && info.tile.content.raw && uv) {
-      const { raw, width, height } = info.tile.content;
-      const [u, v] = uv;
-      const x = Math.floor(u * width);
-      const y = Math.floor(v * height);
-      const channels = raw.length / (width * height);
-      const pixelIndex = Math.floor((y * width + x) * channels);
-      const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
-      console.log('Raw values:', rawValues); // e.g. [128, 200, 45] for 3 bands
+    if (info.tile?.content?.raw) {
+      // UV can be in info.uv or info.bitmap.uv depending on layer configuration
+      const uv = info.uv || (info.bitmap && info.bitmap.uv);
+      if (uv) {
+        const { raw, width, height } = info.tile.content;
+        const [u, v] = uv;
+        const x = Math.floor(u * width);
+        const y = Math.floor(v * height);
+        const channels = raw.length / (width * height);
+        const pixelIndex = Math.floor((y * width + x) * channels);
+        const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
+        console.log('Raw values:', rawValues); // e.g. [128, 200, 45] for 3 bands
+      }
     }
   }
 });
 ```
 
-### B. Terrain Picking (elevation & multiband)
+### B. Terrain Picking (3D scene)
+
+For terrain meshes, use `pickable: '3d'` to get true 3D coordinates **clamped to the terrain surface**. This works accurately at any camera pitch:
+
+#### Simple Approach (Recommended)
+
+Use the `extractTerrainCoordinate()` utility:
 
 ```typescript
+import { CogTerrainLayer, extractTerrainCoordinate } from '@gisatcz/deckgl-geolib';
+
 const layer = new CogTerrainLayer({
   id: 'picking-terrain',
   elevationData: 'https://example.com/dem.tif',
   isTiled: true,
-  pickable: true,
+  pickable: '3d',  // ← Enable 3D picking (returns 3-element coordinate on terrain surface)
   operation: 'terrain+draw',
   terrainOptions: { type: 'terrain' },
   onClick: (info) => {
-    if (info.tile && info.tile.content && info.tile.content[0]) {
-      const { raw, width, height } = info.tile.content[0];
-
-      let u, v;
-      if (info.uv) {
-        [u, v] = info.uv;
-      } else if (info.coordinate && info.tile.bbox) {
-        const { west, south, east, north } = info.tile.bbox;
-        u = (info.coordinate[0] - west) / (east - west);
-        v = (north - info.coordinate[1]) / (north - south);
-      }
-
-      if (u !== undefined && v !== undefined) {
-        const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
-        const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
-        console.log('Elevation (m):', raw[y * width + x]);
-      }
+    const coord = extractTerrainCoordinate(info);
+    if (coord) {
+      console.log(`Lat: ${coord.latitude.toFixed(6)}, Lon: ${coord.longitude.toFixed(6)}, Elev: ${coord.elevation.toFixed(2)}m`);
     }
   }
 });
 ```
 
-> **Known limitation:** Terrain picking does not work when an overlay (OSM/XYZ or `CogBitmapLayer` with `clampToTerrain`) is active. Fix planned for a future release.
+#### Advanced: Access Raw Raster Values
+
+To query elevation or additional bands from the raster:
+
+```typescript
+import { CogTerrainLayer, extractTerrainCoordinate } from '@gisatcz/deckgl-geolib';
+
+const layer = new CogTerrainLayer({
+  id: 'picking-terrain',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  pickable: '3d',  // ← Enable 3D picking
+  operation: 'terrain+draw',
+  terrainOptions: { type: 'terrain' },
+  onClick: (info) => {
+    const coord = extractTerrainCoordinate(info);
+    if (!coord) return;
+
+    const tileResult = info.tile?.content?.[0];
+    if (!tileResult?.raw) return;
+
+    const bbox = info.tile.bbox;
+    const { west, south, east, north } = bbox;
+
+    // Map 3D coordinate to raster pixel
+    const u = (coord.longitude - west) / (east - west);
+    const v = (north - coord.latitude) / (north - south);
+    const pixelX = Math.round(Math.max(0, Math.min(1, u)) * (tileResult.width - 1));
+    const pixelY = Math.round(Math.max(0, Math.min(1, v)) * (tileResult.height - 1));
+
+    // Query elevation and other bands
+    const elevation = tileResult.raw[pixelY * tileResult.width + pixelX];
+    const channels = tileResult.raw.length / (tileResult.width * tileResult.height);
+    const pixelOffset = (pixelY * tileResult.width + pixelX) * channels;
+    const allBands = Array.from(tileResult.raw.slice(pixelOffset, pixelOffset + channels));
+    
+    console.log('Elevation:', elevation);
+    console.log('All bands:', allBands);
+  }
+});
+```
+
+**Key Difference from `pickable: true`:**
+- `pickable: true` — Returns approximate 2D coordinates with camera parallax (incorrect at non-zero pitch)
+- `pickable: '3d'` — Returns exact 3D coordinates clamped to terrain mesh (correct at any pitch)
 
 ---
 

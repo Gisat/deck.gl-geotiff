@@ -3,11 +3,12 @@ import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { CogTerrainLayer, CogTiles, extractTerrainCoordinate } from '@gisatcz/deckgl-geolib';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer } from '@deck.gl/layers';
 
+// Updated: Properly handles WebMercator non-linear Y projection
 function getElevationAtInfo(info: any): number | null {
   const tileResult = info.tile?.content?.[0];
   if (!tileResult?.raw) return null;
@@ -19,7 +20,17 @@ function getElevationAtInfo(info: any): number | null {
   } else if (info.coordinate && info.tile?.bbox) {
     const { west, south, east, north } = info.tile.bbox as any;
     u = (info.coordinate[0] - west) / (east - west);
-    v = (north - info.coordinate[1]) / (north - south);
+    
+    // WebMercator non-linear latitude projection
+    const latRad = info.coordinate[1] * Math.PI / 180;
+    const northRad = north * Math.PI / 180;
+    const southRad = south * Math.PI / 180;
+    
+    const mercatorY = Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+    const mercatorNorth = Math.log(Math.tan(Math.PI / 4 + northRad / 2));
+    const mercatorSouth = Math.log(Math.tan(Math.PI / 4 + southRad / 2));
+    
+    v = (mercatorNorth - mercatorY) / (mercatorNorth - mercatorSouth);
   }
   if (u === undefined || v === undefined) return null;
 
@@ -74,9 +85,9 @@ function CogTerrainLayerExample() {
       );
 
       setViewState({
-        longitude,
-        latitude,
-        zoom,
+        longitude: 120.9546,
+        latitude: 15.0062,
+        zoom: Math.min(19, zoom + 3),
         pitch: 60,
         bearing: 0,
       });
@@ -117,10 +128,22 @@ function CogTerrainLayerExample() {
       meshMaxError: 'auto',
       operation: 'terrain+draw',
       terrainOptions,
-      pickable: true,
+      pickable: '3d',
       onClick: (info: any) => {
-        const elevation = getElevationAtInfo(info);
-        if (elevation !== null) console.log('Raw elevation at click:', elevation);
+        const coord = extractTerrainCoordinate(info);
+        if (coord) {
+          console.log('Terrain Coordinate:', {
+            longitude: coord.longitude.toFixed(6),
+            latitude: coord.latitude.toFixed(6),
+            elevation: coord.elevation.toFixed(2),
+          });
+        } else {
+          // Fallback: attempt to get elevation via traditional method
+          const elevation = getElevationAtInfo(info);
+          if (elevation !== null) {
+            console.log('Fallback elevation at click:', elevation);
+          }
+        }
       },
 
     });
@@ -150,8 +173,21 @@ function CogTerrainLayerExample() {
       controller
       layers={layers}
       getTooltip={(info: any) => {
+        // Use the new utility to extract full terrain coordinates
+        const coord = extractTerrainCoordinate(info);
+        if (coord) {
+          return {
+            text: `Lat: ${coord.latitude.toFixed(4)}, Lon: ${coord.longitude.toFixed(4)}, Elevation: ${coord.elevation.toFixed(1)}m`,
+          };
+        }
+        // Fallback: show elevation if 3D coordinate extraction not available
         const elevation = getElevationAtInfo(info);
-        return elevation !== null ? { text: `Elevation: ${elevation.toFixed(1)} m` } : null;
+        if (elevation !== null) {
+          return {
+            text: `Elevation: ${elevation.toFixed(1)} m`,
+          };
+        }
+        return null;
       }}
       views={[
         new MapView({
