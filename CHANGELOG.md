@@ -1,3 +1,14 @@
+## [2.6.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.1...v2.6.0-dev.2) (2026-05-28)
+
+### Features
+
+* Add terrain coordinate extraction utility for CogTerrainLayer ([6cdf131](https://github.com/Gisat/deck.gl-geotiff/commit/6cdf131def24eaa7514af1873250bdc6f457df41))
+* **example:** set initial view to Philippines AOI and increase zoom ([f23b3ce](https://github.com/Gisat/deck.gl-geotiff/commit/f23b3ced279f467f76ced20f8dfb99d13afbe263))
+
+### Bug Fixes
+
+* Address PR [#149](https://github.com/Gisat/deck.gl-geotiff/issues/149) code review comments ([69d2b4f](https://github.com/Gisat/deck.gl-geotiff/commit/69d2b4f3470f2766a65417e7fc09333b4245fd1d))
+
 ## [2.6.0-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.1-dev.1...v2.6.0-dev.1) (2026-05-14)
 
 ### Features
