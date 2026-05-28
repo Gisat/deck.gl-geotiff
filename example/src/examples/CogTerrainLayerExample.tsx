@@ -85,9 +85,9 @@ function CogTerrainLayerExample() {
       );
 
       setViewState({
-        longitude,
-        latitude,
-        zoom,
+        longitude: 120.9546,
+        latitude: 15.0062,
+        zoom: Math.min(19, zoom + 3),
         pitch: 60,
         bearing: 0,
       });
@@ -149,7 +149,7 @@ function CogTerrainLayerExample() {
     });
 
     return [
-      tileLayer,
+      // tileLayer,
       cogLayer,
     ];
   }, [viewState, initializedCog]);
