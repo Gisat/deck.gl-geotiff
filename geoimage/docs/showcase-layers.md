@@ -482,15 +482,18 @@ When rendering overlay `TileLayer` (OSM, Satellite, etc.) over elevated terrain 
 
 Pass the elevation range (`zRange`) from your `CogTerrainLayer` to the overlay `TileLayer`. This tells deck.gl's frustum culling algorithm: *"these tiles exist between minZ and maxZ elevations, not just at Z=0."*
 
-#### Example: OSM Overlay on Terrain
+#### Example: OSM Overlay on Terrain (Using Hook)
+
+The easiest way to integrate is with the `useTerrainZRange` hook:
 
 ```typescript
-import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { CogTerrainLayer, useTerrainZRange } from '@gisatcz/deckgl-geolib';
 import { TileLayer, BitmapLayer } from '@deck.gl/layers';
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 
 function TerrainWithOSM() {
-  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(null);
+  // 1. Use the hook
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   const layers = useMemo(() => [
     // OSM overlay with zRange for proper 3D culling
@@ -500,7 +503,7 @@ function TerrainWithOSM() {
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
-      zRange: terrainZRange,  // ← Pass terrain elevation bounds
+      zRange: zRange,  // ← 2. Pass elevation bounds from hook
       renderSubLayers: (props) => {
         const { bbox } = props.tile as any;
         const { west, south, east, north } = bbox;
@@ -512,6 +515,52 @@ function TerrainWithOSM() {
       },
     }),
     // Terrain layer that computes and updates zRange
+    new CogTerrainLayer({
+      id: 'terrain',
+      elevationData: 'https://example.com/dem.tif',
+      isTiled: true,
+      tileSize: 256,
+      terrainOptions: { type: 'terrain' },
+      onZRangeUpdate: onZRangeUpdate,  // ← 3. Sync elevation bounds to hook
+    }),
+  ], [zRange]);
+
+  return <DeckGL layers={layers} /* ... */ />;
+}
+```
+
+**That's it!** 3 lines: import hook, call hook, wire to layers.
+
+#### Alternative: Manual State Management
+
+If you prefer full control, you can manage the state manually:
+
+```typescript
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { TileLayer, BitmapLayer } from '@deck.gl/layers';
+import React, { useState, useMemo } from 'react';
+
+function TerrainWithOSM() {
+  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(null);
+
+  const layers = useMemo(() => [
+    new TileLayer({
+      id: 'osm-overlay',
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      zRange: terrainZRange,  // ← Pass elevation bounds
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile as any;
+        const { west, south, east, north } = bbox;
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [west, south, east, north],
+        });
+      },
+    }),
     new CogTerrainLayer({
       id: 'terrain',
       elevationData: 'https://example.com/dem.tif',

@@ -3,7 +3,7 @@ import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-import { CogBitmapLayer, CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { CogBitmapLayer, CogTerrainLayer, CogTiles, useTerrainZRange } from '@gisatcz/deckgl-geolib';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer } from '@deck.gl/layers';
@@ -67,8 +67,8 @@ function CogTerrainGlazeExample() {
   const [glazeCogTiles] = useState(new CogTiles(glazeOptions));
   // cogState pairs CogTiles with the mode it was initialized for.
   const [cogState, setCogState] = useState<{ cog: CogTiles; glaze: CogTiles; mode: TerrainMode } | null>(null);
-  // Track terrain zRange for overlay TileLayer frustum culling
-  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(null);
+  // Sync terrain zRange to overlay TileLayer for 3D frustum culling
+  const { zRange: terrainZRange, onZRangeUpdate: onTerrainZRangeUpdate } = useTerrainZRange();
 
   // Initial load: set viewState and initialize all CogTiles instances
   useEffect(() => {
@@ -150,7 +150,7 @@ function CogTerrainGlazeExample() {
       tileSize: 256,
       operation: 'terrain',
       terrainOptions,
-      onZRangeUpdate: setTerrainZRange,
+      onZRangeUpdate: onTerrainZRangeUpdate,
       // disableTexture: cogState.mode === 'glaze',
       pickable: false,
       onClick: (info: any) => {
