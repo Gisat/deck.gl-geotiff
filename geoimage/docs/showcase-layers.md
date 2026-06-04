@@ -470,6 +470,97 @@ const layers = [terrainLayer, satelliteLayer, glazeLayer];
 
 ---
 
+## 3.6 Overlay Tiles with Proper 3D Frustum Culling
+
+**Use Case:** rendering standard XYZ tile providers (OSM, satellite imagery, map tiles) as overlays on top of 3D terrain without foreground tile clipping when the viewport is tilted.
+
+### The Problem: Tile Clipping in 3D
+
+When rendering overlay `TileLayer` (OSM, Satellite, etc.) over elevated terrain with a tilted camera, foreground tiles may be incorrectly culled or clipped. This happens because deck.gl's `TileLayer` assumes tiles exist on a flat Z=0 plane by default. When the viewport is tilted in 3D and the terrain is elevated, the frustum culling math fails to account for the terrain's elevation range.
+
+### The Solution: Sync `zRange` from CogTerrainLayer
+
+Pass the elevation range (`zRange`) from your `CogTerrainLayer` to the overlay `TileLayer`. This tells deck.gl's frustum culling algorithm: *"these tiles exist between minZ and maxZ elevations, not just at Z=0."*
+
+#### Example: OSM Overlay on Terrain
+
+```typescript
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { TileLayer, BitmapLayer } from '@deck.gl/layers';
+import React, { useState, useMemo } from 'react';
+
+function TerrainWithOSM() {
+  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(null);
+
+  const layers = useMemo(() => [
+    // OSM overlay with zRange for proper 3D culling
+    new TileLayer({
+      id: 'osm-overlay',
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      zRange: terrainZRange,  // ← Pass terrain elevation bounds
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile as any;
+        const { west, south, east, north } = bbox;
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [west, south, east, north],
+        });
+      },
+    }),
+    // Terrain layer that computes and updates zRange
+    new CogTerrainLayer({
+      id: 'terrain',
+      elevationData: 'https://example.com/dem.tif',
+      isTiled: true,
+      tileSize: 256,
+      terrainOptions: { type: 'terrain' },
+      onZRangeUpdate: setTerrainZRange,  // ← Receive zRange updates
+    }),
+  ], [terrainZRange]);
+
+  return <DeckGL layers={layers} /* ... */ />;
+}
+```
+
+#### How It Works
+
+1. **Terrain Layer computes elevation bounds** — As `CogTerrainLayer` loads terrain tiles, it calculates the min/max elevation (`zRange`) from the loaded mesh data.
+2. **Callback fires on update** — When terrain tiles load and the elevation bounds expand, `onZRangeUpdate` callback fires with the updated `zRange`.
+3. **Overlay receives bounds** — React state syncs the `zRange` into the overlay `TileLayer`.
+4. **Frustum culling corrected** — deck.gl now knows the elevation range and performs correct 3D frustum culling, keeping foreground tiles visible even when tilted.
+
+#### Key Props
+
+| Layer | Prop | Type | Purpose |
+|---|---|---|---|
+| **CogTerrainLayer** | `onZRangeUpdate` | `(zRange: [number, number] \| null) => void` | Callback fired when terrain elevation bounds are updated |
+| **TileLayer** | `zRange` | `[number, number] \| null` | Elevation range for 3D frustum culling |
+
+#### Result
+
+✅ **Before tilt:** All tiles visible (no regression)  
+✅ **During tilt:** Foreground tiles remain fully loaded and rendered  
+✅ **3D rotation:** Complete tile coverage regardless of camera angle  
+
+### Technical Details
+
+deck.gl's `TileLayer` uses `zRange` to expand its 3D bounding volume when performing frustum culling. Without `zRange`, tiles are assumed to exist only on the Z=0 plane. When the camera is tilted and looking at elevated terrain, tiles that are "below" the Z=0 plane in screen space (but actually visible on the terrain surface) are incorrectly culled.
+
+By passing the terrain's elevation bounds via `zRange`, the tile layer's bounding box expands to `[minLat, minLon, maxLat, maxLon, minZ, maxZ]`, ensuring correct intersection testing with the camera frustum.
+
+#### Important Notes
+
+- **Dynamic updates:** `zRange` updates progressively as terrain tiles load. The overlay will automatically adjust visibility as the terrain elevation range expands.
+- **Multiple overlay layers:** Apply this pattern to each overlay layer (OSM, satellite, etc.) if you have multiple overlays stacked on the same terrain.
+- **No performance penalty:** Passing `zRange` does not affect rendering performance — it only improves frustum culling accuracy.
+- **Compatible with `TerrainExtension`:** This pattern works whether or not your overlay layers use the `TerrainExtension`.
+
+---
+
 ## 4. Raw Value Picking
 
 **Use Case:** retrieving the original GeoTIFF raster values (elevation, band values, indices) at a clicked location, without extra network requests.
