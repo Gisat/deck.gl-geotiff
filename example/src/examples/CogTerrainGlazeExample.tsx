@@ -67,6 +67,8 @@ function CogTerrainGlazeExample() {
   const [glazeCogTiles] = useState(new CogTiles(glazeOptions));
   // cogState pairs CogTiles with the mode it was initialized for.
   const [cogState, setCogState] = useState<{ cog: CogTiles; glaze: CogTiles; mode: TerrainMode } | null>(null);
+  // Track terrain zRange for overlay TileLayer frustum culling
+  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(null);
 
   // Initial load: set viewState and initialize all CogTiles instances
   useEffect(() => {
@@ -98,7 +100,7 @@ function CogTerrainGlazeExample() {
         longitude,
         latitude,
         zoom,
-        pitch: 60,
+        pitch: 70,
         bearing: 0,
       });
       setCogState({ cog, glaze: glazeCogTiles, mode });
@@ -124,6 +126,7 @@ function CogTerrainGlazeExample() {
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
+      zRange: terrainZRange,
       extensions: [new TerrainExtension()],
 
       renderSubLayers: (props) => {
@@ -147,6 +150,7 @@ function CogTerrainGlazeExample() {
       tileSize: 256,
       operation: 'terrain',
       terrainOptions,
+      onZRangeUpdate: setTerrainZRange,
       // disableTexture: cogState.mode === 'glaze',
       pickable: false,
       onClick: (info: any) => {
@@ -176,7 +180,7 @@ function CogTerrainGlazeExample() {
     }
 
     return layerStack;
-  }, [viewState, cogState]);
+  }, [viewState, cogState, terrainZRange]);
 
   if (!viewState) {
     return (

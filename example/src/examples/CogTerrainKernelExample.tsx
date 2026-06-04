@@ -135,6 +135,8 @@ function CogTerrainKernelExample() {
   // cogState pairs CogTiles with the mode it was initialized for.
   // null while reinitializing — prevents layers from rendering with wrong CogTiles.
   const [cogState, setCogState] = useState<{ cog: CogTiles; mode: KernelMode } | null>(null);
+  // Track terrain zRange for overlay TileLayer frustum culling
+  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(null);
 
   // Initial load: set viewState and initialize all CogTiles instances
   useEffect(() => {
@@ -183,6 +185,7 @@ function CogTerrainKernelExample() {
         minZoom: 0,
         maxZoom: 19,
         tileSize: 256,
+        zRange: terrainZRange,
         pickable: false,
         renderSubLayers: (props) => {
           const { bbox } = props.tile as any;
@@ -202,10 +205,11 @@ function CogTerrainKernelExample() {
         tileSize: 256,
         operation: 'terrain+draw',
         terrainOptions: buildTerrainOptions(cogState.mode),
+        onZRangeUpdate: setTerrainZRange,
         pickable: true,
       }),
     ];
-  }, [viewState, cogState]);
+  }, [viewState, cogState, terrainZRange]);
 
   const isTransitioning = cogState?.mode !== mode;
 
