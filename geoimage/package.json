@@ -30,6 +30,11 @@
       "types": "./dist/esm/types/index.d.ts",
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
+    },
+    "./react": {
+      "types": "./dist/esm/types/react/index.d.ts",
+      "import": "./dist/esm/react/index.js",
+      "require": "./dist/cjs/react/index.js"
     }
   },
   "sideEffects": false,
@@ -64,7 +69,13 @@
     "@loaders.gl/schema": ">=4.0.0",
     "@luma.gl/core": ">=9.0.0",
     "@luma.gl/engine": ">=9.0.0",
-    "@luma.gl/shadertools": ">=9.0.0"
+    "@luma.gl/shadertools": ">=9.0.0",
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deck.gl/core": "^9.3.2",

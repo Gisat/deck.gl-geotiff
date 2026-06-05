@@ -487,7 +487,8 @@ Pass the elevation range (`zRange`) from your `CogTerrainLayer` to the overlay `
 The easiest way to integrate is with the `useTerrainZRange` hook:
 
 ```typescript
-import { CogTerrainLayer, useTerrainZRange } from '@gisatcz/deckgl-geolib';
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 import { TileLayer, BitmapLayer } from '@deck.gl/layers';
 import React, { useMemo } from 'react';
 

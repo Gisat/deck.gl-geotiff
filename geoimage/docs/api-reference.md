@@ -294,7 +294,8 @@ When rendering overlay tile layers (OSM, satellite, CartoDB) over 3D terrain wit
 
 **Example (Recommended):**
 ```typescript
-import { CogTerrainLayer, useTerrainZRange } from '@gisatcz/deckgl-geolib';
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 
 function Map3D() {
   const { zRange, onZRangeUpdate } = useTerrainZRange();
