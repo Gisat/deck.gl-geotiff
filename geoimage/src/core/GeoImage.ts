@@ -30,6 +30,7 @@ export default class GeoImage {
         },
     options: GeoImageOptions,
     meshMaxError: number,
+    workerPool?: any, // TerrainWorkerPool (optional)
   ): Promise<TileResult | null> {
     const mergedOptions = GeoImage.resolveVisualizationMode(
       { ...DefaultGeoImageOptions, ...options },
@@ -40,7 +41,7 @@ export default class GeoImage {
       case 'image':
         return this.getBitmap(input, mergedOptions);
       case 'terrain':
-        return this.getHeightmap(input, mergedOptions, meshMaxError);
+        return this.getHeightmap(input, mergedOptions, meshMaxError, workerPool);
       default:
         return null;
     }
@@ -115,6 +116,7 @@ export default class GeoImage {
         },
     options: GeoImageOptions,
     meshMaxError: number,
+    workerPool?: any, // TerrainWorkerPool (optional)
   ): Promise<TileResult> {
     let rasters = [];
     let width: number;
@@ -139,8 +141,8 @@ export default class GeoImage {
       cellSizeMeters = input.cellSizeMeters;
     }
 
-    // Delegate to TerrainGenerator
-    return await TerrainGenerator.generate({ width, height, rasters, bounds, cellSizeMeters }, options, meshMaxError);
+    // Delegate to TerrainGenerator with worker pool
+    return await TerrainGenerator.generate({ width, height, rasters, bounds, cellSizeMeters }, options, meshMaxError, workerPool);
   }
 
   async getBitmap(

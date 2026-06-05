@@ -7,12 +7,14 @@ import { BitmapGenerator } from './BitmapGenerator';
 import { KernelGenerator } from './KernelGenerator';
 import { ReliefCompositor } from './ReliefCompositor';
 import { isF32NoData } from './numberUtils';
+import type { ComputeMeshOptions } from '../../workers/TerrainWorkerPool';
 
 export class TerrainGenerator {
   static async generate(
     input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds; cellSizeMeters?: number },
     options: GeoImageOptions,
-    meshMaxError: number
+    meshMaxError: number,
+    workerPool?: any // TerrainWorkerPool (optional for flexibility)
   ): Promise<TileResult> {
     const { width, height } = input;
     const isKernel = width === 258;
@@ -30,24 +32,42 @@ export class TerrainGenerator {
     // 2. Tesselate (Generate Mesh)
     const { terrainSkirtHeight, verticalExaggeration = 1.0 } = options;
 
-    let mesh;
-    switch (options.tesselator) {
-      case 'martini':
-        mesh = this.getMartiniTileMesh(meshMaxError, meshWidth, meshTerrain);
-        break;
-      case 'delatin':
-        mesh = this.getDelatinTileMesh(meshMaxError, meshWidth, meshHeight, meshTerrain);
-        break;
+    let mesh: { vertices: Uint16Array; triangles: Uint32Array };
+    let meshTerrainForAttributes: Float32Array; // ← Will hold terrain for getMeshAttributes()
 
-      default:
-        // Intentional: default to Martini for any unspecified or unrecognized tesselator.
-        mesh = this.getMartiniTileMesh(meshMaxError, meshWidth, meshTerrain);
-        break;
+    if (workerPool) {
+      // ✅ NEW: Offload to Web Worker with ZERO-COPY ROUNDTRIP
+      // Transfer meshTerrain to worker; worker transfers it back alongside mesh
+      // This avoids meshTerrain.slice() allocation on main thread
+      const result = await workerPool.computeMesh({
+        terrain: meshTerrain, // ← Transferred to worker (detached here)
+        meshMaxError,
+        tesselator: options.tesselator || 'martini',
+        width: meshWidth,
+        height: meshHeight,
+      });
+
+      mesh = { vertices: result.vertices, triangles: result.triangles };
+      meshTerrainForAttributes = result.terrain; // ← Transferred back from worker
+    } else {
+      // ❌ FALLBACK: Synchronous (old behavior, kept for safety)
+      switch (options.tesselator) {
+        case 'martini':
+          mesh = this.getMartiniTileMesh(meshMaxError, meshWidth, meshTerrain);
+          break;
+        case 'delatin':
+          mesh = this.getDelatinTileMesh(meshMaxError, meshWidth, meshHeight, meshTerrain);
+          break;
+        default:
+          mesh = this.getMartiniTileMesh(meshMaxError, meshWidth, meshTerrain);
+          break;
+      }
+      meshTerrainForAttributes = meshTerrain; // ← Use original
     }
 
     const { vertices } = mesh;
     let { triangles } = mesh;
-    let attributes = this.getMeshAttributes(vertices, meshTerrain, meshWidth, meshHeight, input.bounds, verticalExaggeration);
+    let attributes = this.getMeshAttributes(vertices, meshTerrainForAttributes, meshWidth, meshHeight, input.bounds, verticalExaggeration);
     // Compute bounding box before adding skirt so that z values are not skewed
     const boundingBox = getMeshBoundingBox(attributes);
 

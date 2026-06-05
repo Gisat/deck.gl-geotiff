@@ -5497,6 +5497,7 @@ __metadata:
     eslint: "npm:^9.39.3"
     eslint-plugin-react: "npm:^7.37.5"
     globals: "npm:^17.4.0"
+    rollup-plugin-web-worker-loader: "npm:^1.7.0"
     semantic-release: "npm:^25.0.3"
     typescript: "npm:^6.0.2"
     typescript-eslint: "npm:^8.57.2"
@@ -8994,6 +8995,15 @@ __metadata:
     pacote: "npm:^15.1.1"
     terser: "npm:^5.6.0"
   checksum: 10c0/03711dadab884e2eb5cc67564477efe8bc10f92811684bfebfa959996b525d3055dd1f3891c611cbceb469a71c1c5a176180ee3046b8f367f4a6328b631f6388
+  languageName: node
+  linkType: hard
+
+"rollup-plugin-web-worker-loader@npm:^1.7.0":
+  version: 1.7.0
+  resolution: "rollup-plugin-web-worker-loader@npm:1.7.0"
+  peerDependencies:
+    rollup: ^1.9.2 || ^2.0.0 || ^3.0.0 || ^4.0.0
+  checksum: 10c0/c854841934e8865b30d5ec4ab605228e476d72aa19c004612fab11603fafc76482985a9cb96d6f627eeb343410253742b5c3d159cdf7a478baf29ca1d9cd440e
   languageName: node
   linkType: hard
 
