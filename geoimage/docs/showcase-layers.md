@@ -602,7 +602,7 @@ function TerrainWithOSM() {
 
 deck.gl's `TileLayer` uses `zRange` to expand its 3D bounding volume when performing frustum culling. Without `zRange`, tiles are assumed to exist only on the Z=0 plane. When the camera is tilted and looking at elevated terrain, tiles that are "below" the Z=0 plane in screen space (but actually visible on the terrain surface) are incorrectly culled.
 
-By passing the terrain's elevation bounds via `zRange`, the tile layer's bounding box expands to `[minLat, minLon, maxLat, maxLon, minZ, maxZ]`, ensuring correct intersection testing with the camera frustum.
+By passing the terrain's elevation bounds via `zRange`, the tile layer's bounding box expands to `[west, south, east, north, minZ, maxZ]` (in lon/lat/elevation order), ensuring correct intersection testing with the camera frustum.
 
 #### Important Notes
 
