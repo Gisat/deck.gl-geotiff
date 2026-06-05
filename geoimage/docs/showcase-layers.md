@@ -489,7 +489,8 @@ The easiest way to integrate is with the `useTerrainZRange` hook:
 ```typescript
 import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
 import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
-import { TileLayer, BitmapLayer } from '@deck.gl/layers';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { BitmapLayer } from '@deck.gl/layers';
 import React, { useMemo } from 'react';
 
 function TerrainWithOSM() {
@@ -538,7 +539,8 @@ If you prefer full control, you can manage the state manually:
 
 ```typescript
 import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
-import { TileLayer, BitmapLayer } from '@deck.gl/layers';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { BitmapLayer } from '@deck.gl/layers';
 import React, { useState, useMemo } from 'react';
 
 function TerrainWithOSM() {
