@@ -148,8 +148,25 @@ function CogTerrainLayerExample() {
 
     });
 
+    // Placeholder layer — locked to lowest zoom, instant tessellation
+    const terrainPlaceholderLayer = new CogTerrainLayer({
+      id: 'cog-terrain-placeholder',
+      elevationData: mainCog.url,
+      cogTiles: initializedCog,
+      isTiled: true,
+      tileSize: 256,
+      operation: 'terrain+draw',
+      // disableTexture: true,
+        // color: [180, 180, 180],
+      getPolygonOffset: (params: { layerIndex: number }) => [0, 100],
+      terrainOptions,
+      pickable: false,
+      zoomOverride: initializedCog.getZoomRange()[0],
+    });
+
     return [
       // tileLayer,
+      terrainPlaceholderLayer,
       cogLayer,
     ];
   }, [viewState, initializedCog]);
