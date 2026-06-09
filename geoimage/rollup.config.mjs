@@ -49,7 +49,7 @@ const getPlugins = (isEsm) => [
 ];
 
 export default [
-  // Pass 1: Generates ESM files + Type Declarations
+  // Pass 1: Generates ESM files + Type Declarations (main entry)
   {
     external,
     input: './src/index.ts',
@@ -70,7 +70,7 @@ export default [
     ],
     plugins: getPlugins(true),
   },
-  // Pass 2: Generates CJS files
+  // Pass 2: Generates CJS files (main entry)
   {
     external,
     input: './src/index.ts',
@@ -83,6 +83,48 @@ export default [
       },
       {
         file: path.join(packageJson.main, 'index.min.js'),
+        format: 'cjs',
+        sourcemap: true,
+        plugins: [terser()],
+        inlineDynamicImports: true,
+      },
+    ],
+    plugins: getPlugins(false),
+  },
+  // Pass 3: Generates ESM files (react subpath entry)
+  {
+    external,
+    input: './src/react/index.ts',
+    output: [
+      {
+        file: path.join(packageJson.module, 'react/index.js'),
+        format: 'esm',
+        sourcemap: true,
+        inlineDynamicImports: true,
+      },
+      {
+        file: path.join(packageJson.module, 'react/index.min.js'),
+        format: 'esm',
+        sourcemap: true,
+        plugins: [terser()],
+        inlineDynamicImports: true,
+      },
+    ],
+    plugins: getPlugins(false),
+  },
+  // Pass 4: Generates CJS files (react subpath entry)
+  {
+    external,
+    input: './src/react/index.ts',
+    output: [
+      {
+        file: path.join(packageJson.main, 'react/index.js'),
+        format: 'cjs',
+        sourcemap: true,
+        inlineDynamicImports: true,
+      },
+      {
+        file: path.join(packageJson.main, 'react/index.min.js'),
         format: 'cjs',
         sourcemap: true,
         plugins: [terser()],

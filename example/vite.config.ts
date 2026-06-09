@@ -7,10 +7,16 @@ export default defineConfig({
   plugins: [react()],
   publicDir: './public',
   resolve: {
-    alias: {
-      // Maps the package name directly to the source index file
-      '@gisatcz/deckgl-geolib': path.resolve(__dirname, '../geoimage/src/index.ts'),
-    },
+    alias: [
+      {
+        find: '@gisatcz/deckgl-geolib/react',
+        replacement: path.resolve(__dirname, '../geoimage/src/react/index.ts'),
+      },
+      {
+        find: '@gisatcz/deckgl-geolib',
+        replacement: path.resolve(__dirname, '../geoimage/src/index.ts'),
+      },
+    ],
     dedupe: [
       '@deck.gl/core',
       '@luma.gl/core',

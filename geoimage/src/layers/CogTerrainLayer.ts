@@ -168,6 +168,12 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
    */
   disableTexture?: boolean;
 
+  /**
+   * Callback fired when the terrain zRange is updated.
+   * Used to sync overlay TileLayer zRange for proper 3D frustum culling.
+   */
+  onZRangeUpdate?: (zRange: ZRange | null) => void;
+
 	/**
 	 * @deprecated Use `loadOptions.terrain.workerUrl` instead
 	 */
@@ -431,7 +437,9 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  const maxZ = Math.max(...ranges.map((x) => x?.[1] ?? 0).filter((n) => Number.isFinite(n)));
 
 	  if (!zRange || minZ < zRange[0] || maxZ > zRange[1]) {
-      this.setState({ zRange: [Number.isFinite(minZ) ? minZ : 0, Number.isFinite(maxZ) ? maxZ : 0] });
+      const newZRange: ZRange = [Number.isFinite(minZ) ? minZ : 0, Number.isFinite(maxZ) ? maxZ : 0];
+      this.setState({ zRange: newZRange });
+      this.props.onZRangeUpdate?.(newZRange);
 	  }
   }
 

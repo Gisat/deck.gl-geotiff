@@ -134,6 +134,7 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 | **`meshMaxError`** | `number \| 'auto'` | `'auto'` | Martini/Delatin error tolerance in meters, or `'auto'` for zoom-adaptive scaling. **Modes:** (1) Explicit numeric value (e.g. `10`): Fixed meshMaxError for all zoom levels; user has full control. (2) `'auto'`: Dynamically scales meshMaxError based on zoom level and the COG's tile resolution. The scaling uses a linear interpolation multiplier that ranges from **3.0× at the COG's minimum zoom** (coarse meshes for performance when viewing entire regions) to **0.5× at the COG's maximum zoom** (fine meshes for detail when viewing local features). Formula: `meshMaxError = tileResolution × errorMultiplier`. This provides significant performance improvements at low zooms (fewer triangles, faster tessellation) while maintaining pixel-perfect detail at high zooms (no slivers). **Recommendation:** `'auto'` is the default and recommended for most cases. Explicit numbers are useful for fine-tuning if you want consistent tessellation across all zoom levels. |
 | **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 | **`disableTexture`** | `boolean` | `false` | When `true`, suppresses any generated texture and renders the mesh in plain `color`. Useful for showing neutral grey terrain during mode transitions. |
+| **`onZRangeUpdate`** | `(zRange: [number, number] \| null) => void` | `undefined` | **Optional callback for 3D overlay tile culling.** Fired when the terrain's elevation bounds (`zRange`) are computed or updated. Use this to sync the elevation range to overlay `TileLayer` instances (e.g., OSM, satellite) for proper 3D frustum culling. Without `zRange`, overlay tiles may be incorrectly culled when the viewport is tilted in 3D. **Recommended:** Use with the `useTerrainZRange()` hook for easy integration. See [Overlay Tiles with Proper 3D Frustum Culling](showcase-layers.md#36-overlay-tiles-with-proper-3d-frustum-culling) for full examples. |
 
 ## Animation & Caching Options
 
@@ -267,6 +268,70 @@ Since `pickable: true` enables both click and hover, you can show a live tooltip
 ```
 
 > **Note:** Do not use React state (`useState`) inside `onHover` to drive a tooltip — this triggers re-renders during tile initialization and can cause deck.gl errors. Use `getTooltip` on the `DeckGL` component instead.
+
+---
+
+## React Hooks
+
+### `useTerrainZRange()`
+
+A React hook that simplifies syncing terrain elevation bounds to overlay tile layers for proper 3D frustum culling.
+
+**Signature:**
+```typescript
+function useTerrainZRange(): {
+  zRange: [number, number] | null;
+  onZRangeUpdate: (zRange: [number, number] | null) => void;
+}
+```
+
+**Returns:**
+- **`zRange`**: The elevation bounds `[minZ, maxZ]` from the terrain layer. Initially `null`, updates as terrain tiles load.
+- **`onZRangeUpdate`**: A callback function to pass to `CogTerrainLayer.onZRangeUpdate`.
+
+**Purpose:**
+When rendering overlay tile layers (OSM, satellite, CartoDB) over 3D terrain with a tilted viewport, deck.gl's frustum culling assumes tiles exist on a flat Z=0 plane. This causes foreground tiles to be incorrectly clipped. By syncing the terrain's elevation range (`zRange`) to the overlay layer, the culling algorithm expands its 3D bounding volume to include the elevated terrain, fixing the clipping issue.
+
+**Example (Recommended):**
+```typescript
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
+
+function Map3D() {
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
+
+  return (
+    <DeckGL layers={[
+      new CogTerrainLayer({
+        id: 'terrain',
+        elevationData: 'https://example.com/dem.tif',
+        terrainOptions: { type: 'terrain' },
+        onZRangeUpdate,
+      }),
+      new TileLayer({
+        id: 'osm-overlay',
+        data: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        zRange,  // Pass elevation bounds from terrain
+      }),
+    ]} />
+  );
+}
+```
+
+**Manual Alternative (without hook):**
+```typescript
+const [terrainZRange, setTerrainZRange] = useState(null);
+
+// Then:
+new CogTerrainLayer({
+  onZRangeUpdate: setTerrainZRange,
+}),
+new TileLayer({
+  zRange: terrainZRange,
+}),
+```
+
+For full implementation examples, see [Overlay Tiles with Proper 3D Frustum Culling](showcase-layers.md#36-overlay-tiles-with-proper-3d-frustum-culling).
 
 ---
 
