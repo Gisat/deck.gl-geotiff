@@ -415,8 +415,10 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       _instanced: false,
       pickable: props.pickable,
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-      // Forward polygon offset from parent layer; sublayers don't inherit it automatically
-      getPolygonOffset: this.props.getPolygonOffset ?? ((params: { layerIndex: number }) => [0, -params.layerIndex * 100]),
+      // Dynamic polygon offset: pull higher zoom levels closer to camera to depth-test in front.
+      // Uses tile.index.z from closure to avoid Z-fighting between ancestor tiles and high-res detail.
+      // Formula: zoom 0 = offset 0, zoom 9 = offset -9000, zoom 12 = offset -12000, etc.
+      getPolygonOffset: this.props.getPolygonOffset ?? [0, -((props.tile?.index?.z ?? 0) * 1000)],
       // getPosition: (d) => [0, 0, 0],
       getColor: tileTexture ? [255, 255, 255] : color,
       wireframe,

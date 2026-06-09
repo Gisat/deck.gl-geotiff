@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
@@ -7,9 +7,9 @@ import { CogTerrainLayer, CogTiles, extractTerrainCoordinate } from '@gisatcz/de
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer } from '@deck.gl/layers';
-import { Matrix4 } from '@math.gl/core';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 
-// Updated: Properly handles WebMercator non-linear Y projection
+
 function getElevationAtInfo(info: any): number | null {
   const tileResult = info.tile?.content?.[0];
   if (!tileResult?.raw) return null;
@@ -44,7 +44,9 @@ function CogTerrainLayerExample() {
   const mainCog = COG_TERRAIN_EXAMPLES.MISICUNI;
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
-  const [detailLayerEnabled, setDetailLayerEnabled] = useState(false);
+  const [overviewLoaded, setOverviewLoaded] = useState(false);
+  const overviewTileLoadedRef = useRef<number | null>(null);
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   const terrainOptions: GeoImageOptions = {
     ...mainCog.defaultOptions as GeoImageOptions,
@@ -101,72 +103,43 @@ function CogTerrainLayerExample() {
   const layers = useMemo(() => {
     if (!viewState || !initializedCog) return [];
 
-    // 1. Map Overlays (OSM / Satellite imagery)
-    const tileLayer = new TileLayer({
-      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      id: 'standard-tile-layer',
-      minZoom: 0,
-      maxZoom: 19,
-      tileSize: 256,
-      extensions: [new TerrainExtension()],
+    // Determine the minimum zoom level for the overview/ancestor tile gate
+    const minZoom = initializedCog.getZoomRange()[0];
 
-      renderSubLayers: (props) => {
-        const { bbox } = props.tile as any;
-        const { west, south, east, north } = bbox;
+    // Dynamic zoomOverride based on viewport zoom: locked at minZoom for ancestor fallback,
+    // released at high zoom to allow detail tiles to fetch without HTTP/1.1 bottleneck
+    const isAtHighZoom = viewState.zoom > minZoom + 3;
+    const dynamicZoomOverride = isAtHighZoom ? undefined : minZoom;
 
-        return new BitmapLayer(props, {
-          data: undefined,
-          image: props.data,
-          bounds: [west, south, east, north],
-        });
-      },
-    });
-
-    // 2. Fast Placeholder Layer — boots first to win network priority
-    //    intentionally does NOT receive `cogTiles: initializedCog` so it creates
-    //    an isolated CogTiles instance with its own worker pool and network queue.
-    const terrainPlaceholderLayer = new CogTerrainLayer({
-      id: 'cog-terrain-placeholder',
-      elevationData: mainCog.url,
-      isTiled: true,
-      tileSize: 256,
-      meshMaxError: 30, // tighter than 80 so placeholder hugs ravines better while loading
-      operation: 'terrain+draw',
-
-      // Clean baseline optimizations
-      // disableTexture: true,       // Bypasses extra imagery requests to clear the HTTP/1.1 queue
-      // color: [180, 180, 180],     // Neutral grey
-      
-      // getPolygonOffset: (params: { layerIndex: number }) => [0, 100], // Depth buffer cushion
-      // modelMatrix: new Matrix4().translate([0, 0, -650]),
-      // getPolygonOffset: () => [10, 10000],
-      parameters: {
-        depthRange: [0.01, 1.0] 
-      },
-
-      terrainOptions,
-      pickable: false,
-      zoomOverride: initializedCog.getZoomRange()[0], // lock to overview zoom
-
-      // Gate detail layer until placeholder has rendered at least one tile
-      onTileLoad: () => setDetailLayerEnabled(true),
-      visible: true,
-    });
-
-    // 3. High-Res Actual Layer — constructed only after placeholder gives the gate
-    const cogLayer = detailLayerEnabled ? new CogTerrainLayer({
+    const cogLayer = new CogTerrainLayer({
       id: 'cog-terrain-layer',
       elevationData: mainCog.url,
-      cogTiles: initializedCog, // share pre-initialized cache and main worker pool
+      cogTiles: initializedCog,
       isTiled: true,
       tileSize: 256,
-      meshMaxError: 'auto', // adaptive as before
+      meshMaxError: 'auto', // Adaptive tessellation per zoom level
       operation: 'terrain+draw',
       terrainOptions,
       pickable: '3d',
-      parameters: {
-        depthRange: [0.0, 0.98] 
+      onZRangeUpdate: onZRangeUpdate,
+
+      // Network gate: dynamically lock at minZoom during moderate/low zoom to ensure
+      // ancestor tiles are available as fallback while panning/zooming
+      zoomOverride: !overviewLoaded ? minZoom : dynamicZoomOverride,
+
+      // 500ms debounce: ensure overview tile is fetched and rendered before releasing gate
+      onTileLoad: (tile) => {
+        if (tile.index.z === minZoom && !overviewLoaded) {
+          if (!overviewTileLoadedRef.current) {
+            overviewTileLoadedRef.current = Date.now();
+            setTimeout(() => {
+              setOverviewLoaded(true);
+              overviewTileLoadedRef.current = null;
+            }, 500);
+          }
+        }
       },
+
       onClick: (info: any) => {
         const coord = extractTerrainCoordinate(info);
         if (coord) {
@@ -182,18 +155,35 @@ function CogTerrainLayerExample() {
           }
         }
       },
-    }) : null;
+    });
 
-    // Final render order: standard bottom-to-top
-    // 1. Sunken placeholder loads instantly
-    // 2. High-res detail pops in and naturally covers the sunken placeholder
-    // 3. OSM overlays drape over whatever geometry is on top
+    // OSM tile layer with TerrainExtension for 3D drape
+    const tileLayer = new TileLayer({
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      id: 'standard-tile-layer',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      zRange: zRange,
+      extensions: [new TerrainExtension()],
+
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile as any;
+        const { west, south, east, north } = bbox;
+
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [west, south, east, north],
+        });
+      },
+    });
+
     return [
-      terrainPlaceholderLayer,
       cogLayer,
-      // tileLayer,
-    ].filter(Boolean);
-  }, [viewState, initializedCog, detailLayerEnabled]);
+      // tileLayer  // OSM satellite drape (commented for now)
+    ];
+  }, [viewState, initializedCog, overviewLoaded]);
 
   if (!viewState) {
     return (
@@ -208,7 +198,6 @@ function CogTerrainLayerExample() {
 
   return (
     <DeckGL
-      glOptions={{ stencil: true }}
       getCursor={() => 'crosshair'}
       viewState={viewState}
       onViewStateChange={({ viewState: newViewState }) => setViewState(newViewState as any)}

@@ -1,7 +1,7 @@
 # LOD Placeholder Layer — Progressive Terrain Loading
 
 **Date:** 2026-06-06  
-**Status:** Phase 2 — Stencil Masking
+**Status:** Phase 3 — Single-Layer Ancestor Fallback + Dynamic Z-Offset
 
 ---
 
@@ -26,40 +26,39 @@ The Web Worker pool (implemented in `2026-06-04-web-worker-terrain-tessellation.
 | Semi-transparent terrain (`opacity < 1`) | WebGL depth sorting breaks on 3D terrain without per-triangle back-to-front sorting. Interior faces bleed through. |
 | Higher `meshMaxError` to reduce interpolation visibility | Counterproductive: larger triangles stretch further across ravines, making the floating-ceiling artifact *worse*. |
 | Global `visible` toggle via `onTileLoad` counter | Works but hides/shows the **entire** placeholder at once. In ravine terrain the low-res mesh physically pokes through the high-res detail — placeholder must be masked at tile granularity, not globally. |
+| Two-layer stencil masking | "3D Silhouette Problem": Low-res mesh (meshMaxError: 30) is physically "fatter" — geometry protrudes horizontally beyond high-res footprints. Stencil/depth masking cannot hide non-occluded geometry at viewport edges. |
 
 ---
 
-## Chosen Solution: Stencil Masking
+## Chosen Solution: Single-Layer Ancestor Fallback + Dynamic Z-Offset
 
-The placeholder layer uses the **WebGL stencil buffer** to hide itself precisely in the footprints where the detail layer has already rendered. This achieves pixel-perfect per-tile masking without shader rewrites and without any React state management overhead.
+Instead of two layers with stencil masking, use **a single `CogTerrainLayer` that exploits deck.gl's native TileLayer ancestor caching**. Start with `zoomOverride: minZoom` to fetch only the root overview tile (1–4 tiles, exclusive network access). When the overview tile loads, remove the `zoomOverride` to allow high-res child tiles to fetch. deck.gl automatically renders cached ancestor tiles while waiting for high-res children — no manual layer coordination needed.
+
+To solve Z-fighting between the cached low-res ancestor and incoming high-res tiles, apply **dynamic polygon offset** based on zoom level: `getPolygonOffset: () => [0, -(tile.index.z * 1000)]`. Each zoom level deeper pulls the geometry 1000 units closer to the camera, ensuring high-res tiles always depth-test in front.
 
 ### How it works
 
-| Pass | Layer | Stencil operation | Result |
-|---|---|---|---|
-| 1 (render first) | Placeholder | Write `0` everywhere it draws | Marks placeholder coverage |
-| 2 (render second) | Detail tiles | Write `1` in every fragment they cover | Marks "detail present" footprint |
-| 3 (re-read) | Placeholder (second pass / discard logic) | `stencilFunc: EQUAL, ref: 0` — discard fragments where stencil = 1 | Placeholder only visible where no detail tile has painted |
+```
+Boot (Zoom 9)         → Layer created with zoomOverride: 9 → Fetches only Zoom 9 tile (1 tile, exclusive network)
+onTileLoad fires      → Remove zoomOverride (set to undefined) → deck.gl requests Zoom 12+ children
+User pans/zooms       → new viewport triggers new tile requests → deck.gl auto-renders cached ancestors while children load
+Detail tile render    → Dynamic offset -(z * 1000) pulls it 1000 units closer than ancestor
+Fully loaded          → All high-res tiles in place; ancestors cached but depth-tested behind
+```
 
-Because deck.gl renders layers in array order — placeholder first, detail on top — this naturally maps to a single-pass stencil write/test flow:
+### Why this is better than stencil masking
 
-1. **Placeholder renders first:** draws its geometry, writes stencil value `0` everywhere.
-2. **Detail tiles render second:** each rendered fragment writes stencil value `1`.
-3. Any re-render of the placeholder uses `stencilTest: NOTEQUAL, ref: 1` to skip fragments already covered by detail.
-
-### Why this is better than the `activeRequests` counter
-
-| Concern | `activeRequests` counter | Stencil masking |
+| Concern | Two-layer stencil | Single-layer ancestor |
 |---|---|---|
-| Granularity | Global show/hide | Per-pixel per-tile |
-| Ravine Z-fighting | Still visible globally until `activeRequests === 0` | Masked tile-by-tile as each detail tile arrives |
-| Network race conditions | Requires `onInteractionStateChange` guards | Zero React state — GPU-only |
-| Performance | React re-renders per tile event | Zero JS overhead after initial `parameters` setup |
-| Transparency/opacity | Cannot use (breaks depth buffer) | Not needed — masking is binary per pixel |
+| 3D Silhouette Problem | **Failed** — stencil cannot mask non-occluded fat geometry | **Solved** — high-res tiles naturally depth-test in front (no masking needed) |
+| Architecture complexity | Coordinate two layers, stencil state, onTileLoad gate | One layer, dynamic offset based on zoom level |
+| GPU overhead | Stencil test per fragment + overdraw | Depth test (native, no extra cost) + minor Z-offset |
+| Ancestor tile fallback | Not used (two separate instances) | **Leveraged** — deck.gl's native behavior, perfect fit |
+| React state management | `detailLayerEnabled` gate required | Simple `overviewLoaded` boolean (optional, for UI feedback) |
 
 ### How overlay clamping still works
 
-Both layers use `operation: 'terrain+draw'` and write to the depth buffer. `TerrainExtension` reads the **depth buffer** (not stencil), so satellite/OSM imagery continues to drape correctly. The stencil test does not interfere with depth writes.
+The layer writes to the depth buffer with `operation: 'terrain+draw'`. `polygonOffset` modifies depth values in clip-space by a negligible amount in world-space. `TerrainExtension` reads the depth buffer to reconstruct coordinates for satellite/OSM draping — the microscopic offset does not degrade drape accuracy.
 
 ---
 
@@ -67,15 +66,15 @@ Both layers use `operation: 'terrain+draw'` and write to the depth buffer. `Terr
 
 | State | What the user sees |
 |---|---|
-| Initial load | Low-res terrain mesh covering full DEM + satellite/OSM draped on it |
-| Detail tiles loading | Placeholder disappears tile-by-tile as each detail tile's footprint is stencil-masked |
-| Fully loaded | Full-detail terrain; placeholder fragments fully masked, zero GPU overdraw |
+| Initial load (Zoom 9) | Low-res overview mesh (1–4 tiles) covering full DEM instantly + satellite/OSM draped on it |
+| Detail tiles loading (Zoom 12+) | Ancestor mesh remains fully visible; high-res tiles fade in as they load without Z-fighting |
+| Fully loaded | Full-detail terrain; ancestors cached but hidden behind high-res tiles via dynamic offset |
 
 ---
 
 ## Phase 1 — Completed ✅
 
-These items are implemented and committed on branch `feature/lod-placeholder-layer`.
+These items are implemented and committed on branch `feature/lod-placeholder-layer` (stencil masking approach, now superseded).
 
 ### 1.1 Add `zoomOverride` prop to `CogTerrainLayer` ✅
 
@@ -99,154 +98,96 @@ These items are implemented and committed on branch `feature/lod-placeholder-lay
   getPolygonOffset: this.props.getPolygonOffset ?? ((params) => [0, -params.layerIndex * 100]),
   ```
 
-### 1.3 Add placeholder layer to example app ✅
-
-**File:** `example/src/examples/CogTerrainLayerExample.tsx`
-
-- Placeholder uses **isolated `CogTiles` instance** (no `cogTiles` prop) so it gets its own worker pool, independent of detail layer traffic
-- `activeRequests` counter tracks pending detail tile operations via `onTileLoad` / `onTileUnload` / `onTileError`
-- `onInteractionStateChange` guard resets counter only when all interaction flags are `false`
-- Layer order: `[terrainPlaceholderLayer, cogLayer, tileLayer]`
-
 ---
 
-## Phase 2 — Stencil Masking (Current)
+## Phase 3 — Single-Layer Ancestor Fallback + Dynamic Z-Offset (Current)
 
-### The Network vs. Render Order Problem
-
-A naive stencil approach creates a fundamental conflict:
-
-| Goal | Needs |
-|---|---|
-| Same-frame stencil masking | `[detail, placeholder]` array order — detail writes stencil=1 first, placeholder reads it in the same draw call |
-| Placeholder fetches first | `[placeholder, detail]` array order — placeholder's request fires before detail floods the 6-connection pool |
-
-These are incompatible if array order controls both concerns simultaneously.
-
-**Attempted alternative — next-frame stencil (`[placeholder, detail]`):**  
-Placeholder renders first (writes stencil=0), detail renders second (writes stencil=1), then next frame placeholder tests stencil. Rejected because deck.gl's `MaskExtension` internally manages the stencil buffer and may modify or clear stencil values between frames. Cross-frame stencil reads are unreliable without ownership of the clear cycle.
-
-### Solution: `onTileLoad` Gate + Flipped Render Order
-
-Decouple network priority from render order by **gating the detail layer's existence** on the placeholder's `onTileLoad` event:
-
-1. On boot, only the placeholder layer is in the `layers` array — it has **exclusive access** to all 6 browser connections and loads its single low-res tile immediately.
-2. When placeholder fires `onTileLoad`, its tile is in GPU memory. A `detailLayerEnabled` flag flips to `true`.
-3. `useMemo` re-evaluates: the detail layer is added to the array. It can now flood the connection pool — the placeholder tile is already rendered.
-4. Layer order becomes `[detail, placeholder, tileLayer]`: detail writes stencil=1, placeholder reads it and masks covered pixels **in the same frame** — no cross-frame dependency, no stencil persistence assumptions.
-
-```
-Boot              → [placeholder]               → placeholder fetches instantly (exclusive network)
-onTileLoad fires  → [detail, placeholder, tile] → detail floods network; same-frame stencil masking active
-```
-
-### 2.1 Add `stencilParameters` prop to `CogTerrainLayer` sublayers
+### 3.1 Dynamic polygon offset based on tile zoom level
 
 **File:** `geoimage/src/layers/CogTerrainLayer.ts`
 
-- 2.1.1. Add `stencilParameters?: Record<string, unknown>` to `_CogTerrainLayerProps` type
-- 2.1.2. In `renderSubLayers()`, merge `stencilParameters` into the `SimpleMeshLayer` `parameters` prop:
+- 3.1.1. Modify `renderSubLayers()` to replace the static `getPolygonOffset` fallback with dynamic zoom-based calculation using closure access to `props.tile`:
   ```ts
-  parameters: {
-    ...(this.props.stencilParameters ?? {}),
+  getPolygonOffset: this.props.getPolygonOffset ?? [0, -((props.tile?.index?.z ?? 0) * 1000)],
+  ```
+  **Why static array, not callback:** `getPolygonOffset` callbacks only receive `{ layerIndex }` from deck.gl; they cannot access the tile. We access `props.tile` directly from the `renderSubLayers` closure instead. This pulls higher zoom levels 1000 units closer to camera, ensuring each tile depth-tests in front without Z-fighting.
+- 3.1.2. This ensures that as tiles load at progressive zooms (Zoom 9 ancestor, then Zoom 12+ children), each new level depth-tests in front automatically.
+
+### 3.2 Add `overviewLoaded` state and `zoomOverride` gate logic
+
+**File:** `example/src/examples/CogTerrainLayerExample.tsx`
+
+- 3.2.1. Add state flag:
+  ```ts
+  const [overviewLoaded, setOverviewLoaded] = useState(false);
+  ```
+- 3.2.2. Determine minimum zoom from the `initializedCog`:
+  ```ts
+  const minZoom = initializedCog?.getZoomRange()[0] ?? 9;
+  ```
+- 3.2.3. Define the single layer with `zoomOverride` gate:
+  ```ts
+  zoomOverride: overviewLoaded ? undefined : minZoom,  // Gate: start at minZoom only
+  onTileLoad: (tile) => {
+    // Fire once when the first overview tile loads (Zoom 9 in this case)
+    // Use 500ms debounce to ensure overview tile is fetched AND rendered before removing gate
+    // This prevents deck.gl from jumping to higher zoom levels (e.g., z:14) before z:8 is visible
+    if (tile.index.z === minZoom && !overviewLoaded) {
+      if (!overviewTileLoadedRef.current) {
+        overviewTileLoadedRef.current = Date.now();
+        setTimeout(() => {
+          setOverviewLoaded(true);  // Remove zoomOverride after debounce
+          overviewTileLoadedRef.current = null;
+        }, 500);
+      }
+    }
   },
   ```
+- 3.2.4. **Critical timing fix:** The 500ms debounce ensures that the overview tile loads and renders to GPU before removing `zoomOverride`. Without this delay, deck.gl may request higher-zoom tiles (e.g., z:14) before the overview tile is rendered, bypassing the fallback entirely. This was observed as 50-50 intermittent behavior during testing.
+- 3.2.5. No need for `detailLayerEnabled` gate — single layer handles all tile ranges.
 
-### 2.2 Add `detailLayerEnabled` gate
+### 3.3 Remove stencil parameters and clean up
 
-**File:** `example/src/examples/CogTerrainLayerExample.tsx`
+**File:** `geoimage/src/layers/CogTerrainLayer.ts` and `example/src/examples/CogTerrainLayerExample.tsx`
 
-- 2.2.1. Add state flag:
-  ```ts
-  const [detailLayerEnabled, setDetailLayerEnabled] = useState(false);
-  ```
-- 2.2.2. Add `onTileLoad` to the placeholder layer to open the gate:
-  ```ts
-  onTileLoad: () => setDetailLayerEnabled(true),
-  ```
-- 2.2.3. Conditionally construct the detail layer:
-  ```ts
-  const cogLayer = detailLayerEnabled ? new CogTerrainLayer({ id: 'cog-terrain-layer', ... }) : null;
-  ```
-- 2.2.4. Add `detailLayerEnabled` to `useMemo` dependencies.
+- 3.3.1. Remove `stencilParameters` prop from `_CogTerrainLayerProps` type (not needed)
+- 3.3.2. Remove any `stencilParameters` merge logic from `renderSubLayers()`
+- 3.3.3. Remove `deviceProps={{ webgl: { stencil: true } }}` from the `DeckGL` component (stencil buffer no longer needed)
+- 3.3.4. Remove the placeholder-specific layer configuration
+- 3.3.5. Remove `detailLayerEnabled` state and all its associated logic
 
-### 2.3 Configure detail layer to write stencil
+### 3.4 Verify layer order and simplify
 
 **File:** `example/src/examples/CogTerrainLayerExample.tsx`
 
-- 2.3.1. Pass `stencilParameters` to the detail `CogTerrainLayer`:
+- 3.4.1. Return layers array with just the single terrain layer + OSM tile layer:
   ```ts
-  stencilParameters: {
-    stencilTest: true,
-    stencilWriteMask: 0xFF,          // luma.gl v9: stencilWriteMask (not stencilMask)
-    stencilCompare: 'always',        // always pass — write unconditionally
-    stencilPassOperation: 'replace', // write the reference value
-    stencilReference: 1,             // value written wherever detail renders
-  },
+  return [cogLayer, tileLayer].filter(Boolean);
   ```
-
-### 2.4 Configure placeholder layer to test stencil
-
-**File:** `example/src/examples/CogTerrainLayerExample.tsx`
-
-- 2.4.1. Pass `stencilParameters` to the placeholder `CogTerrainLayer`:
-  ```ts
-  stencilParameters: {
-    stencilTest: true,
-    stencilWriteMask: 0x00,          // luma.gl v9: stencilWriteMask (not stencilMask)
-    stencilCompare: 'not-equal',     // luma.gl v9: kebab-case (not 'notEqual')
-    stencilReference: 1,
-    stencilReadMask: 0xFF,
-  },
-  ```
-- 2.4.2. Change placeholder `visible` from `activeRequests > 0` to `true` — stencil test handles masking at GPU level.
-
-### 2.5 Update layer array order and OSM tile layer position
-
-**File:** `example/src/examples/CogTerrainLayerExample.tsx`
-
-- 2.5.1. Return layers in `[cogLayer, terrainPlaceholderLayer, tileLayer].filter(Boolean)` order:
-  - `cogLayer` renders first → writes stencil=1 in its footprint
-  - `terrainPlaceholderLayer` renders second → masked where cogLayer painted
-  - `tileLayer` (OSM) renders last as before
-
-### 2.6 Remove `activeRequests` state (cleanup)
-
-- 2.6.1. Remove `activeRequests` state variable
-- 2.6.2. Remove `onTileLoad` (increment), `onTileUnload`, `onTileError` callbacks from detail layer  
-  _(`onTileLoad` on the **placeholder** for the gate in 2.2.2 is kept)_
-- 2.6.3. Remove `onInteractionStateChange` reset-to-zero logic (deck.gl clears stencil to `0` automatically at the start of every render frame via `layers-pass.js`)
-- 2.6.4. Remove `activeRequests` from `useMemo` dependencies; add `detailLayerEnabled`
 
 ---
 
 ## Key Design Decisions
 
-### `onTileLoad` gate — why not `setTimeout`
-A timer delay is arbitrary and breaks on slow networks. `onTileLoad` fires exactly when the placeholder tile is in GPU memory — the only moment it is guaranteed safe to flood the connection pool with detail requests.
+### Single layer exploits deck.gl's native ancestor caching
+TileLayer automatically retains cached ancestor tiles in GPU memory as long as their screen-space footprints aren't completely occluded by fully loaded children. This is designed for exactly this LOD use case — no custom masking or layer coordination needed.
 
-### Why `detailLayerEnabled` not `visible: false` on detail layer
-`visible: false` still causes deck.gl to create the layer instance and call `getTileData` on tile requests — the tiles are just not drawn. The connection pool would still be flooded. Omitting the layer from the array entirely prevents all data fetching.
+### `zoomOverride` gate ensures exclusive network access
+By capping the layer to `minZoom` on boot, we guarantee that only 1–4 low-res tiles request the network simultaneously. This fits comfortably within the 6-connection HTTP/1.1 limit, loading in milliseconds. Once the overview tile is in GPU memory (`onTileLoad` fires), we remove the gate to allow child tiles to flood the pool.
 
-### Render order: `[detail, placeholder]` not `[placeholder, detail]`
-Same-frame stencil masking requires detail to draw **before** the placeholder in each render frame. This is safe because by the time the detail layer enters the array (post-gate), the placeholder tile is fully loaded — there is no more network competition.
+### Dynamic polygon offset avoids Z-fighting
+Instead of masking or making tiles transparent, we use the GPU's native depth buffer mechanics. Zoom-based offset `-(z * 1000)` ensures that each new tile render at a deeper zoom level floats 1000 units closer to the camera — no mathematical overlap, no stencil buffer state management, no cross-frame persistence issues.
 
-### Cross-frame stencil is avoided — and auto-clear confirmed
-deck.gl's `layers-pass.js` calls `clearStencil = clearCanvas ? 0 : false` at the start of every render frame. This means:
-1. No stale stencil values persist across frames — no manual clear needed, no `onBeforeRender` hook needed.
-2. Stencil masking works within a single frame: detail draws and writes stencil=1, then placeholder reads it and skips covered pixels — all in the same frame, same draw list.
+### Why not static offset or depthRange?
+- Static offset (e.g., `[0, 100]`) fails when multiple ancestor zoom levels coexist (e.g., Zoom 9 ancestor + Zoom 11 intermediate + Zoom 13 detail).
+- `depthRange` (near/far bounds) quantizes the viewport into bands — when user zooms within a band, ancestor tiles reappear in front of detail.
+- Dynamic zoom-based offset scales infinitely: Zoom 0 at offset 0, Zoom 12 at offset -12,000, Zoom 18 at offset -18,000 — all automatically sorted in depth order.
 
-### Isolated `CogTiles` for placeholder
-The placeholder does **not** receive `cogTiles: initializedCog`. It spins up its own isolated instance with its own worker pool. This prevents its single low-res tile from being queued behind 16+ detail tile requests in the shared worker FIFO queue.
+### Precision at extreme zoom levels
+WebGL's depth buffer has sufficient precision to handle offsets of ±1,000,000. At Zoom 20 (offset -20,000), we are far within this range. If future datasets push to Zoom 25+ (offset -25,000), precision could degrade — but this is rare and can be tuned down to 500 units/zoom or addressed by adjusting the elevation coordinate system.
 
-### `meshMaxError: 30` not `80`
-Lower `meshMaxError` = smaller triangles = the placeholder mesh follows valleys and ravines more closely. This minimises the elevation difference in ravines, reducing the stencil-unmasked surface area where Z-fighting could still be visible at tile boundaries.
-
-### `disableTexture: true` on placeholder
-Prevents a texture fetch, leaving one more HTTP connection slot for detail tiles during the gate phase.
-
-### `getPolygonOffset: () => [0, 100]` retained
-Retained as a secondary defence against Z-fighting at tile boundary seams where stencil values transition from 1 to 0.
+### `meshMaxError: 'auto'` recommended
+Use the adaptive zoom-based `meshMaxError` (default 'auto') to allow deck.gl's automatic LOD switching. At Zoom 9, tessellation is naturally coarser; at Zoom 12+, finer triangles respect detail. This synergizes with the ancestor fallback — if a user rapidly pans across the Zoom 9 tile, it loads faster than if we force `meshMaxError: 30` at all zooms.
 
 ---
 
@@ -254,14 +195,14 @@ Retained as a secondary defence against Z-fighting at tile boundary seams where 
 
 | File | Change |
 |---|---|
-| `geoimage/src/layers/CogTerrainLayer.ts` | Add `stencilParameters` prop; merge into `SimpleMeshLayer` `parameters` |
-| `example/src/examples/CogTerrainLayerExample.tsx` | Add `detailLayerEnabled` gate; `stencilWriteMask`/`'not-equal'` stencil params on both layers; `[detail, placeholder, tile]` layer order; remove `activeRequests` |
+| `geoimage/src/layers/CogTerrainLayer.ts` | Update `renderSubLayers()` to calculate dynamic polygon offset based on `tile.index.z`; remove stencilParameters prop if present |
+| `example/src/examples/CogTerrainLayerExample.tsx` | Replace two-layer stencil approach with single-layer ancestor fallback; add `overviewLoaded` state; add `zoomOverride` and `onTileLoad` gate logic; remove `detailLayerEnabled`, stencil params, and device stencil setup |
 
 ---
 
 ## Out of Scope
 
 - HTTP/2 migration (investigate separately with infra team — would eliminate the root cause entirely)
-- Full LOD crop+upscale pipeline (re-evaluate if placeholder approach is insufficient)
-- `CogBitmapLayer` placeholder (bitmap tiles queue differently; less severe bottleneck)
+- Full LOD crop+upscale pipeline (re-evaluate if ancestor approach is insufficient)
+- `CogBitmapLayer` ancestor fallback (bitmap tiles queue differently; less severe bottleneck)
 - `CogTerrainGlazeExample.tsx` update (follow-up after `CogTerrainLayerExample.tsx` is validated)
