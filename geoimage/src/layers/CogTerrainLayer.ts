@@ -420,6 +420,9 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       // getPosition: (d) => [0, 0, 0],
       getColor: tileTexture ? [255, 255, 255] : color,
       wireframe,
+      
+      // ADDED: Forward parameters prop down to the SimpleMeshLayer for depthRange to work
+      parameters: this.props.parameters,
 	  });
   }
 

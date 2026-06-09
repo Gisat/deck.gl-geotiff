@@ -7,6 +7,7 @@ import { CogTerrainLayer, CogTiles, extractTerrainCoordinate } from '@gisatcz/de
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer } from '@deck.gl/layers';
+import { Matrix4 } from '@math.gl/core';
 
 // Updated: Properly handles WebMercator non-linear Y projection
 function getElevationAtInfo(info: any): number | null {
@@ -40,9 +41,10 @@ function getElevationAtInfo(info: any): number | null {
 }
 
 function CogTerrainLayerExample() {
-  const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_PHILIPPINES_DEM;
+  const mainCog = COG_TERRAIN_EXAMPLES.MISICUNI;
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
+  const [detailLayerEnabled, setDetailLayerEnabled] = useState(false);
 
   const terrainOptions: GeoImageOptions = {
     ...mainCog.defaultOptions as GeoImageOptions,
@@ -85,8 +87,8 @@ function CogTerrainLayerExample() {
       );
 
       setViewState({
-        longitude: 120.9546,
-        latitude: 15.0062,
+        longitude: -66.33,
+        latitude: -17.09,
         zoom: Math.min(19, zoom + 3),
         pitch: 60,
         bearing: 0,
@@ -99,6 +101,7 @@ function CogTerrainLayerExample() {
   const layers = useMemo(() => {
     if (!viewState || !initializedCog) return [];
 
+    // 1. Map Overlays (OSM / Satellite imagery)
     const tileLayer = new TileLayer({
       data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
       id: 'standard-tile-layer',
@@ -117,18 +120,53 @@ function CogTerrainLayerExample() {
           bounds: [west, south, east, north],
         });
       },
-    })
+    });
 
-    const cogLayer = new CogTerrainLayer({
-      id: 'cog-terrain-layer',
+    // 2. Fast Placeholder Layer — boots first to win network priority
+    //    intentionally does NOT receive `cogTiles: initializedCog` so it creates
+    //    an isolated CogTiles instance with its own worker pool and network queue.
+    const terrainPlaceholderLayer = new CogTerrainLayer({
+      id: 'cog-terrain-placeholder',
       elevationData: mainCog.url,
-      cogTiles: initializedCog,
       isTiled: true,
       tileSize: 256,
-      meshMaxError: 'auto',
+      meshMaxError: 30, // tighter than 80 so placeholder hugs ravines better while loading
+      operation: 'terrain+draw',
+
+      // Clean baseline optimizations
+      // disableTexture: true,       // Bypasses extra imagery requests to clear the HTTP/1.1 queue
+      // color: [180, 180, 180],     // Neutral grey
+      
+      // getPolygonOffset: (params: { layerIndex: number }) => [0, 100], // Depth buffer cushion
+      // modelMatrix: new Matrix4().translate([0, 0, -650]),
+      // getPolygonOffset: () => [10, 10000],
+      parameters: {
+        depthRange: [0.01, 1.0] 
+      },
+
+      terrainOptions,
+      pickable: false,
+      zoomOverride: initializedCog.getZoomRange()[0], // lock to overview zoom
+
+      // Gate detail layer until placeholder has rendered at least one tile
+      onTileLoad: () => setDetailLayerEnabled(true),
+      visible: true,
+    });
+
+    // 3. High-Res Actual Layer — constructed only after placeholder gives the gate
+    const cogLayer = detailLayerEnabled ? new CogTerrainLayer({
+      id: 'cog-terrain-layer',
+      elevationData: mainCog.url,
+      cogTiles: initializedCog, // share pre-initialized cache and main worker pool
+      isTiled: true,
+      tileSize: 256,
+      meshMaxError: 'auto', // adaptive as before
       operation: 'terrain+draw',
       terrainOptions,
       pickable: '3d',
+      parameters: {
+        depthRange: [0.0, 0.98] 
+      },
       onClick: (info: any) => {
         const coord = extractTerrainCoordinate(info);
         if (coord) {
@@ -138,38 +176,24 @@ function CogTerrainLayerExample() {
             elevation: coord.elevation.toFixed(2),
           });
         } else {
-          // Fallback: attempt to get elevation via traditional method
           const elevation = getElevationAtInfo(info);
           if (elevation !== null) {
             console.log('Fallback elevation at click:', elevation);
           }
         }
       },
+    }) : null;
 
-    });
-
-    // Placeholder layer — locked to lowest zoom, instant tessellation
-    const terrainPlaceholderLayer = new CogTerrainLayer({
-      id: 'cog-terrain-placeholder',
-      elevationData: mainCog.url,
-      cogTiles: initializedCog,
-      isTiled: true,
-      tileSize: 256,
-      operation: 'terrain+draw',
-      // disableTexture: true,
-        // color: [180, 180, 180],
-      getPolygonOffset: (params: { layerIndex: number }) => [0, 100],
-      terrainOptions,
-      pickable: false,
-      zoomOverride: initializedCog.getZoomRange()[0],
-    });
-
+    // Final render order: standard bottom-to-top
+    // 1. Sunken placeholder loads instantly
+    // 2. High-res detail pops in and naturally covers the sunken placeholder
+    // 3. OSM overlays drape over whatever geometry is on top
     return [
-      // tileLayer,
       terrainPlaceholderLayer,
       cogLayer,
-    ];
-  }, [viewState, initializedCog]);
+      // tileLayer,
+    ].filter(Boolean);
+  }, [viewState, initializedCog, detailLayerEnabled]);
 
   if (!viewState) {
     return (
@@ -184,20 +208,19 @@ function CogTerrainLayerExample() {
 
   return (
     <DeckGL
+      glOptions={{ stencil: true }}
       getCursor={() => 'crosshair'}
       viewState={viewState}
       onViewStateChange={({ viewState: newViewState }) => setViewState(newViewState as any)}
       controller
       layers={layers}
       getTooltip={(info: any) => {
-        // Use the new utility to extract full terrain coordinates
         const coord = extractTerrainCoordinate(info);
         if (coord) {
           return {
             text: `Lat: ${coord.latitude.toFixed(4)}, Lon: ${coord.longitude.toFixed(4)}, Elevation: ${coord.elevation.toFixed(1)}m`,
           };
         }
-        // Fallback: show elevation if 3D coordinate extraction not available
         const elevation = getElevationAtInfo(info);
         if (elevation !== null) {
           return {
