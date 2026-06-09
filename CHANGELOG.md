@@ -1,3 +1,15 @@
+## [2.6.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.2...v2.6.0-dev.3) (2026-06-09)
+
+### Features
+
+* add useTerrainZRange hook for 3D overlay tile culling ([5f6fe1e](https://github.com/Gisat/deck.gl-geotiff/commit/5f6fe1ebe670f1bcf665653b6c5854e69fdef663))
+* add zRange callback to CogTerrainLayer for 3D overlay tile culling ([b2e3f90](https://github.com/Gisat/deck.gl-geotiff/commit/b2e3f90b5f8dd46a1561068b4f0e5190315988b0))
+
+### Bug Fixes
+
+* move useTerrainZRange to subpath export and add build configuration ([193d4a9](https://github.com/Gisat/deck.gl-geotiff/commit/193d4a989c5284c8c317c5ddb128be52c3a8db21))
+* update vite config with array-based alias for subpath resolution ([71b4359](https://github.com/Gisat/deck.gl-geotiff/commit/71b4359e4450e3b23e18dad759f1a8fbe2f01fc7))
+
 ## [2.6.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.1...v2.6.0-dev.2) (2026-05-28)
 
 ### Features
