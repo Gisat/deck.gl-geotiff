@@ -48,6 +48,7 @@ export class TerrainGenerator {
 
       mesh = { vertices: result.vertices, triangles: result.triangles };
       meshTerrainForAttributes = result.terrain; // ← Transferred back from worker
+      meshTerrain = result.terrain; // ← Reassign for downstream use (tileResult.raw, etc.)
     } else {
       // ❌ FALLBACK: Synchronous (old behavior, kept for safety)
       switch (options.tesselator) {
