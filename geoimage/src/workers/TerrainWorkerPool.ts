@@ -74,7 +74,7 @@ class TerrainWorkerPool {
 
     // Check if already aborted
     if (signal?.aborted) {
-      throw new Error('Task aborted before dispatch');
+      throw new DOMException('Aborted', 'AbortError');
     }
 
     const taskId = `task_${++this.taskCounter}`;
@@ -88,13 +88,18 @@ class TerrainWorkerPool {
       // Handle abort signal
       if (signal) {
         signal.addEventListener('abort', () => {
+          // Guard against late aborts: only process if task still exists
+          if (!this.pendingTasks.has(taskId)) {
+            return;
+          }
+          
           task.aborted = true;
           this.pendingTasks.delete(taskId);
 
           // Send abort to the same worker that owns this task
           worker.postMessage({ type: 'abort', taskId });
 
-          reject(new Error('Mesh computation aborted'));
+          reject(new DOMException('Aborted', 'AbortError'));
         }, { once: true });
       }
 
@@ -198,7 +203,7 @@ class TerrainWorkerPool {
   terminate() {
     // Reject all pending tasks before terminating workers
     this.pendingTasks.forEach(task => {
-      task.reject(new Error('TerrainWorkerPool terminated'));
+      task.reject(new DOMException('Worker pool terminated', 'AbortError'));
     });
     
     this.pendingTasks.clear();
