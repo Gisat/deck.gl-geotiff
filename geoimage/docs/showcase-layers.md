@@ -154,7 +154,55 @@ const terrainLayer = new CogTerrainLayer({
 });
 ```
 
-### B. Terrain with Draping (External Texture)
+### B. Progressive Loading (Automatic LOD Placeholders)
+
+**Use Case:** Eliminate blank-map delays when loading high-resolution terrain tiles over slow connections (HTTP/1.1 limit of 6 concurrent connections).
+
+When you create a `CogTerrainLayer` with `meshMaxError: 'auto'` and `isTiled: true`, progressive loading is **enabled by default**. The layer automatically:
+
+1. **Loads low-resolution overview tiles first** (e.g., Zoom 9) with exclusive network access
+2. **Keeps overview visible** as a placeholder while detail tiles (e.g., Zoom 12+) fetch in the background
+3. **Fades in high-resolution tiles** as they load without Z-fighting artifacts
+4. **Re-shows overview** when you zoom back out to prevent blank areas
+
+No configuration needed — it just works!
+
+```typescript
+const progressiveTerrainLayer = new CogTerrainLayer({
+  id: 'terrain-progressive',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  tileSize: 256,
+  meshMaxError: 'auto', // ← Enables adaptive LOD + progressive loading
+  operation: 'terrain+draw',
+  terrainOptions: {
+    type: 'terrain',
+    useHeatMap: true,
+    colorScale: ['#fde725', '#5dc962', '#20908d'],
+    colorScaleValueRange: [0, 4000],
+  }
+  // Progressive loading is now automatic!
+  // No additional props or state management required
+});
+```
+
+**Fine-tuning (Advanced):**
+
+- **Disable progressive loading:** Set `enableProgressiveLoading: false` if you need all tiles to load immediately
+- **Custom zoom threshold:** The default threshold is `minZoom + 3` — when you zoom out below this, the layer re-locks at `minZoom` to keep overview visible
+- **Custom `zoomOverride`:** For edge cases where you need to manually control which zoom level tiles are requested
+
+```typescript
+const customLayer = new CogTerrainLayer({
+  // ... base props ...
+  enableProgressiveLoading: true,    // Default: true
+  // zoomOverride: 9,                 // Optional: manually lock to Zoom 9
+});
+```
+
+> **Technical Details:** The layer uses deck.gl's native ancestor tile caching with dynamic polygon offset (`-(zoom * 1000)`) to prevent Z-fighting. Overview tiles stay cached in GPU memory and automatically render while detail tiles load, providing seamless progressive rendering without manual layer coordination.
+
+### C. Terrain with Draping (External Texture)
 Project a satellite image or tile service (XYZ) onto the 3D terrain.
 
 <img src="/geoimage/docs/images/cogTerrainLayer_overlay.jpg" width="60%" alt="Terrain Overlay" />

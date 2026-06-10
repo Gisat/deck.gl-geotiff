@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
@@ -44,8 +44,6 @@ function CogTerrainLayerExample() {
   const mainCog = COG_TERRAIN_EXAMPLES.MISICUNI;
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
-  const [overviewLoaded, setOverviewLoaded] = useState(false);
-  const overviewTileLoadedRef = useRef<number | null>(null);
   const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   const terrainOptions: GeoImageOptions = {
@@ -103,14 +101,6 @@ function CogTerrainLayerExample() {
   const layers = useMemo(() => {
     if (!viewState || !initializedCog) return [];
 
-    // Determine the minimum zoom level for the overview/ancestor tile gate
-    const minZoom = initializedCog.getZoomRange()[0];
-
-    // Dynamic zoomOverride based on viewport zoom: locked at minZoom for ancestor fallback,
-    // released at high zoom to allow detail tiles to fetch without HTTP/1.1 bottleneck
-    const isAtHighZoom = viewState.zoom > minZoom + 3;
-    const dynamicZoomOverride = isAtHighZoom ? undefined : minZoom;
-
     const cogLayer = new CogTerrainLayer({
       id: 'cog-terrain-layer',
       elevationData: mainCog.url,
@@ -122,23 +112,8 @@ function CogTerrainLayerExample() {
       terrainOptions,
       pickable: '3d',
       onZRangeUpdate: onZRangeUpdate,
-
-      // Network gate: dynamically lock at minZoom during moderate/low zoom to ensure
-      // ancestor tiles are available as fallback while panning/zooming
-      zoomOverride: !overviewLoaded ? minZoom : dynamicZoomOverride,
-
-      // 500ms debounce: ensure overview tile is fetched and rendered before releasing gate
-      onTileLoad: (tile) => {
-        if (tile.index.z === minZoom && !overviewLoaded) {
-          if (!overviewTileLoadedRef.current) {
-            overviewTileLoadedRef.current = Date.now();
-            setTimeout(() => {
-              setOverviewLoaded(true);
-              overviewTileLoadedRef.current = null;
-            }, 500);
-          }
-        }
-      },
+      // Progressive loading now automatic by default!
+      // No zoomOverride, no overviewLoaded, no onTileLoad gate needed
 
       onClick: (info: any) => {
         const coord = extractTerrainCoordinate(info);
@@ -183,7 +158,7 @@ function CogTerrainLayerExample() {
       cogLayer,
       // tileLayer  // OSM satellite drape (commented for now)
     ];
-  }, [viewState, initializedCog, overviewLoaded]);
+  }, [viewState, initializedCog]);
 
   if (!viewState) {
     return (

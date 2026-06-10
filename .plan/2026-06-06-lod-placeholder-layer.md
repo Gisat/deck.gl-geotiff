@@ -1,7 +1,9 @@
 # LOD Placeholder Layer — Progressive Terrain Loading
 
 **Date:** 2026-06-06  
-**Status:** Phase 3 — Single-Layer Ancestor Fallback + Dynamic Z-Offset
+**Status:** ✅ Complete — Automatic by Default (Refactored 2026-06-10)
+
+> **Note**: The initial implementation required manual state management in user applications. This was refactored on **2026-06-10** to make progressive loading **automatic by default** inside `CogTerrainLayer`. See [2026-06-10-automatic-progressive-loading.md](2026-06-10-automatic-progressive-loading.md) for the refactoring details.
 
 ---
 

@@ -82,6 +82,46 @@ Used for categorical data (land cover, classification).
 
 ---
 
+## Progressive Loading (CogTerrainLayer)
+
+When using `CogTerrainLayer` with `isTiled: true`, **progressive loading is enabled by default**. This automatically loads low-resolution overview tiles first, then requests high-resolution detail tiles, eliminating blank-map delays on slow connections.
+
+### How It Works
+
+1. **Boot phase:** Layer locks to `minZoom`, fetching only 1–4 overview tiles with exclusive HTTP/1.1 connection access (no queuing)
+2. **Overview loads:** After 500ms debounce ensures render to GPU, layer unlocks and requests detail tiles (Zoom 12+)
+3. **User zooms out:** Layer automatically re-locks at `minZoom` to keep overview tiles visible and prevent blank areas
+4. **Depth sorting:** Dynamic polygon offset (`-(zoom * 1000)`) ensures high-resolution tiles automatically depth-test in front of low-resolution ancestors
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **`enableProgressiveLoading`** | `boolean` | `true` | Enable automatic LOD placeholder behavior. When `true`, the layer starts by loading only overview tiles (`minZoom`), then releases to full zoom range after overview renders. When `false`, all visible tiles at current zoom are requested immediately. |
+| **`meshMaxError`** | `number` \| `'auto'` | `'auto'` | Error tolerance for mesh tessellation. Set to `'auto'` (recommended) for adaptive per-zoom error values that synergize with progressive loading. Lower values produce finer meshes (more triangles, slower). Set to a fixed number (e.g., `4.0`) for consistent tessellation across all zooms. |
+
+**Recommended configuration:**
+
+```typescript
+const progressiveTerrainLayer = new CogTerrainLayer({
+  id: 'terrain',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  meshMaxError: 'auto',           // ← Enables adaptive LOD + progressive loading
+  enableProgressiveLoading: true, // ← (Default; explicit for clarity)
+  // Progressive loading now works automatically!
+});
+```
+
+**Disabling progressive loading:**
+
+```typescript
+const detailedLayer = new CogTerrainLayer({
+  enableProgressiveLoading: false, // Requests all visible tiles immediately
+  // ...
+});
+```
+
+---
+
 ## Terrain Options
 
 These options apply specifically to `CogTerrainLayer` or when generating heightmaps. **All parameters are optional.**
