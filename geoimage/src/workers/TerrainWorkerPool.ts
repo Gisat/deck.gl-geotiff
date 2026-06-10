@@ -154,9 +154,40 @@ class TerrainWorkerPool {
     }
   }
 
-  // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
   private handleWorkerError(e: ErrorEvent) {
-    // Global worker errors are rare; errors are already handled in handleWorkerMessage
+    // Find which worker failed (e.target is the Worker instance)
+    const failedWorker = e.target as Worker;
+    
+    // Find all pending tasks assigned to this worker
+    const failedTaskIds: string[] = [];
+    this.pendingTasks.forEach((task, taskId) => {
+      if (task.worker === failedWorker) {
+        failedTaskIds.push(taskId);
+      }
+    });
+    
+    // Reject all tasks for the failed worker
+    for (const taskId of failedTaskIds) {
+      const task = this.pendingTasks.get(taskId);
+      if (task) {
+        this.pendingTasks.delete(taskId);
+        task.reject(new Error(`Worker crashed: ${e.message || 'Unknown error'}`));
+      }
+    }
+    
+    // Respawn the failed worker to maintain pool capacity
+    const workerIndex = this.workers.indexOf(failedWorker);
+    if (workerIndex !== -1) {
+      try {
+        const newWorker = new TerrainWorker();
+        newWorker.onmessage = this.handleWorkerMessage.bind(this);
+        newWorker.onerror = this.handleWorkerError.bind(this);
+        this.workers[workerIndex] = newWorker;
+      } catch (spawnError) {
+        // eslint-disable-next-line no-console
+        console.error('[TerrainWorkerPool] Failed to respawn worker:', spawnError);
+      }
+    }
   }
 
   /**
