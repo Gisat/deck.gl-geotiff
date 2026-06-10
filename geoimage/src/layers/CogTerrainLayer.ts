@@ -302,8 +302,12 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     // When the external cogTiles instance is swapped (e.g. mode switch), update state so
     // renderLayers picks up the new reference and the TileLayer updateTrigger fires a refetch
     // while keeping old tile content visible until new tiles are ready.
+    // Also reset progressive loading state for the new dataset.
     if (props.cogTiles && props.cogTiles !== oldProps.cogTiles) {
-      this.setState({ terrainCogTiles: props.cogTiles });
+      this.setState({ terrainCogTiles: props.cogTiles, overviewLoaded: false, overviewTileLoadTime: null });
+    } else if (elevationDataChanged) {
+      // Reset progressive loading state when dataset URL changes
+      this.setState({ overviewLoaded: false, overviewTileLoadTime: null });
     }
 
 	  if (props.workerUrl) {

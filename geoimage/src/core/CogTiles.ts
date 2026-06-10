@@ -70,7 +70,7 @@ class CogTiles {
 
     // Get reference to global worker pool for terrain tiles
     // Do NOT create a new pool per instance — reuse the singleton
-    if (options.type === 'terrain') {
+    if (options.type === 'terrain' && typeof Worker !== 'undefined') {
       this.workerPool = getGlobalTerrainWorkerPool();
     }
   }
