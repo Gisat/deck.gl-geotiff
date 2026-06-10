@@ -25,7 +25,7 @@ export class TerrainGenerator {
     // For kernel tiles, the mesh uses the inner 257×257 sub-grid (rows 1–257, cols 1–257)
     // so that row 0 / col 0 (kernel padding) is dropped while the bottom/right stitching
     // overlap is preserved.
-    const meshTerrain = isKernel ? this.extractMeshRaster(terrain) : terrain;
+    let meshTerrain = isKernel ? this.extractMeshRaster(terrain) : terrain;
     const meshWidth = isKernel ? 257 : width;
     const meshHeight = isKernel ? 257 : height;
 
