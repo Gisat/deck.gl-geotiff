@@ -172,6 +172,7 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
    * Callback fired when the terrain zRange is updated.
    * Used to sync overlay TileLayer zRange for proper 3D frustum culling.
    */
+  // eslint-disable-next-line no-unused-vars
   onZRangeUpdate?: (zRange: ZRange | null) => void;
 
 	/**

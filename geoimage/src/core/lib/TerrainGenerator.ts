@@ -7,7 +7,6 @@ import { BitmapGenerator } from './BitmapGenerator';
 import { KernelGenerator } from './KernelGenerator';
 import { ReliefCompositor } from './ReliefCompositor';
 import { isF32NoData } from './numberUtils';
-import type { ComputeMeshOptions } from '../../workers/TerrainWorkerPool';
 
 export class TerrainGenerator {
   static async generate(

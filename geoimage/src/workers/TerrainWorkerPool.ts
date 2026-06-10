@@ -6,7 +6,7 @@
  * to avoid expensive worker creation/destruction during deck.gl layer recreations.
  */
 
-// @ts-ignore - The import statement will be handled by both Rollup (web-worker: prefix)
+// @ts-expect-error - The import statement will be handled by both Rollup (web-worker: prefix)
 // and our Vite plugin (web-worker: → ?worker conversion)
 import TerrainWorker from 'web-worker:./terrain.worker.ts';
 
@@ -17,7 +17,9 @@ interface MeshResult {
 }
 
 interface PendingTask {
+  // eslint-disable-next-line no-unused-vars
   resolve: (result: MeshResult) => void;
+  // eslint-disable-next-line no-unused-vars
   reject: (error: Error) => void;
   aborted: boolean;
   worker: Worker; // ← Track which worker owns this task for correct abort routing
@@ -60,7 +62,6 @@ class TerrainWorkerPool {
       this.workers.push(worker);
     }
 
-    console.log(`[TerrainWorkerPool] Initialized with ${size} workers`);
   }
 
   /**
@@ -153,9 +154,9 @@ class TerrainWorkerPool {
     }
   }
 
+  // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
   private handleWorkerError(e: ErrorEvent) {
-    console.error('[TerrainWorkerPool] Worker error:', e.message);
-    // Global worker errors are rare; log for debugging
+    // Global worker errors are rare; errors are already handled in handleWorkerMessage
   }
 
   /**
@@ -167,7 +168,6 @@ class TerrainWorkerPool {
     this.workers.forEach(w => w.terminate());
     this.workers = [];
     this.pendingTasks.clear();
-    console.log('[TerrainWorkerPool] Terminated');
   }
 }
 
