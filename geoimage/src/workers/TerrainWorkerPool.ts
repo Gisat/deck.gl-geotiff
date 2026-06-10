@@ -196,9 +196,14 @@ class TerrainWorkerPool {
    * on app shutdown, not on individual layer unmount.
    */
   terminate() {
+    // Reject all pending tasks before terminating workers
+    this.pendingTasks.forEach(task => {
+      task.reject(new Error('TerrainWorkerPool terminated'));
+    });
+    
+    this.pendingTasks.clear();
     this.workers.forEach(w => w.terminate());
     this.workers = [];
-    this.pendingTasks.clear();
   }
 }
 
