@@ -1,3 +1,9 @@
+## [2.6.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.3...v2.6.0-dev.4) (2026-06-10)
+
+### Bug Fixes
+
+* restore missing useMemo dependencies for zRange feature ([72d29fb](https://github.com/Gisat/deck.gl-geotiff/commit/72d29fbeff6c59e1bc693263b80b69ba71573f76))
+
 ## [2.6.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.2...v2.6.0-dev.3) (2026-06-09)
 
 ### Features
