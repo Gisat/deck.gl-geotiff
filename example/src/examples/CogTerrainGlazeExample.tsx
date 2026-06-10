@@ -181,7 +181,7 @@ function CogTerrainGlazeExample() {
     }
 
     return layerStack;
-  }, [viewState, cogState]);
+  }, [viewState, cogState, zRange, onZRangeUpdate]);
 
   if (!viewState) {
     return (

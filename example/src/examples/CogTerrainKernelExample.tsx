@@ -4,6 +4,7 @@ import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
@@ -209,7 +210,7 @@ function CogTerrainKernelExample() {
         pickable: true,
       }),
     ];
-  }, [viewState, cogState]);
+  }, [viewState, cogState, zRange, onZRangeUpdate]);
 
   const isTransitioning = cogState?.mode !== mode;
 

@@ -525,13 +525,15 @@ function TerrainWithOSM() {
       terrainOptions: { type: 'terrain' },
       onZRangeUpdate: onZRangeUpdate,  // ← 3. Sync elevation bounds to hook
     }),
-  ], [zRange]);
+  ], [zRange, onZRangeUpdate]);  // ⚠️ CRITICAL: Include both hook values in dependencies!
 
   return <DeckGL layers={layers} /* ... */ />;
 }
 ```
 
 **That's it!** 3 lines: import hook, call hook, wire to layers.
+
+> ⚠️ **CRITICAL:** If you wrap the layers array in `useMemo`, **you MUST include `zRange` and `onZRangeUpdate` in the dependency array**, as shown above. Without these dependencies, when the terrain updates the elevation bounds, React won't re-create the layers array with the new `zRange` value. This causes the overlay tiles to remain at the stale `zRange: null`, resulting in tile clipping when the viewport is tilted.
 
 #### Alternative: Manual State Management
 
