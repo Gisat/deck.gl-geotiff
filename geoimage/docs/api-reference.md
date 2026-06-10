@@ -296,27 +296,37 @@ When rendering overlay tile layers (OSM, satellite, CartoDB) over 3D terrain wit
 ```typescript
 import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
 import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { useMemo } from 'react';
 
 function Map3D() {
   const { zRange, onZRangeUpdate } = useTerrainZRange();
 
-  return (
-    <DeckGL layers={[
-      new CogTerrainLayer({
-        id: 'terrain',
-        elevationData: 'https://example.com/dem.tif',
-        terrainOptions: { type: 'terrain' },
-        onZRangeUpdate,
-      }),
-      new TileLayer({
-        id: 'osm-overlay',
-        data: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        zRange,  // Pass elevation bounds from terrain
-      }),
-    ]} />
-  );
+  const layers = useMemo(() => [
+    new CogTerrainLayer({
+      id: 'terrain',
+      elevationData: 'https://example.com/dem.tif',
+      terrainOptions: { type: 'terrain' },
+      onZRangeUpdate,
+    }),
+    new TileLayer({
+      id: 'osm-overlay',
+      data: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      zRange,  // Pass elevation bounds from terrain
+    }),
+  ], [zRange, onZRangeUpdate]);  // ⚠️ CRITICAL: Include both hook values!
+
+  return <DeckGL layers={layers} />;
 }
 ```
+
+> ⚠️ **CRITICAL useMemo Dependencies:** When using `useMemo` to create your layers array, **you MUST include `zRange` and `onZRangeUpdate` in the dependency array**. Without these dependencies:
+> - When the terrain layer updates the elevation bounds (as tiles load), the `onZRangeUpdate` callback fires
+> - React won't re-create the layers array because the dependencies haven't changed
+> - The TileLayer keeps the stale `zRange: null` value
+> - **Result:** Overlay tiles clip when the viewport is tilted, defeating the fix
+>
+> **Summary:** `[zRange, onZRangeUpdate]` is not optional—it's required for the feature to work.
 
 **Manual Alternative (without hook):**
 ```typescript
