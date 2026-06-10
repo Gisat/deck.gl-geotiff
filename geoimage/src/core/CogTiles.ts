@@ -666,7 +666,7 @@ class CogTiles {
         height: requiredSize,
         bounds: bounds ?? [0, 0, 0, 0],
         cellSizeMeters,
-      }, generatorOptions, resolvedMeshMaxError, this.workerPool);
+      }, generatorOptions, resolvedMeshMaxError, this.workerPool, controller.signal);
     })();
 
     const entry = {
@@ -730,7 +730,7 @@ class CogTiles {
       height: this.tileSize,
       bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
-    }, this.options, meshMaxError ?? 4.0, this.workerPool);
+    }, this.options, meshMaxError ?? 4.0, this.workerPool, signal);
   }
 
   private async getBitmapTile(x: number, y: number, z: number, bounds: Bounds | undefined, cellSizeMeters: number, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
@@ -870,7 +870,7 @@ class CogTiles {
           height: FETCH_SIZE,
           bounds: bounds ?? [0, 0, 0, 0],
           cellSizeMeters,
-        }, generatorOptions, resolvedMeshMaxError, this.workerPool);
+        }, generatorOptions, resolvedMeshMaxError, this.workerPool, signal);
 
         if (tileResult) results.push(tileResult);
       }

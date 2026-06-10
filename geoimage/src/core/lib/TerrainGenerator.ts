@@ -13,7 +13,8 @@ export class TerrainGenerator {
     input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds; cellSizeMeters?: number },
     options: GeoImageOptions,
     meshMaxError: number,
-    workerPool?: any // TerrainWorkerPool (optional for flexibility)
+    workerPool?: any, // TerrainWorkerPool (optional for flexibility)
+    signal?: AbortSignal,
   ): Promise<TileResult> {
     const { width, height } = input;
     const isKernel = width === 258;
@@ -44,6 +45,7 @@ export class TerrainGenerator {
         tesselator: options.tesselator || 'martini',
         width: meshWidth,
         height: meshHeight,
+        signal, // ← Thread cancellation signal to worker
       });
 
       mesh = { vertices: result.vertices, triangles: result.triangles };
