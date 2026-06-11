@@ -289,6 +289,29 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       this.state.terrainCogTiles.clearTileResultCache(); // Invalidate cached tiles from previous channel
     }
 
+    // Update kernel visualization options when hillshade/slope/relief settings change.
+    // These affect tile texture generation — the cache must be cleared and options synced
+    // so the next getTileData call uses the updated kernel settings.
+    const kernelOptionsChanged =
+      props?.terrainOptions?.useHillshade !== oldProps.terrainOptions?.useHillshade ||
+      props?.terrainOptions?.useSlope !== oldProps.terrainOptions?.useSlope ||
+      props?.terrainOptions?.useSwissRelief !== oldProps.terrainOptions?.useSwissRelief ||
+      props?.terrainOptions?.hillshadeAzimuth !== oldProps.terrainOptions?.hillshadeAzimuth ||
+      props?.terrainOptions?.hillshadeAltitude !== oldProps.terrainOptions?.hillshadeAltitude ||
+      props?.terrainOptions?.zFactor !== oldProps.terrainOptions?.zFactor;
+
+    if (kernelOptionsChanged && this.state.terrainCogTiles) {
+      // Sync updated options into the shared CogTiles instance
+      this.state.terrainCogTiles.options.useHillshade = props.terrainOptions?.useHillshade;
+      this.state.terrainCogTiles.options.useSlope = props.terrainOptions?.useSlope;
+      this.state.terrainCogTiles.options.useSwissRelief = props.terrainOptions?.useSwissRelief;
+      this.state.terrainCogTiles.options.hillshadeAzimuth = props.terrainOptions?.hillshadeAzimuth;
+      this.state.terrainCogTiles.options.hillshadeAltitude = props.terrainOptions?.hillshadeAltitude;
+      this.state.terrainCogTiles.options.zFactor = props.terrainOptions?.zFactor;
+      // Invalidate cached tiles — kernel output is baked into the texture
+      this.state.terrainCogTiles.clearTileResultCache();
+    }
+
     // Update skipTexture when wireframe/operation/disableTexture changes so cache keys are correct
     const newSkipTexture = !!(props?.wireframe || props?.operation === 'terrain' || props?.disableTexture);
     const oldSkipTexture = !!(oldProps?.wireframe || oldProps?.operation === 'terrain' || oldProps?.disableTexture);
@@ -536,6 +559,12 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
             terrainCogTiles: this.state.terrainCogTiles,
             skipTexture: !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture),
             useChannel: this.props.terrainOptions?.useChannel,
+            useHillshade: this.props.terrainOptions?.useHillshade,
+            useSlope: this.props.terrainOptions?.useSlope,
+            useSwissRelief: this.props.terrainOptions?.useSwissRelief,
+            hillshadeAzimuth: this.props.terrainOptions?.hillshadeAzimuth,
+            hillshadeAltitude: this.props.terrainOptions?.hillshadeAltitude,
+            zFactor: this.props.terrainOptions?.zFactor,
           },
           renderSubLayers: {
             disableTexture: this.props.disableTexture,
