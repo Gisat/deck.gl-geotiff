@@ -490,17 +490,12 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 
   renderLayers(): Layer | null | LayersList {
 	  const {
-      // color,
-      // material,
       elevationData,
-      // texture,
-      // wireframe,
       meshMaxError,
       elevationDecoder,
       tileSize,
       extent,
       maxRequests,
-      // onTileLoad, // Handled by internal wrapper in TileLayer props
       onTileUnload,
       onTileError,
       maxCacheSize,
@@ -508,76 +503,71 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       refinementStrategy,
 	  } = this.props;
 
-	  if (this.state.isTiled && this.state.initialized) {
-      // Auto-enable LOD gate: start with minZoom, release after overview loads
-      // User's explicit zoomOverride takes precedence over auto-gate
-      let effectiveMinZoom = this.state.minZoom;
-      let effectiveMaxZoom = this.state.maxZoom;
+	  if (!this.state.isTiled || !this.state.initialized) {
+      return null;
+    }
 
-      if (this.props.zoomOverride !== undefined) {
-        // User explicitly set zoomOverride — use it
-        effectiveMinZoom = this.props.zoomOverride;
-        effectiveMaxZoom = this.props.zoomOverride;
-      } else if (this.props.enableProgressiveLoading) {
-        if (!this.state.overviewLoaded) {
-          // Auto-gate: lock at minZoom until the overview tile has loaded
-          effectiveMinZoom = this.state.minZoom;
-          effectiveMaxZoom = this.state.minZoom;
-        }
-        // else: overview loaded → use full zoom range
-      }
+    // Auto-enable LOD gate: lock at minZoom until overview tile loads, then release to full range.
+    // User's explicit zoomOverride takes precedence over auto-gate.
+    let effectiveMinZoom = this.state.minZoom;
+    let effectiveMaxZoom = this.state.maxZoom;
 
-      return new TileLayer<MeshAndTexture | null>(
-		  this.getSubLayerProps({
-          id: 'tiles',
-		  }),
-		  {
-          getTileData: this.getTiledTerrainData.bind(this),
-          renderSubLayers: this.renderSubLayers.bind(this),
-          pickable: this.props.pickable,
-          onClick: this.props.onClick,
-          updateTriggers: {
-			      getTileData: {
-              elevationData: urlTemplateToUpdateTrigger(elevationData),
-              meshMaxError,
-              elevationDecoder,
-              terrainCogTiles: this.state.terrainCogTiles,
-              skipTexture: !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture),
-              useChannel: this.props.terrainOptions?.useChannel,
-			      },
-              renderSubLayers: {
-                disableTexture: this.props.disableTexture,
-                terrainOptions: this.props.terrainOptions,
-              },
+    if (this.props.zoomOverride !== undefined) {
+      effectiveMinZoom = this.props.zoomOverride;
+      effectiveMaxZoom = this.props.zoomOverride;
+    } else if (this.props.enableProgressiveLoading && !this.state.overviewLoaded) {
+      // Gate: lock at minZoom until the overview viewport is fully covered
+      effectiveMinZoom = this.state.minZoom;
+      effectiveMaxZoom = this.state.minZoom;
+    }
+
+    return new TileLayer<MeshAndTexture | null>(
+      this.getSubLayerProps({ id: 'tiles' }),
+      {
+        getTileData: this.getTiledTerrainData.bind(this),
+        renderSubLayers: this.renderSubLayers.bind(this),
+        pickable: this.props.pickable,
+        onClick: this.props.onClick,
+        updateTriggers: {
+          getTileData: {
+            elevationData: urlTemplateToUpdateTrigger(elevationData),
+            meshMaxError,
+            elevationDecoder,
+            terrainCogTiles: this.state.terrainCogTiles,
+            skipTexture: !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture),
+            useChannel: this.props.terrainOptions?.useChannel,
           },
-          onViewportLoad: this.onViewportLoad.bind(this),
-          zRange: this.state.zRange || null,
-          tileSize,
-          minZoom: effectiveMinZoom,
-          maxZoom: effectiveMaxZoom,
-          extent,
-          maxRequests,
-          onTileLoad: (tile) => {
-            // Release LOD gate immediately once any minZoom tile finishes loading
-            if (
-              this.props.enableProgressiveLoading &&
-              tile.index.z === this.state.minZoom &&
-              !this.state.overviewLoaded
-            ) {
-              this.setState({ overviewLoaded: true });
-            }
-
-            // Call user's onTileLoad callback if provided
-            this.props.onTileLoad?.(tile);
+          renderSubLayers: {
+            disableTexture: this.props.disableTexture,
+            terrainOptions: this.props.terrainOptions,
           },
-          onTileUnload,
-          onTileError,
-          maxCacheSize,
-          maxCacheByteSize,
-          refinementStrategy,
-		  },
-      );
-	  }
-    return null;
-  }
+        },
+        onViewportLoad: this.onViewportLoad.bind(this),
+        zRange: this.state.zRange || null,
+        tileSize,
+        minZoom: effectiveMinZoom,
+        maxZoom: effectiveMaxZoom,
+        extent,
+        maxRequests,
+        onTileLoad: (tile) => {
+          // Release progressive loading gate as soon as any minZoom tile finishes loading.
+          // This fires mid-cycle so the TileLayer immediately re-selects high-res tiles
+          // for the current viewport without requiring a zoom/pan interaction.
+          if (
+            this.props.enableProgressiveLoading &&
+            tile.index.z === this.state.minZoom &&
+            !this.state.overviewLoaded
+          ) {
+            this.setState({ overviewLoaded: true });
+          }
+          this.props.onTileLoad?.(tile);
+        },
+        onTileUnload,
+        onTileError,
+        maxCacheSize,
+        maxCacheByteSize,
+        refinementStrategy,
+      },
+    );
+	}
 }

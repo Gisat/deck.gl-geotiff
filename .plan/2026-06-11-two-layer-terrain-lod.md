@@ -1,7 +1,7 @@
 # Two-Layer Terrain LOD — Persistent Overview Fallback
 
 **Date:** 2026-06-11  
-**Status:** Planned
+**Status:** ❌ Abandoned — See "Why This Approach Fails" section below.
 
 **Predecessor:** `.plan/2026-06-10-automatic-progressive-loading.md`
 
@@ -202,3 +202,35 @@ return [overviewLayer, detailLayer].filter(Boolean) as LayersList;
 5. **enableProgressiveLoading: false**: Detail layer is created immediately (no gate), overview layer still acts as permanent fallback
 6. **Picking**: Both layers share `pickable` and `onClick` from `sharedTileLayerProps`
 7. **Z-fighting**: Detail tiles always render in front of overview tiles (confirmed by polygon offset fix from predecessor plan)
+
+---
+
+## Why This Approach Fails — Post-Implementation Analysis
+
+This plan was implemented and then **reverted** because of a fundamental geometric artifact.
+
+### The Problem: 3D Mesh Intersection
+
+`polygonOffset` (via `getPolygonOffset`) only applies a sub-pixel depth-buffer bias. It works correctly for coplanar 2D geometry (e.g. a flat polygon draped over a flat map). However, terrain layers render macroscopic **3D meshes** via `SimpleMeshLayer`. A low-resolution zoom-9 mountain peak can physically protrude hundreds of world-space meters higher or wider than the high-resolution zoom-14 mesh covering the same area. A depth-buffer bias of any magnitude cannot hide this physical intersection — the low-res mesh will visibly pierce through the high-res mesh.
+
+### The Actual Behaviour of deck.gl `best-available`
+
+Source analysis of `tileset-2d.ts` reveals that `best-available` (`updateTileStateDefault`) has **two fallback paths**:
+
+```
+For each selected tile:
+1. getPlaceholderInAncestors(tile)  →  show cached lower-zoom ancestor
+2. if (1) fails: getPlaceholderInChildren(tile)  →  show cached higher-zoom children
+```
+
+This means:
+- **Zooming out from a cached area**: Selected zoom-9 tile has no ancestors, but `getPlaceholderInChildren` finds cached zoom-12 tiles → **no blank, high-res tiles shown while zoom-9 loads** ✅
+- **Panning to a completely new area at high zoom, then zooming out**: No tiles cached at any zoom for the new area → **brief blank** ❌
+
+The brief blank case only affects brand-new uncached areas. The tiles load quickly (low-res overview = small data). This is acceptable behaviour and matches what all standard map applications do.
+
+### Conclusion
+
+The two-layer approach solved a narrow edge case (brief blank for new areas) at the cost of systematic 3D geometry artifacts across the entire terrain surface. The correct architecture is a **single TileLayer** with `best-available` refinement strategy. The `overviewLoaded` gate (implemented in the predecessor plan) handles the initial-load case. The brief blank for new uncached areas is expected and acceptable.
+
+**Future improvement path (if needed):** A custom `TilesetClass` that overrides `_getNearestAncestor` to proactively request ancestor tiles (not just look them up in cache) would solve the new-area blank case without any layer duplication. This would be a contribution to the deck.gl tileset internals.
