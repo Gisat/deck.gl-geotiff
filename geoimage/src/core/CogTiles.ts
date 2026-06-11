@@ -4,6 +4,7 @@ import { fromUrl, GeoTIFF, type BlockedSourceOptions } from 'geotiff';
 import GeoImage from './GeoImage';
 import { GeoImageOptions, TileResult, TypedArray } from './types';
 import { ReliefCompositor } from './lib/ReliefCompositor';
+import { getGlobalTerrainWorkerPool } from '../workers/TerrainWorkerPool';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
@@ -56,6 +57,7 @@ class CogTiles {
   // future cache hits just await the already-resolved promise directly.
   private cache = new TileCacheManager();
   private tileReader?: TileReader;
+  private workerPool?: any; // TerrainWorkerPool (for terrain tiles)
 
   // Store initialization promise to prevent concurrent duplicate initializations
   private initializePromise?: Promise<void>;
@@ -65,6 +67,12 @@ class CogTiles {
 
   constructor(options: GeoImageOptions) {
     this.options = { ...CogTilesGeoImageOptionsDefaults, ...options };
+
+    // Get reference to global worker pool for terrain tiles
+    // Do NOT create a new pool per instance — reuse the singleton
+    if (options.type === 'terrain') {
+      this.workerPool = getGlobalTerrainWorkerPool();
+    }
   }
 
   async initializeCog(url: string) {
@@ -658,7 +666,7 @@ class CogTiles {
         height: requiredSize,
         bounds: bounds ?? [0, 0, 0, 0],
         cellSizeMeters,
-      }, generatorOptions, resolvedMeshMaxError);
+      }, generatorOptions, resolvedMeshMaxError, this.workerPool, controller.signal);
     })();
 
     const entry = {
@@ -722,7 +730,7 @@ class CogTiles {
       height: this.tileSize,
       bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
-    }, this.options, meshMaxError ?? 4.0);
+    }, this.options, meshMaxError ?? 4.0, this.workerPool, signal);
   }
 
   private async getBitmapTile(x: number, y: number, z: number, bounds: Bounds | undefined, cellSizeMeters: number, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
@@ -746,7 +754,7 @@ class CogTiles {
       height: this.tileSize,
       bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
-    }, this.options, meshMaxError ?? 4.0);
+    }, this.options, meshMaxError ?? 4.0, this.workerPool);
   }
 
   async getTileAllBands(x: number, y: number, z: number, meshMaxError?: number, signal?: AbortSignal, bounds?: Bounds): Promise<TileResult[]> {
@@ -862,7 +870,7 @@ class CogTiles {
           height: FETCH_SIZE,
           bounds: bounds ?? [0, 0, 0, 0],
           cellSizeMeters,
-        }, generatorOptions, resolvedMeshMaxError);
+        }, generatorOptions, resolvedMeshMaxError, this.workerPool, signal);
 
         if (tileResult) results.push(tileResult);
       }

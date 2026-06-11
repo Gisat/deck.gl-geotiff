@@ -4,6 +4,7 @@ import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 import json from '@rollup/plugin-json';
 import filesize from 'rollup-plugin-filesize';
+import webWorkerLoader from 'rollup-plugin-web-worker-loader';
 import path from 'path';
 
 const packageJson = {
@@ -32,6 +33,15 @@ const external = [
 // Reusable plugin stack
 const getPlugins = (isEsm) => [
   json(),
+  // ⚠️ CRITICAL: webWorkerLoader must come BEFORE resolve() and typescript()
+  // so it can intercept worker imports before resolution
+  webWorkerLoader({
+    targetPlatform: 'browser',
+    inline: true,           // ← Inline worker as base64 Blob URL
+    loadPath: '',           // ← No external .js files
+    preserveSource: false,  // ← Remove source after bundling
+    extensions: ['.ts'],    // ← Support TypeScript workers
+  }),
   resolve({
     preferBuiltins: true,
     browser: true,

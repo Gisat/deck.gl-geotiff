@@ -9,5 +9,6 @@ export { CogBitmapLayer, CogTerrainLayer } from './layers/index';
 export { CogTiles, GeoImage } from './core/index';
 export { suppressGlobalAbortErrors } from './utils/suppressAbortErrors';
 export { extractTerrainCoordinate, sampleTerrainTileCoordinates } from './utils/terrainPickingUtils';
+export { terminateGlobalTerrainWorkerPool } from './workers/TerrainWorkerPool';
 export type { GeoImageOptions } from './core/index';
 export type { TerrainCoordinate } from './utils/terrainPickingUtils';
