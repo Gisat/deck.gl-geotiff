@@ -158,11 +158,11 @@ const terrainLayer = new CogTerrainLayer({
 
 **Use Case:** Eliminate blank-map delays when loading high-resolution terrain tiles over slow connections (HTTP/1.1 limit of 6 concurrent connections).
 
-When you create a `CogTerrainLayer` with `meshMaxError: 'auto'` and `isTiled: true`, progressive loading is **enabled by default**. The layer automatically:
+When you create a `CogTerrainLayer` with `isTiled: true`, progressive loading is **enabled by default**. The layer automatically:
 
-1. **Loads low-resolution overview tiles first** (e.g., Zoom 9) with exclusive network access
-2. **Keeps overview visible** as a placeholder while detail tiles (e.g., Zoom 12+) fetch in the background
-3. **Fades in high-resolution tiles** as they load without Z-fighting artifacts
+1. **Loads low-resolution overview tiles first** (the dataset `minZoom`) with exclusive network access
+2. **Keeps cached overview tiles visible** as placeholders while higher-zoom detail tiles fetch in the background
+3. **Prevents Z-fighting** between ancestor and detail tiles using dynamic polygon offset (`-(zoom * 1000)`)
 4. **Re-shows overview** when you zoom back out to prevent blank areas
 
 No configuration needed — it just works!
@@ -189,7 +189,6 @@ const progressiveTerrainLayer = new CogTerrainLayer({
 **Fine-tuning (Advanced):**
 
 - **Disable progressive loading:** Set `enableProgressiveLoading: false` if you need all tiles to load immediately
-- **Custom zoom threshold:** The default threshold is `minZoom + 3` — when you zoom out below this, the layer re-locks at `minZoom` to keep overview visible
 - **Custom `zoomOverride`:** For edge cases where you need to manually control which zoom level tiles are requested
 
 ```typescript

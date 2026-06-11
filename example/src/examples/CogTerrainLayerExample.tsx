@@ -158,7 +158,7 @@ function CogTerrainLayerExample() {
       cogLayer,
       // tileLayer  // OSM satellite drape (commented for now)
     ];
-  }, [viewState, initializedCog]);
+  }, [viewState, initializedCog, zRange, onZRangeUpdate]);
 
   if (!viewState) {
     return (

@@ -89,8 +89,8 @@ When using `CogTerrainLayer` with `isTiled: true`, **progressive loading is enab
 ### How It Works
 
 1. **Boot phase:** Layer locks to `minZoom`, fetching only 1–4 overview tiles with exclusive HTTP/1.1 connection access (no queuing)
-2. **Overview loads:** After 500ms debounce ensures render to GPU, layer unlocks and requests detail tiles (Zoom 12+)
-3. **User zooms out:** Layer automatically re-locks at `minZoom` to keep overview tiles visible and prevent blank areas
+2. **Overview loads:** As soon as the first `minZoom` tile finishes loading, the layer unlocks and requests higher-zoom detail tiles for the current viewport
+3. **Navigation while loading:** deck.gl’s tile caching can continue rendering already-cached ancestor tiles as placeholders while new tiles fetch
 4. **Depth sorting:** Dynamic polygon offset (`-(zoom * 1000)`) ensures high-resolution tiles automatically depth-test in front of low-resolution ancestors
 
 | Option | Type | Default | Description |

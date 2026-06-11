@@ -459,7 +459,8 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       // getPolygonOffset must be a function (deck.gl calls it as getPolygonOffset(uniforms)).
       // If the user supplied a custom override on the CogTerrainLayer, respect it;
       // otherwise apply the tile-zoom-based dynamic offset.
-      getPolygonOffset: (this.props.getPolygonOffset !== (CogTerrainLayer.defaultProps as any).getPolygonOffset && this.props.getPolygonOffset != null)
+      getPolygonOffset: (this.props.getPolygonOffset != null
+         && this.props.getPolygonOffset !== (((CogTerrainLayer.defaultProps as any).getPolygonOffset?.value) ?? (CogTerrainLayer.defaultProps as any).getPolygonOffset))
         ? this.props.getPolygonOffset
         : () => [0, -((props.tile?.index?.z ?? 0) * 1000)],
       // getPosition: (d) => [0, 0, 0],
