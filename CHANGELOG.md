@@ -1,3 +1,18 @@
+## [2.6.0-dev.5](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.4...v2.6.0-dev.5) (2026-06-11)
+
+### Features
+
+* move terrain tessellation to Web Worker pool ([ca16954](https://github.com/Gisat/deck.gl-geotiff/commit/ca16954fbc53f255a895f2b791bc055260da2e52))
+* thread AbortSignal through terrain tessellation pipeline ([97dbba7](https://github.com/Gisat/deck.gl-geotiff/commit/97dbba700653b713dc1c5247de3a081213ceea91))
+
+### Bug Fixes
+
+* change meshTerrain from const to let ([0802c4f](https://github.com/Gisat/deck.gl-geotiff/commit/0802c4f03fddd9a93f7e33fc16d1da02de3808ad))
+* implement proper worker error handling in TerrainWorkerPool ([763f96b](https://github.com/Gisat/deck.gl-geotiff/commit/763f96b67835aa5bf47a6303a8446d945be83b42))
+* reassign meshTerrain after worker transfer ([b32ce89](https://github.com/Gisat/deck.gl-geotiff/commit/b32ce89fed0bda7ab6e7f5920eeeac564c052876))
+* reject pending tasks in terminate() method ([3919920](https://github.com/Gisat/deck.gl-geotiff/commit/39199206a463cab31cbaddc3ffe7c01b5d865a40))
+* use AbortError for cancellation and guard against late aborts ([8736b49](https://github.com/Gisat/deck.gl-geotiff/commit/8736b49c850695e0e543259b48447f04604167c2))
+
 ## [2.6.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.3...v2.6.0-dev.4) (2026-06-10)
 
 ### Bug Fixes
