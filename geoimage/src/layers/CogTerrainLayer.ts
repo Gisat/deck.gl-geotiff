@@ -220,7 +220,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     terrainCogTiles: CogTiles;
     initialized: boolean;
     overviewLoaded: boolean;
-    overviewTileLoadTime: number | null;
 	};
 
   async initializeState(context: any) {
@@ -231,7 +230,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       terrainCogTiles,
       initialized: false,
       overviewLoaded: false,
-      overviewTileLoadTime: null,
     });
 
     // Only initialize if not already done (e.g., provided cogTiles instance may be pre-initialized)
@@ -304,10 +302,10 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     // while keeping old tile content visible until new tiles are ready.
     // Also reset progressive loading state for the new dataset.
     if (props.cogTiles && props.cogTiles !== oldProps.cogTiles) {
-      this.setState({ terrainCogTiles: props.cogTiles, overviewLoaded: false, overviewTileLoadTime: null });
+      this.setState({ terrainCogTiles: props.cogTiles, overviewLoaded: false });
     } else if (elevationDataChanged) {
       // Reset progressive loading state when dataset URL changes
-      this.setState({ overviewLoaded: false, overviewTileLoadTime: null });
+      this.setState({ overviewLoaded: false });
     }
 
 	  if (props.workerUrl) {
@@ -435,7 +433,12 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       // Dynamic polygon offset: pull higher zoom levels closer to camera to depth-test in front.
       // Uses tile.index.z from closure to avoid Z-fighting between ancestor tiles and high-res detail.
       // Formula: zoom 0 = offset 0, zoom 9 = offset -9000, zoom 12 = offset -12000, etc.
-      getPolygonOffset: this.props.getPolygonOffset ?? [0, -((props.tile?.index?.z ?? 0) * 1000)],
+      // getPolygonOffset must be a function (deck.gl calls it as getPolygonOffset(uniforms)).
+      // If the user supplied a custom override on the CogTerrainLayer, respect it;
+      // otherwise apply the tile-zoom-based dynamic offset.
+      getPolygonOffset: (this.props.getPolygonOffset !== (CogTerrainLayer.defaultProps as any).getPolygonOffset && this.props.getPolygonOffset != null)
+        ? this.props.getPolygonOffset
+        : () => [0, -((props.tile?.index?.z ?? 0) * 1000)],
       // getPosition: (d) => [0, 0, 0],
       getColor: tileTexture ? [255, 255, 255] : color,
       wireframe,
@@ -464,8 +467,19 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  if (ranges.length === 0) {
       return;
 	  }
-	  const minZ = Math.min(...ranges.map((x) => x?.[0] ?? 0).filter((n) => Number.isFinite(n)));
-	  const maxZ = Math.max(...ranges.map((x) => x?.[1] ?? 0).filter((n) => Number.isFinite(n)));
+	  const minValues = ranges
+      .map((x) => x?.[0])
+      .filter((n): n is number => n !== undefined && Number.isFinite(n));
+	  const maxValues = ranges
+      .map((x) => x?.[1])
+      .filter((n): n is number => n !== undefined && Number.isFinite(n));
+
+	  if (minValues.length === 0 || maxValues.length === 0) {
+      return;
+	  }
+
+	  const minZ = Math.min(...minValues);
+	  const maxZ = Math.max(...maxValues);
 
 	  if (!zRange || minZ < zRange[0] || maxZ > zRange[1]) {
       const newZRange: ZRange = [Number.isFinite(minZ) ? minZ : 0, Number.isFinite(maxZ) ? maxZ : 0];
@@ -505,17 +519,12 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         effectiveMinZoom = this.props.zoomOverride;
         effectiveMaxZoom = this.props.zoomOverride;
       } else if (this.props.enableProgressiveLoading) {
-        // Get current viewport zoom to determine if we should show overview or detail
-        const viewportZoom = this.context.viewport?.zoom ?? this.state.maxZoom;
-        const zoomThreshold = this.state.minZoom + 3;
-        
-        if (!this.state.overviewLoaded || viewportZoom <= zoomThreshold) {
-          // Auto-gate: lock at minZoom if overview hasn't loaded OR if zoomed out
-          // This keeps overview tiles visible when zooming back out
+        if (!this.state.overviewLoaded) {
+          // Auto-gate: lock at minZoom until the overview tile has loaded
           effectiveMinZoom = this.state.minZoom;
           effectiveMaxZoom = this.state.minZoom;
         }
-        // else: overview loaded and zoomed in → use full zoom range
+        // else: overview loaded → use full zoom range
       }
 
       return new TileLayer<MeshAndTexture | null>(
@@ -549,21 +558,13 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
           extent,
           maxRequests,
           onTileLoad: (tile) => {
-            // Internal LOD gate logic: detect when overview tile loads
+            // Release LOD gate immediately once any minZoom tile finishes loading
             if (
               this.props.enableProgressiveLoading &&
               tile.index.z === this.state.minZoom &&
-              !this.state.overviewLoaded &&
-              !this.state.overviewTileLoadTime
+              !this.state.overviewLoaded
             ) {
-              // Start 500ms debounce: ensures overview renders to GPU before releasing gate
-              this.setState({ overviewTileLoadTime: Date.now() });
-              setTimeout(() => {
-                this.setState({
-                  overviewLoaded: true,
-                  overviewTileLoadTime: null,
-                });
-              }, 500);
+              this.setState({ overviewLoaded: true });
             }
 
             // Call user's onTileLoad callback if provided
