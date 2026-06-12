@@ -89,6 +89,7 @@ function CogAnimationExample() {
     // 2. The Brute-Force Animated Layer
     const animatedDem = new CogTerrainLayer({
       id: 'cog-animation-layer',
+      enableProgressiveLoading: false,
       elevationData: animationCog.url,
       isTiled: true,
       tileSize: 256,
