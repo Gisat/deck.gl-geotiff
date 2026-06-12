@@ -325,10 +325,17 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     // while keeping old tile content visible until new tiles are ready.
     // Also reset progressive loading state for the new dataset.
     if (props.cogTiles && props.cogTiles !== oldProps.cogTiles) {
-      this.setState({ terrainCogTiles: props.cogTiles, overviewLoaded: false });
+      const newState: any = { terrainCogTiles: props.cogTiles };
+      // Only reset progressive loading state if it's actually enabled
+      if (this.props.enableProgressiveLoading) {
+        newState.overviewLoaded = false;
+      }
+      this.setState(newState);
     } else if (elevationDataChanged) {
       // Reset progressive loading state when dataset URL changes
-      this.setState({ overviewLoaded: false });
+      if (this.props.enableProgressiveLoading) {
+        this.setState({ overviewLoaded: false });
+      }
     }
 
 	  if (props.workerUrl) {

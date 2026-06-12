@@ -89,6 +89,9 @@ function CogAnimationExample() {
     // 2. The Brute-Force Animated Layer
     const animatedDem = new CogTerrainLayer({
       id: 'cog-animation-layer',
+      // IMPORTANT: Disable progressive loading for animation layers to maintain responsiveness
+      // when rapidly switching bands/channels via slider. Progressive loading state resets would
+      // otherwise stall tile updates during interactive dragging.
       enableProgressiveLoading: false,
       elevationData: animationCog.url,
       isTiled: true,

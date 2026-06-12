@@ -188,13 +188,15 @@ const progressiveTerrainLayer = new CogTerrainLayer({
 
 **Fine-tuning (Advanced):**
 
-- **Disable progressive loading:** Set `enableProgressiveLoading: false` if you need all tiles to load immediately
+- **Disable progressive loading:** Set `enableProgressiveLoading: false` if you need all tiles to load immediately. This is **essential for multi-band animation layers** where rapid band switching via slider would otherwise stall due to progressive loading state resets. See [Animation Guide](animation-guide.md) for details.
 - **Custom `zoomOverride`:** For edge cases where you need to manually control which zoom level tiles are requested
 
 ```typescript
 const customLayer = new CogTerrainLayer({
   // ... base props ...
   enableProgressiveLoading: true,    // Default: true
+  // For animation: set to false for responsive slider
+  // enableProgressiveLoading: false,
   // zoomOverride: 9,                 // Optional: manually lock to Zoom 9
 });
 ```

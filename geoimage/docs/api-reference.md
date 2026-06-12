@@ -120,6 +120,11 @@ const detailedLayer = new CogTerrainLayer({
 });
 ```
 
+> **When to disable progressive loading:**
+> - **Multi-band animation/sliders:** When using an interactive slider to switch between different bands/channels in real-time (e.g., `CogAnimationExample`), set `enableProgressiveLoading: false`. Progressive loading state resets can cause unnecessary re-renders and stall animation responsiveness.
+> - **Small viewport layers:** For layers covering a small portion of the screen (like animation overlays), the benefits of progressive loading are minimal, so disabling it avoids overhead.
+> - **Low-latency requirements:** When tile fetch speed is critical and your network is fast enough, fetching all tiles immediately may be preferable to the two-phase load.
+
 ---
 
 ## Terrain Options
