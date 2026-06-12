@@ -567,12 +567,26 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
             terrainCogTiles: this.state.terrainCogTiles,
             skipTexture: !!(this.props.wireframe || this.props.operation === 'terrain' || this.props.disableTexture),
             useChannel: this.props.terrainOptions?.useChannel,
-            useHillshade: this.props.terrainOptions?.useHillshade,
-            useSlope: this.props.terrainOptions?.useSlope,
-            useSwissRelief: this.props.terrainOptions?.useSwissRelief,
-            hillshadeAzimuth: this.props.terrainOptions?.hillshadeAzimuth,
-            hillshadeAltitude: this.props.terrainOptions?.hillshadeAltitude,
-            zFactor: this.props.terrainOptions?.zFactor,
+            // Only include kernel visualization triggers if they're explicitly set to avoid false positives
+            // when animating with different useChannel values
+            ...(this.props.terrainOptions?.useHillshade !== undefined && {
+              useHillshade: this.props.terrainOptions.useHillshade,
+            }),
+            ...(this.props.terrainOptions?.useSlope !== undefined && {
+              useSlope: this.props.terrainOptions.useSlope,
+            }),
+            ...(this.props.terrainOptions?.useSwissRelief !== undefined && {
+              useSwissRelief: this.props.terrainOptions.useSwissRelief,
+            }),
+            ...(this.props.terrainOptions?.hillshadeAzimuth !== undefined && {
+              hillshadeAzimuth: this.props.terrainOptions.hillshadeAzimuth,
+            }),
+            ...(this.props.terrainOptions?.hillshadeAltitude !== undefined && {
+              hillshadeAltitude: this.props.terrainOptions.hillshadeAltitude,
+            }),
+            ...(this.props.terrainOptions?.zFactor !== undefined && {
+              zFactor: this.props.terrainOptions.zFactor,
+            }),
           },
           renderSubLayers: {
             disableTexture: this.props.disableTexture,
