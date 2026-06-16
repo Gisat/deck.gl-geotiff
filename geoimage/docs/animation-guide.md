@@ -125,6 +125,7 @@ function TerrainAnimationExample() {
         meshMaxError: 650,
         color: [0, 105, 148, 180],
         cacheAllBands: false, // Start false for lazy loading
+        disableWorkerPool: true, // Disable worker pool for smooth slider animation during rapid band changes
       });
       
       cog.initializeCog(COG_URL).then(() => {
@@ -312,6 +313,27 @@ updateTriggers: {
   // Add a timeout to clear loading state after 5 seconds
 }
 ```
+
+### "Slider animation freezes during rapid dragging (Windows / mobile)"
+
+**Cause:** Web Worker pool for terrain tessellation queues up too many async tasks during rapid band changes, blocking tile updates.
+
+**Fix:** Enable `disableWorkerPool: true` in the `CogTiles` constructor:
+
+```tsx
+const cog = new CogTiles({
+  type: 'terrain',
+  // ... other options
+  disableWorkerPool: true, // Use synchronous tessellation for smooth animation
+});
+```
+
+**Context:** This is an edge case that manifests when:
+- Dragging a slider rapidly (many band changes per second)
+- Running on lower-end devices or mobile
+- Using dense meshes with many visible tiles
+
+The synchronous tessellation trades a small amount of responsiveness in non-animated rendering for smooth animation. **Recommendation:** Enable this only if you observe animation stalls; leave disabled for normal terrain rendering.
 
 ---
 
