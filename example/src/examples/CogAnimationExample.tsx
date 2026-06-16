@@ -88,34 +88,30 @@ function CogAnimationExample() {
 
     // 2. The Brute-Force Animated Layer
     const animatedDem = new CogTerrainLayer({
-      id: 'cog-animation-layer',
-      // IMPORTANT: Disable progressive loading for animation layers to maintain responsiveness
-      // when rapidly switching bands/channels via slider. Progressive loading state resets would
-      // otherwise stall tile updates during interactive dragging.
-      enableProgressiveLoading: false,
-      elevationData: animationCog.url,
-      isTiled: true,
-      tileSize: 256,
-      cogTiles: cogInstance || undefined, // Pass the pre-initialized instance
-      terrainOptions: {
-        type: 'terrain',
-        noDataValue: -32768.0,
-        terrainSkirtHeight: 0,
-        // useChannel is 1-based, so we add 1 to our 0-based index
-        useChannel: currentBandIndex + 1, 
-        meshMaxError: 650,
-        useSingleColor: true,
-        color: [0, 105, 148, 180],
-        // Make cacheAllBands dynamic: only cache when user clicks the button
-        cacheAllBands: isFetched,
-      },
-      pickable: true,
-      extensions: [new MaskExtension()],
-      maskId: 'water-mask',
-      // Force Deck.gl to re-fetch when the index or fetch state changes
-      updateTriggers: {
-        getTileData: [currentBandIndex, isFetched]
-      }
+id: 'cog-animation-layer',
+elevationData: animationCog.url,
+isTiled: true,
+tileSize: 256,
+cogTiles: cogInstance || undefined, // Pass the pre-initialized instance
+terrainOptions: {
+  type: 'terrain',
+  noDataValue: -32768.0,
+  terrainSkirtHeight: 0,
+  // useChannel is 1-based, so we add 1 to our 0-based index
+  useChannel: currentBandIndex + 1, 
+  meshMaxError: 650,
+  useSingleColor: true,
+  color: [0, 105, 148, 180],
+  // Make cacheAllBands dynamic: only cache when user clicks the button
+  cacheAllBands: isFetched,
+},
+pickable: true,
+extensions: [new MaskExtension()],
+maskId: 'water-mask',
+// Force Deck.gl to re-fetch when the index or fetch state changes
+updateTriggers: {
+  getTileData: [currentBandIndex, isFetched]
+}
     });
 
     return [maskLayer, backgroundDem, animatedDem];

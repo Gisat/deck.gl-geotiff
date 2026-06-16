@@ -211,6 +211,9 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 
   terrainUrl: string = '';
 
+  private zRangeUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private lastZRangeValue: ZRange | null = null;
+
   declare state: {
 	  isTiled?: boolean;
 	  terrain?: MeshAttributes;
@@ -515,7 +518,19 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
 	  if (!zRange || minZ < zRange[0] || maxZ > zRange[1]) {
       const newZRange: ZRange = [Number.isFinite(minZ) ? minZ : 0, Number.isFinite(maxZ) ? maxZ : 0];
       this.setState({ zRange: newZRange });
-      this.props.onZRangeUpdate?.(newZRange);
+      
+      // Debounce onZRangeUpdate callback to avoid excessive React re-renders during rapid updates
+      // (e.g., slider scrubbing in animation use cases). Wait 200ms of stable zRange before firing.
+      if (this.zRangeUpdateTimeoutId !== null) {
+        clearTimeout(this.zRangeUpdateTimeoutId);
+      }
+      
+      this.lastZRangeValue = newZRange;
+      
+      this.zRangeUpdateTimeoutId = setTimeout(() => {
+        this.props.onZRangeUpdate?.(this.lastZRangeValue);
+        this.zRangeUpdateTimeoutId = null;
+      }, 200);
 	  }
   }
 
@@ -621,4 +636,13 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       },
     );
 	}
+
+  _finalize() {
+    // Clean up pending zRangeUpdate callback timer on layer unmount
+    if (this.zRangeUpdateTimeoutId !== null) {
+      clearTimeout(this.zRangeUpdateTimeoutId);
+      this.zRangeUpdateTimeoutId = null;
+    }
+    super._finalize?.();
+  }
 }
