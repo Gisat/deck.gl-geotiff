@@ -43,6 +43,7 @@ function CogAnimationExample() {
         useSingleColor: true,
         color: [0, 105, 148, 180],
         cacheAllBands: false, // Start false for lazy loading
+        disableWorkerPool: true, // Disable worker pool for smooth slider animation during rapid band changes
       });
       
       cog.initializeCog(animationCog.url).then(() => {
