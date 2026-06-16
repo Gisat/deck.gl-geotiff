@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import DeckGL from '@deck.gl/react';
 import { MapView } from '@deck.gl/core';
 import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
@@ -31,6 +31,33 @@ function CogAnimationExample() {
   const totalBands = cogInstance?.getNumChannels?.() || 30; // Dynamically read from COG, fallback to 30
   const bandDescriptions = cogInstance?.getBandDescriptions?.() ?? [];
   const currentDescription = bandDescriptions[currentBandIndex] || '';
+
+  // RAF throttling for smooth slider animation: prevents React re-render thrashing on rapid drag events
+  const rafIdRef = useRef<number | null>(null);
+  const pendingIndexRef = useRef<number | null>(null);
+
+  const scheduleBandIndexUpdate = (index: number) => {
+    pendingIndexRef.current = index;
+    if (rafIdRef.current == null) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        const v = pendingIndexRef.current;
+        if (v !== null && v !== undefined) {
+          setCurrentBandIndex(v);
+        }
+      });
+    }
+  };
+
+  // Cancel any pending RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
 
   // Initialize the CogTiles instance once to read metadata
   useEffect(() => {
@@ -173,10 +200,22 @@ updateTriggers: {
             max={totalBands - 1}
             value={currentBandIndex}
             disabled={!isFetched}
-            // Use onChange for visual feedback during drag, onMouseUp/onTouchEnd for fetching on release
-            onChange={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
-            onMouseUp={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
-            onTouchEnd={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
+            onInput={(e) => scheduleBandIndexUpdate(parseInt(e.currentTarget.value, 10))}
+            onChange={(e) => scheduleBandIndexUpdate(parseInt(e.currentTarget.value, 10))}
+            onMouseUp={(e) => {
+              if (rafIdRef.current) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+              }
+              setCurrentBandIndex(parseInt(e.currentTarget.value, 10));
+            }}
+            onTouchEnd={(e) => {
+              if (rafIdRef.current) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+              }
+              setCurrentBandIndex(parseInt(e.currentTarget.value, 10));
+            }}
             style={{ width: '100%', cursor: isFetched ? 'pointer' : 'not-allowed', opacity: isFetched ? 1 : 0.5 }}
           />
         </div>
