@@ -70,7 +70,8 @@ class CogTiles {
 
     // Get reference to global worker pool for terrain tiles
     // Do NOT create a new pool per instance — reuse the singleton
-    if (options.type === 'terrain') {
+    // Skip if disableWorkerPool is true (e.g., for smooth animation during rapid band changes)
+    if (options.type === 'terrain' && typeof Worker !== 'undefined' && !options.disableWorkerPool) {
       this.workerPool = getGlobalTerrainWorkerPool();
     }
   }

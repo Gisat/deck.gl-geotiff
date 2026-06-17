@@ -82,6 +82,53 @@ Used for categorical data (land cover, classification).
 
 ---
 
+## Progressive Loading (CogTerrainLayer)
+
+When using `CogTerrainLayer` with `isTiled: true`, **progressive loading is enabled by default**. This automatically loads low-resolution overview tiles first, then requests high-resolution detail tiles, eliminating blank-map delays on slow connections.
+
+### How It Works
+
+1. **Boot phase:** Layer locks to `minZoom`, fetching only 1–4 overview tiles with exclusive HTTP/1.1 connection access (no queuing)
+2. **Overview loads:** As soon as the first `minZoom` tile finishes loading, the layer unlocks and requests higher-zoom detail tiles for the current viewport
+3. **Navigation while loading:** deck.gl’s tile caching can continue rendering already-cached ancestor tiles as placeholders while new tiles fetch
+4. **Depth sorting:** Dynamic polygon offset (`-(zoom * 1000)`) ensures high-resolution tiles automatically depth-test in front of low-resolution ancestors
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **`enableProgressiveLoading`** | `boolean` | `true` | Enable automatic LOD placeholder behavior. When `true`, the layer starts by loading only overview tiles (`minZoom`), then releases to full zoom range after overview renders. When `false`, all visible tiles at current zoom are requested immediately. |
+| **`meshMaxError`** | `number` \| `'auto'` | `'auto'` | Error tolerance for mesh tessellation. Set to `'auto'` (recommended) for adaptive per-zoom error values that synergize with progressive loading. Lower values produce finer meshes (more triangles, slower). Set to a fixed number (e.g., `4.0`) for consistent tessellation across all zooms. |
+
+**Recommended configuration:**
+
+```typescript
+const progressiveTerrainLayer = new CogTerrainLayer({
+  id: 'terrain',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  meshMaxError: 'auto',           // ← Enables adaptive LOD + progressive loading
+  enableProgressiveLoading: true, // ← (Default; explicit for clarity)
+  // Progressive loading now works automatically!
+});
+```
+
+**Disabling progressive loading:**
+
+```typescript
+const detailedLayer = new CogTerrainLayer({
+  enableProgressiveLoading: false, // Requests all visible tiles immediately
+  // ...
+});
+```
+
+> **Progressive loading and animation:**
+> Progressive loading now works seamlessly with animated band/channel switching thanks to debounced `onZRangeUpdate` callbacks. The layer provides responsive updates during slider dragging while showing faster perceived load times via LOD fallback tiles.
+>
+> **When to disable progressive loading:**
+> - **Small viewport layers:** For layers covering a small portion of the screen (like animation overlays), the benefits of progressive loading are minimal, so disabling it avoids overhead.
+> - **Low-latency requirements:** When tile fetch speed is critical and your network is fast enough, fetching all tiles immediately may be preferable to the two-phase load.
+
+---
+
 ## Terrain Options
 
 These options apply specifically to `CogTerrainLayer` or when generating heightmaps. **All parameters are optional.**
@@ -143,6 +190,7 @@ These options control multi-band caching for smooth animation and real-time band
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | **`cacheAllBands`** | `boolean` | `false` | **Enable multi-band caching for smooth animation.** When `true`, on first tile access, fetches and caches all bands in a single HTTP request. Subsequent band changes (via `useChannel`) instantly return cached meshes from memory — zero network latency. **Use case:** Multi-temporal elevation data (time series, 4D monitoring) or multi-variable analysis (different scalar fields). **Lazy-load pattern:** Start with `cacheAllBands: false`, let users click a "Fetch All Bands" button to enable caching on demand. **Memory trade-off:** Each tile caches all bands in RAM (e.g., 30 bands × 256KB = ~7.7 MB per tile for Float32 data). **Recommendation:** Enable only for COGs with <50 bands to avoid memory bloat over long sessions. See [Animation Guide](animation-guide.md) for implementation details and performance tuning. |
+| **`disableWorkerPool`** | `boolean` | `false` | **Disable Web Worker pool for terrain tessellation (terrain layers only).** By default (false), terrain mesh generation runs in a Web Worker pool for performance. Set to `true` to use synchronous tessellation when rapid band switching causes animation stalls (e.g., during slider scrubbing in multi-band terrain animation). This is an edge case that only manifests under very rapid `useChannel` updates. **Use case:** Smooth slider animation with <20 visible tiles. **Recommendation:** Enable only when you observe animation freezing during rapid band changes; leave disabled for normal terrain rendering. See [Animation Guide](animation-guide.md#troubleshooting) for details. |
 
 ---
 

@@ -56,7 +56,9 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     try {
       if (tesselator === 'delatin') {
         // Delatin tessellation
-        const tin = new Delatin(terrain, width, height);
+        const widthPlus = width === 257 ? 257 : width + 1;
+        const heightPlus = height === 257 ? 257 : height + 1;
+        const tin = new Delatin(terrain, widthPlus, heightPlus);
         tin.run(meshMaxError);
         // @ts-expect-error: Delatin instance properties 'coords' and 'triangles' are not explicitly typed in the library port
         const { coords, triangles } = tin;

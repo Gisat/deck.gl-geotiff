@@ -45,15 +45,19 @@ class TerrainWorkerPool {
   private roundRobinIndex = 0;
 
   constructor(poolSize?: number) {
-    // Default to CPU core count, fallback to 4, cap at 8 to prevent memory exhaustion
-    const defaultSize = Math.min(navigator.hardwareConcurrency || 4, 8);
+    // Detect browser environment; default to 1 worker in non-browser contexts (SSR/Node/tests)
+    let defaultSize = 1;
+    if (typeof navigator !== 'undefined') {
+      // Default to CPU core count, fallback to 4, cap at 8 to prevent memory exhaustion
+      defaultSize = Math.min(navigator.hardwareConcurrency || 4, 8);
 
-    // On low-memory devices (<4GB), use only 2 workers to avoid OOM
-    const memoryAdjustedSize = (navigator as any).deviceMemory && (navigator as any).deviceMemory < 4
-      ? 2
-      : defaultSize;
+      // On low-memory devices (<4GB), use only 2 workers to avoid OOM
+      if ((navigator as any).deviceMemory && (navigator as any).deviceMemory < 4) {
+        defaultSize = 2;
+      }
+    }
 
-    const size = poolSize ?? memoryAdjustedSize;
+    const size = Math.max(1, poolSize ?? defaultSize);
 
     for (let i = 0; i < size; i++) {
       const worker = new TerrainWorker();

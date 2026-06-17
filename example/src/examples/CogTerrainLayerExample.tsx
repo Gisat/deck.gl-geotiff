@@ -7,8 +7,9 @@ import { CogTerrainLayer, CogTiles, extractTerrainCoordinate } from '@gisatcz/de
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer } from '@deck.gl/layers';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 
-// Updated: Properly handles WebMercator non-linear Y projection
+
 function getElevationAtInfo(info: any): number | null {
   const tileResult = info.tile?.content?.[0];
   if (!tileResult?.raw) return null;
@@ -40,9 +41,10 @@ function getElevationAtInfo(info: any): number | null {
 }
 
 function CogTerrainLayerExample() {
-  const mainCog = COG_TERRAIN_EXAMPLES.COPERNICUS_PHILIPPINES_DEM;
+  const mainCog = COG_TERRAIN_EXAMPLES.MISICUNI;
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   const terrainOptions: GeoImageOptions = {
     ...mainCog.defaultOptions as GeoImageOptions,
@@ -85,8 +87,8 @@ function CogTerrainLayerExample() {
       );
 
       setViewState({
-        longitude: 120.9546,
-        latitude: 15.0062,
+        longitude: -66.33,
+        latitude: -17.09,
         zoom: Math.min(19, zoom + 3),
         pitch: 60,
         bearing: 0,
@@ -99,12 +101,45 @@ function CogTerrainLayerExample() {
   const layers = useMemo(() => {
     if (!viewState || !initializedCog) return [];
 
+    const cogLayer = new CogTerrainLayer({
+      id: 'cog-terrain-layer',
+      elevationData: mainCog.url,
+      cogTiles: initializedCog,
+      isTiled: true,
+      tileSize: 256,
+      meshMaxError: 'auto', // Adaptive tessellation per zoom level
+      operation: 'terrain+draw',
+      terrainOptions,
+      pickable: '3d',
+      onZRangeUpdate: onZRangeUpdate,
+      // Progressive loading now automatic by default!
+      // No zoomOverride, no overviewLoaded, no onTileLoad gate needed
+
+      onClick: (info: any) => {
+        const coord = extractTerrainCoordinate(info);
+        if (coord) {
+          console.log('Terrain Coordinate:', {
+            longitude: coord.longitude.toFixed(6),
+            latitude: coord.latitude.toFixed(6),
+            elevation: coord.elevation.toFixed(2),
+          });
+        } else {
+          const elevation = getElevationAtInfo(info);
+          if (elevation !== null) {
+            console.log('Fallback elevation at click:', elevation);
+          }
+        }
+      },
+    });
+
+    // OSM tile layer with TerrainExtension for 3D drape
     const tileLayer = new TileLayer({
       data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
       id: 'standard-tile-layer',
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,
+      zRange: zRange,
       extensions: [new TerrainExtension()],
 
       renderSubLayers: (props) => {
@@ -117,42 +152,13 @@ function CogTerrainLayerExample() {
           bounds: [west, south, east, north],
         });
       },
-    })
-
-    const cogLayer = new CogTerrainLayer({
-      id: 'cog-terrain-layer',
-      elevationData: mainCog.url,
-      cogTiles: initializedCog,
-      isTiled: true,
-      tileSize: 256,
-      meshMaxError: 'auto',
-      operation: 'terrain+draw',
-      terrainOptions,
-      pickable: '3d',
-      onClick: (info: any) => {
-        const coord = extractTerrainCoordinate(info);
-        if (coord) {
-          console.log('Terrain Coordinate:', {
-            longitude: coord.longitude.toFixed(6),
-            latitude: coord.latitude.toFixed(6),
-            elevation: coord.elevation.toFixed(2),
-          });
-        } else {
-          // Fallback: attempt to get elevation via traditional method
-          const elevation = getElevationAtInfo(info);
-          if (elevation !== null) {
-            console.log('Fallback elevation at click:', elevation);
-          }
-        }
-      },
-
     });
 
     return [
-      // tileLayer,
       cogLayer,
+      // tileLayer  // OSM satellite drape (commented for now)
     ];
-  }, [viewState, initializedCog]);
+  }, [viewState, initializedCog, zRange, onZRangeUpdate]);
 
   if (!viewState) {
     return (
@@ -173,14 +179,12 @@ function CogTerrainLayerExample() {
       controller
       layers={layers}
       getTooltip={(info: any) => {
-        // Use the new utility to extract full terrain coordinates
         const coord = extractTerrainCoordinate(info);
         if (coord) {
           return {
             text: `Lat: ${coord.latitude.toFixed(4)}, Lon: ${coord.longitude.toFixed(4)}, Elevation: ${coord.elevation.toFixed(1)}m`,
           };
         }
-        // Fallback: show elevation if 3D coordinate extraction not available
         const elevation = getElevationAtInfo(info);
         if (elevation !== null) {
           return {

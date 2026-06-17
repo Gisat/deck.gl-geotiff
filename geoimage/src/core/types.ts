@@ -101,6 +101,8 @@ export type GeoImageOptions = {
     // --- Animation / Caching ---
     /** When true, fetch and cache all bands for a tile on first access. Enables instant slider animation. */
     cacheAllBands?: boolean,
+    /** When true, bypass the Web Worker pool for terrain tessellation. Set this for smooth animation during rapid band changes (e.g., slider scrubbing). Default: false */
+    disableWorkerPool?: boolean,
 }
 
 export const DefaultGeoImageOptions: GeoImageOptions = {
@@ -175,6 +177,7 @@ export const DefaultGeoImageOptions: GeoImageOptions = {
 
     // --- Animation / Caching ---
     cacheAllBands: false,
+    disableWorkerPool: false,
 };
 
 export type TypedArray =

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import DeckGL from '@deck.gl/react';
 import { MapView } from '@deck.gl/core';
 import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
@@ -32,6 +32,33 @@ function CogAnimationExample() {
   const bandDescriptions = cogInstance?.getBandDescriptions?.() ?? [];
   const currentDescription = bandDescriptions[currentBandIndex] || '';
 
+  // RAF throttling for smooth slider animation: prevents React re-render thrashing on rapid drag events
+  const rafIdRef = useRef<number | null>(null);
+  const pendingIndexRef = useRef<number | null>(null);
+
+  const scheduleBandIndexUpdate = (index: number) => {
+    pendingIndexRef.current = index;
+    if (rafIdRef.current == null) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        const v = pendingIndexRef.current;
+        if (v !== null && v !== undefined) {
+          setCurrentBandIndex(v);
+        }
+      });
+    }
+  };
+
+  // Cancel any pending RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
+
   // Initialize the CogTiles instance once to read metadata
   useEffect(() => {
     if (!cogInstance) {
@@ -43,6 +70,7 @@ function CogAnimationExample() {
         useSingleColor: true,
         color: [0, 105, 148, 180],
         cacheAllBands: false, // Start false for lazy loading
+        disableWorkerPool: true, // Disable worker pool for smooth slider animation during rapid band changes
       });
       
       cog.initializeCog(animationCog.url).then(() => {
@@ -88,30 +116,30 @@ function CogAnimationExample() {
 
     // 2. The Brute-Force Animated Layer
     const animatedDem = new CogTerrainLayer({
-      id: 'cog-animation-layer',
-      elevationData: animationCog.url,
-      isTiled: true,
-      tileSize: 256,
-      cogTiles: cogInstance || undefined, // Pass the pre-initialized instance
-      terrainOptions: {
-        type: 'terrain',
-        noDataValue: -32768.0,
-        terrainSkirtHeight: 0,
-        // useChannel is 1-based, so we add 1 to our 0-based index
-        useChannel: currentBandIndex + 1, 
-        meshMaxError: 650,
-        useSingleColor: true,
-        color: [0, 105, 148, 180],
-        // Make cacheAllBands dynamic: only cache when user clicks the button
-        cacheAllBands: isFetched,
-      },
-      pickable: true,
-      extensions: [new MaskExtension()],
-      maskId: 'water-mask',
-      // Force Deck.gl to re-fetch when the index or fetch state changes
-      updateTriggers: {
-        getTileData: [currentBandIndex, isFetched]
-      }
+id: 'cog-animation-layer',
+elevationData: animationCog.url,
+isTiled: true,
+tileSize: 256,
+cogTiles: cogInstance || undefined, // Pass the pre-initialized instance
+terrainOptions: {
+  type: 'terrain',
+  noDataValue: -32768.0,
+  terrainSkirtHeight: 0,
+  // useChannel is 1-based, so we add 1 to our 0-based index
+  useChannel: currentBandIndex + 1, 
+  meshMaxError: 650,
+  useSingleColor: true,
+  color: [0, 105, 148, 180],
+  // Make cacheAllBands dynamic: only cache when user clicks the button
+  cacheAllBands: isFetched,
+},
+pickable: true,
+extensions: [new MaskExtension()],
+maskId: 'water-mask',
+// Force Deck.gl to re-fetch when the index or fetch state changes
+updateTriggers: {
+  getTileData: [currentBandIndex, isFetched]
+}
     });
 
     return [maskLayer, backgroundDem, animatedDem];
@@ -172,10 +200,22 @@ function CogAnimationExample() {
             max={totalBands - 1}
             value={currentBandIndex}
             disabled={!isFetched}
-            // Use onChange for visual feedback during drag, onMouseUp/onTouchEnd for fetching on release
-            onChange={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
-            onMouseUp={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
-            onTouchEnd={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
+            onInput={(e) => scheduleBandIndexUpdate(parseInt(e.currentTarget.value, 10))}
+            onChange={(e) => scheduleBandIndexUpdate(parseInt(e.currentTarget.value, 10))}
+            onMouseUp={(e) => {
+              if (rafIdRef.current) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+              }
+              setCurrentBandIndex(parseInt(e.currentTarget.value, 10));
+            }}
+            onTouchEnd={(e) => {
+              if (rafIdRef.current) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+              }
+              setCurrentBandIndex(parseInt(e.currentTarget.value, 10));
+            }}
             style={{ width: '100%', cursor: isFetched ? 'pointer' : 'not-allowed', opacity: isFetched ? 1 : 0.5 }}
           />
         </div>
