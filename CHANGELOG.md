@@ -1,3 +1,26 @@
+## [2.6.0-dev.6](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.5...v2.6.0-dev.6) (2026-06-17)
+
+### Features
+
+* add RAF throttling for smooth slider animation + comprehensive docs ([573d67e](https://github.com/Gisat/deck.gl-geotiff/commit/573d67e185f23e76925a59ca10768083fac57426))
+* add zoomOverride prop and LOD placeholder layer ([03b23c3](https://github.com/Gisat/deck.gl-geotiff/commit/03b23c30d39f7f0cf78a71f44032520f7fc72f64))
+* automatic progressive loading with adaptive LOD and viewport-based re-gating ([5a2cdf3](https://github.com/Gisat/deck.gl-geotiff/commit/5a2cdf3ffa8c09632f536b7a9c27cb9ba14e510e))
+* implement single-layer ancestor fallback LOD placeholder with dynamic zoom gate ([fb7e883](https://github.com/Gisat/deck.gl-geotiff/commit/fb7e8833fab260982489403bb0491b4c0c397ba8))
+* implement stencil masking and placeholder gate for LOD placeholder (WIP: not fully working) ([5dcc9eb](https://github.com/Gisat/deck.gl-geotiff/commit/5dcc9eb9fa9fdf1658996b3bc01866cbb9ed303b))
+
+### Bug Fixes
+
+* add disableWorkerPool option to fix animation slider stall in v2.6.0-dev.5+ ([fa72c10](https://github.com/Gisat/deck.gl-geotiff/commit/fa72c10b7863147dfd11e5492b7535a595a72188))
+* add kernel option change triggers for hillshade/slope/relief dynamic switching ([09b07ed](https://github.com/Gisat/deck.gl-geotiff/commit/09b07ed8a34cb5ab1bd3cfa4f2c5e6d5f5146d08))
+* Address PR [#151](https://github.com/Gisat/deck.gl-geotiff/issues/151) code review comments ([d035176](https://github.com/Gisat/deck.gl-geotiff/commit/d0351760567eba5280315388701a1125ffc987ff))
+* Address PR [#151](https://github.com/Gisat/deck.gl-geotiff/issues/151) second code review comments ([d03d923](https://github.com/Gisat/deck.gl-geotiff/commit/d03d92325a4149bf108ad9bd28b113c878d7b3af))
+* **CogTerrainLayer:** move progressive loading gate release to onTileLoad for immediate detail tile loading ([f6312a4](https://github.com/Gisat/deck.gl-geotiff/commit/f6312a41551534cf23b724779204eecb91494394))
+* **CogTerrainLayer:** resolve four progressive loading implementation bugs ([abde85c](https://github.com/Gisat/deck.gl-geotiff/commit/abde85ced004653f152c2a3cd1d370a203743273))
+* debounce onZRangeUpdate and exclude undefined kernel options for smooth animation ([7c1bd35](https://github.com/Gisat/deck.gl-geotiff/commit/7c1bd352274c62842db385e5eccb18b910c19824)), closes [#2](https://github.com/Gisat/deck.gl-geotiff/issues/2) [#1](https://github.com/Gisat/deck.gl-geotiff/issues/1)
+* exclude undefined kernel options from updateTriggers to prevent animation stalls ([c90cf24](https://github.com/Gisat/deck.gl-geotiff/commit/c90cf248b63446d27685f6525fcd139249ac830f))
+* exclude undefined kernel options from updateTriggers to prevent animation stalls ([b4af1ea](https://github.com/Gisat/deck.gl-geotiff/commit/b4af1ea936c463e9e5b2067e0cb18c392dc18b04))
+* skip progressive loading state reset when disabled and document animation use case ([c8958f8](https://github.com/Gisat/deck.gl-geotiff/commit/c8958f808a80e3a2f2100a49aed6db7f78383ff0))
+
 ## [2.6.0-dev.5](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.4...v2.6.0-dev.5) (2026-06-11)
 
 ### Features
