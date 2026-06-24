@@ -135,6 +135,69 @@ flowchart LR
     *   `raw` — the original raster/elevation data kept on the CPU (RAM).
     *   Stored in `tile.content` by deck.gl's `TileLayer`, enabling raw value picking via `onClick`/`onHover` without additional network requests.
 
+## Multi-Band Caching Flow
+
+When `cacheAllBands: true` is enabled, the library implements a smart caching strategy for smooth terrain animation:
+
+```mermaid
+flowchart TD
+    %% Define Styles
+    classDef user fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef cache fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef fetch fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef gpu fill:#fbb,stroke:#333,stroke-width:2px;
+
+    User["User Moves Slider<br/>useChannel: 1→5"]:::user
+    UpdateTrigger["deck.gl updateTriggers<br/>getTileData changes"]:::user
+    CheckCache["CogTiles.getTerrainTile()<br/>Check GLOBAL_MULTI_BAND_CACHE<br/>for z_x_y_band_5"]:::cache
+    CacheHit["✅ Cache Hit<br/>Return cached TileResult<br/>instantly"]:::cache
+    CacheMiss["❌ Cache Miss<br/>Call getTileAllBands()"]:::fetch
+    FetchAll["Fetch All 30 Bands<br/>in 1 HTTP Request"]:::fetch
+    Tessellate["Tessellate & Process<br/>Each Band via<br/>Martini/BitmapGenerator"]:::fetch
+    PopulateCache["Store All Bands<br/>in GLOBAL_MULTI_BAND_CACHE<br/>z_x_y_band_1 ... z_x_y_band_30"]:::cache
+    ReturnBand["Return Band 5<br/>to CogTerrainLayer"]:::fetch
+    RenderGPU["deck.gl Renders Mesh<br/>on GPU"]:::gpu
+
+    User --> UpdateTrigger
+    UpdateTrigger --> CheckCache
+    CheckCache -->|Found| CacheHit
+    CheckCache -->|Not Found| CacheMiss
+    CacheHit --> RenderGPU
+    CacheMiss --> FetchAll
+    FetchAll --> Tessellate
+    Tessellate --> PopulateCache
+    PopulateCache --> ReturnBand
+    ReturnBand --> RenderGPU
+```
+
+### How It Differs from Standard Fetch
+
+| Phase | Standard Fetch | Multi-Band Cache |
+|---|---|---|
+| **User changes band** | `useChannel: 1→5` | `useChannel: 1→5` |
+| **Tile fetch** | `getTile()` fetches band 5 only | `getTile()` checks cache |
+| **Cache hit** | N/A | Band 5 returned instantly |
+| **Cache miss** | Fetches 256 KB (band 5) | Fetches 7.7 MB (all 30 bands) |
+| **Subsequent bands** | Each band is a new fetch | All bands already cached |
+| **Slider speed** | Slow (network latency) | Fast (memory lookup) |
+
+### Key Implementation Details
+
+1. **Global Cache** (`GLOBAL_MULTI_BAND_CACHE`):
+   - Lives at module scope in `CogTiles.ts`
+   - Survives React re-renders and layer recreations
+   - Cache key format: `${z}_${x}_${y}_band_${channel}` (1-based channel)
+   - Type: `Map<string, TileResult>`
+
+2. **Lazy Population**:
+   - First tile that requests band 5 triggers `getTileAllBands()`
+   - All 30 bands are fetched and cached in one HTTP request
+   - Other tiles in the viewport immediately benefit from the cache
+
+3. **Fallback Logic**:
+   - If `getTileAllBands()` fails or returns empty, seamlessly falls back to normal single-band fetch
+   - No user-visible errors; animation still works, just with network latency
+
 ## AbortSignal Propagation & Tile Cancellation
 
 ### How It Works

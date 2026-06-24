@@ -4,6 +4,7 @@ import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 
@@ -135,6 +136,8 @@ function CogTerrainKernelExample() {
   // cogState pairs CogTiles with the mode it was initialized for.
   // null while reinitializing — prevents layers from rendering with wrong CogTiles.
   const [cogState, setCogState] = useState<{ cog: CogTiles; mode: KernelMode } | null>(null);
+  // Sync terrain zRange to overlay TileLayer for 3D frustum culling
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   // Initial load: set viewState and initialize all CogTiles instances
   useEffect(() => {
@@ -183,6 +186,7 @@ function CogTerrainKernelExample() {
         minZoom: 0,
         maxZoom: 19,
         tileSize: 256,
+        zRange: zRange,
         pickable: false,
         renderSubLayers: (props) => {
           const { bbox } = props.tile as any;
@@ -202,10 +206,11 @@ function CogTerrainKernelExample() {
         tileSize: 256,
         operation: 'terrain+draw',
         terrainOptions: buildTerrainOptions(cogState.mode),
+        onZRangeUpdate: onZRangeUpdate,
         pickable: true,
       }),
     ];
-  }, [viewState, cogState]);
+  }, [viewState, cogState, zRange, onZRangeUpdate]);
 
   const isTransitioning = cogState?.mode !== mode;
 

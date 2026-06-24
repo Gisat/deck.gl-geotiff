@@ -30,6 +30,8 @@ export default class GeoImage {
         },
     options: GeoImageOptions,
     meshMaxError: number,
+    workerPool?: any, // TerrainWorkerPool (optional)
+    signal?: AbortSignal,
   ): Promise<TileResult | null> {
     const mergedOptions = GeoImage.resolveVisualizationMode(
       { ...DefaultGeoImageOptions, ...options },
@@ -40,7 +42,7 @@ export default class GeoImage {
       case 'image':
         return this.getBitmap(input, mergedOptions);
       case 'terrain':
-        return this.getHeightmap(input, mergedOptions, meshMaxError);
+        return this.getHeightmap(input, mergedOptions, meshMaxError, workerPool, signal);
       default:
         return null;
     }
@@ -115,32 +117,34 @@ export default class GeoImage {
         },
     options: GeoImageOptions,
     meshMaxError: number,
+    workerPool?: any, // TerrainWorkerPool (optional)
+   signal?: AbortSignal,
   ): Promise<TileResult> {
-    let rasters = [];
-    let width: number;
-    let height: number;
-    let bounds: Bounds;
-    let cellSizeMeters: number | undefined;
+   let rasters = [];
+   let width: number;
+   let height: number;
+   let bounds: Bounds;
+   let cellSizeMeters: number | undefined;
 
-    if (typeof (input) === 'string') {
-      // TODO not tested
-      // input is type of object
-      await this.setUrl(input);
+   if (typeof (input) === 'string') {
+     // TODO not tested
+     // input is type of object
+     await this.setUrl(input);
 
-      rasters = (await this.data!.readRasters()) as TypedArray[];
-      width = this.data!.getWidth();
-      height = this.data!.getHeight();
-      bounds = this.data!.getBoundingBox() as Bounds;
-    } else {
-      rasters = input.rasters;
-      width = input.width;
-      height = input.height;
-      bounds = input.bounds;
-      cellSizeMeters = input.cellSizeMeters;
-    }
+     rasters = (await this.data!.readRasters()) as TypedArray[];
+     width = this.data!.getWidth();
+     height = this.data!.getHeight();
+     bounds = this.data!.getBoundingBox() as Bounds;
+   } else {
+     rasters = input.rasters;
+     width = input.width;
+     height = input.height;
+     bounds = input.bounds;
+     cellSizeMeters = input.cellSizeMeters;
+   }
 
-    // Delegate to TerrainGenerator
-    return await TerrainGenerator.generate({ width, height, rasters, bounds, cellSizeMeters }, options, meshMaxError);
+   // Delegate to TerrainGenerator with worker pool and cancellation signal
+   return await TerrainGenerator.generate({ width, height, rasters, bounds, cellSizeMeters }, options, meshMaxError, workerPool, signal);
   }
 
   async getBitmap(

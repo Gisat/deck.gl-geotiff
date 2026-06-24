@@ -154,7 +154,54 @@ const terrainLayer = new CogTerrainLayer({
 });
 ```
 
-### B. Terrain with Draping (External Texture)
+### B. Progressive Loading (Automatic LOD Placeholders)
+
+**Use Case:** Eliminate blank-map delays when loading high-resolution terrain tiles over slow connections (HTTP/1.1 limit of 6 concurrent connections).
+
+When you create a `CogTerrainLayer` with `isTiled: true`, progressive loading is **enabled by default**. The layer automatically:
+
+1. **Loads low-resolution overview tiles first** (the dataset `minZoom`) with exclusive network access
+2. **Keeps cached overview tiles visible** as placeholders while higher-zoom detail tiles fetch in the background
+3. **Prevents Z-fighting** between ancestor and detail tiles using dynamic polygon offset (`-(zoom * 1000)`)
+4. **Re-shows overview** when you zoom back out to prevent blank areas
+
+No configuration needed — it just works!
+
+```typescript
+const progressiveTerrainLayer = new CogTerrainLayer({
+  id: 'terrain-progressive',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  tileSize: 256,
+  meshMaxError: 'auto', // ← Enables adaptive LOD + progressive loading
+  operation: 'terrain+draw',
+  terrainOptions: {
+    type: 'terrain',
+    useHeatMap: true,
+    colorScale: ['#fde725', '#5dc962', '#20908d'],
+    colorScaleValueRange: [0, 4000],
+  }
+  // Progressive loading is now automatic!
+  // No additional props or state management required
+});
+```
+
+**Fine-tuning (Advanced):**
+
+- **Disable progressive loading:** Set `enableProgressiveLoading: false` if you need all tiles to load immediately. Progressive loading works well for static viewing; disable only if your use case has specific low-latency requirements or minimal viewport coverage.
+- **Custom `zoomOverride`:** For edge cases where you need to manually control which zoom level tiles are requested
+
+```typescript
+const customLayer = new CogTerrainLayer({
+  // ... base props ...
+  enableProgressiveLoading: true,    // Default: true (works with animation!)
+  // zoomOverride: 9,                 // Optional: manually lock to Zoom 9
+});
+```
+
+> **Technical Details:** The layer uses deck.gl's native ancestor tile caching with dynamic polygon offset (`-(zoom * 1000)`) to prevent Z-fighting. Overview tiles stay cached in GPU memory and automatically render while detail tiles load, providing seamless progressive rendering without manual layer coordination.
+
+### C. Terrain with Draping (External Texture)
 Project a satellite image or tile service (XYZ) onto the 3D terrain.
 
 <img src="/geoimage/docs/images/cogTerrainLayer_overlay.jpg" width="60%" alt="Terrain Overlay" />
@@ -470,65 +517,458 @@ const layers = [terrainLayer, satelliteLayer, glazeLayer];
 
 ---
 
+## 3.6 Overlay Tiles with Proper 3D Frustum Culling
+
+**Use Case:** rendering standard XYZ tile providers (OSM, satellite imagery, map tiles) as overlays on top of 3D terrain without foreground tile clipping when the viewport is tilted.
+
+### The Problem: Tile Clipping in 3D
+
+When rendering overlay `TileLayer` (OSM, Satellite, etc.) over elevated terrain with a tilted camera, foreground tiles may be incorrectly culled or clipped. This happens because deck.gl's `TileLayer` assumes tiles exist on a flat Z=0 plane by default. When the viewport is tilted in 3D and the terrain is elevated, the frustum culling math fails to account for the terrain's elevation range.
+
+### The Solution: Sync `zRange` from CogTerrainLayer
+
+Pass the elevation range (`zRange`) from your `CogTerrainLayer` to the overlay `TileLayer`. This tells deck.gl's frustum culling algorithm: *"these tiles exist between minZ and maxZ elevations, not just at Z=0."*
+
+#### Example: OSM Overlay on Terrain (Using Hook)
+
+The easiest way to integrate is with the `useTerrainZRange` hook:
+
+```typescript
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { BitmapLayer } from '@deck.gl/layers';
+import React, { useMemo } from 'react';
+
+function TerrainWithOSM() {
+  // 1. Use the hook
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
+
+  const layers = useMemo(() => [
+    // OSM overlay with zRange for proper 3D culling
+    new TileLayer({
+      id: 'osm-overlay',
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      zRange: zRange,  // ← 2. Pass elevation bounds from hook
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile as any;
+        const { west, south, east, north } = bbox;
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [west, south, east, north],
+        });
+      },
+    }),
+    // Terrain layer that computes and updates zRange
+    new CogTerrainLayer({
+      id: 'terrain',
+      elevationData: 'https://example.com/dem.tif',
+      isTiled: true,
+      tileSize: 256,
+      terrainOptions: { type: 'terrain' },
+      onZRangeUpdate: onZRangeUpdate,  // ← 3. Sync elevation bounds to hook
+    }),
+  ], [zRange, onZRangeUpdate]);  // ⚠️ CRITICAL: Include both hook values in dependencies!
+
+  return <DeckGL layers={layers} /* ... */ />;
+}
+```
+
+**That's it!** 3 lines: import hook, call hook, wire to layers.
+
+> ⚠️ **CRITICAL:** If you wrap the layers array in `useMemo`, **you MUST include `zRange` and `onZRangeUpdate` in the dependency array**, as shown above. Without these dependencies, when the terrain updates the elevation bounds, React won't re-create the layers array with the new `zRange` value. This causes the overlay tiles to remain at the stale `zRange: null`, resulting in tile clipping when the viewport is tilted.
+
+#### Alternative: Manual State Management
+
+If you prefer full control, you can manage the state manually:
+
+```typescript
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { BitmapLayer } from '@deck.gl/layers';
+import React, { useState, useMemo } from 'react';
+
+function TerrainWithOSM() {
+  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(null);
+
+  const layers = useMemo(() => [
+    new TileLayer({
+      id: 'osm-overlay',
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      minZoom: 0,
+      maxZoom: 19,
+      tileSize: 256,
+      zRange: terrainZRange,  // ← Pass elevation bounds
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile as any;
+        const { west, south, east, north } = bbox;
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [west, south, east, north],
+        });
+      },
+    }),
+    new CogTerrainLayer({
+      id: 'terrain',
+      elevationData: 'https://example.com/dem.tif',
+      isTiled: true,
+      tileSize: 256,
+      terrainOptions: { type: 'terrain' },
+      onZRangeUpdate: setTerrainZRange,  // ← Receive zRange updates
+    }),
+  ], [terrainZRange]);
+
+  return <DeckGL layers={layers} /* ... */ />;
+}
+```
+
+#### How It Works
+
+1. **Terrain Layer computes elevation bounds** — As `CogTerrainLayer` loads terrain tiles, it calculates the min/max elevation (`zRange`) from the loaded mesh data.
+2. **Callback fires on update** — When terrain tiles load and the elevation bounds expand, `onZRangeUpdate` callback fires with the updated `zRange`.
+3. **Overlay receives bounds** — React state syncs the `zRange` into the overlay `TileLayer`.
+4. **Frustum culling corrected** — deck.gl now knows the elevation range and performs correct 3D frustum culling, keeping foreground tiles visible even when tilted.
+
+#### Key Props
+
+| Layer | Prop | Type | Purpose |
+|---|---|---|---|
+| **CogTerrainLayer** | `onZRangeUpdate` | `(zRange: [number, number] \| null) => void` | Callback fired when terrain elevation bounds are updated |
+| **TileLayer** | `zRange` | `[number, number] \| null` | Elevation range for 3D frustum culling |
+
+#### Result
+
+✅ **Before tilt:** All tiles visible (no regression)  
+✅ **During tilt:** Foreground tiles remain fully loaded and rendered  
+✅ **3D rotation:** Complete tile coverage regardless of camera angle  
+
+### Technical Details
+
+deck.gl's `TileLayer` uses `zRange` to expand its 3D bounding volume when performing frustum culling. Without `zRange`, tiles are assumed to exist only on the Z=0 plane. When the camera is tilted and looking at elevated terrain, tiles that are "below" the Z=0 plane in screen space (but actually visible on the terrain surface) are incorrectly culled.
+
+By passing the terrain's elevation bounds via `zRange`, the tile layer's bounding box expands to `[west, south, east, north, minZ, maxZ]` (in lon/lat/elevation order), ensuring correct intersection testing with the camera frustum.
+
+#### Important Notes
+
+- **Dynamic updates:** `zRange` updates progressively as terrain tiles load. The overlay will automatically adjust visibility as the terrain elevation range expands.
+- **Multiple overlay layers:** Apply this pattern to each overlay layer (OSM, satellite, etc.) if you have multiple overlays stacked on the same terrain.
+- **No performance penalty:** Passing `zRange` does not affect rendering performance — it only improves frustum culling accuracy.
+- **Compatible with `TerrainExtension`:** This pattern works whether or not your overlay layers use the `TerrainExtension`.
+
+---
+
 ## 4. Raw Value Picking
 
 **Use Case:** retrieving the original GeoTIFF raster values (elevation, band values, indices) at a clicked location, without extra network requests.
 
-### A. Bitmap Picking (single or multiband)
+### A. Bitmap Picking (2D scene)
+
+For flat imagery without terrain, `CogBitmapLayer` provides 2D coordinates and UV texture coordinates:
 
 ```typescript
 const layer = new CogBitmapLayer({
   id: 'picking-bitmap',
   rasterData: 'https://example.com/data.tif',
   isTiled: true,
-  pickable: true, // default: false, opt-in required
+  pickable: true, // 2D picking is sufficient for flat imagery
   onClick: (info) => {
-    const uv = info.uv || (info.bitmap && info.bitmap.uv);
-    if (info.tile && info.tile.content && info.tile.content.raw && uv) {
-      const { raw, width, height } = info.tile.content;
-      const [u, v] = uv;
-      const x = Math.floor(u * width);
-      const y = Math.floor(v * height);
-      const channels = raw.length / (width * height);
-      const pixelIndex = Math.floor((y * width + x) * channels);
-      const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
-      console.log('Raw values:', rawValues); // e.g. [128, 200, 45] for 3 bands
+    if (info.tile?.content?.raw) {
+      // UV can be in info.uv or info.bitmap.uv depending on layer configuration
+      const uv = info.uv || (info.bitmap && info.bitmap.uv);
+      if (uv) {
+        const { raw, width, height } = info.tile.content;
+        const [u, v] = uv;
+        const x = Math.floor(u * width);
+        const y = Math.floor(v * height);
+        const channels = raw.length / (width * height);
+        const pixelIndex = Math.floor((y * width + x) * channels);
+        const rawValues = raw.slice(pixelIndex, pixelIndex + channels);
+        console.log('Raw values:', rawValues); // e.g. [128, 200, 45] for 3 bands
+      }
     }
   }
 });
 ```
 
-### B. Terrain Picking (elevation & multiband)
+### B. Terrain Picking (3D scene)
+
+For terrain meshes, use `pickable: '3d'` to get true 3D coordinates **clamped to the terrain surface**. This works accurately at any camera pitch:
+
+#### Simple Approach (Recommended)
+
+Use the `extractTerrainCoordinate()` utility:
 
 ```typescript
+import { CogTerrainLayer, extractTerrainCoordinate } from '@gisatcz/deckgl-geolib';
+
 const layer = new CogTerrainLayer({
   id: 'picking-terrain',
   elevationData: 'https://example.com/dem.tif',
   isTiled: true,
-  pickable: true,
+  pickable: '3d',  // ← Enable 3D picking (returns 3-element coordinate on terrain surface)
   operation: 'terrain+draw',
   terrainOptions: { type: 'terrain' },
   onClick: (info) => {
-    if (info.tile && info.tile.content && info.tile.content[0]) {
-      const { raw, width, height } = info.tile.content[0];
-
-      let u, v;
-      if (info.uv) {
-        [u, v] = info.uv;
-      } else if (info.coordinate && info.tile.bbox) {
-        const { west, south, east, north } = info.tile.bbox;
-        u = (info.coordinate[0] - west) / (east - west);
-        v = (north - info.coordinate[1]) / (north - south);
-      }
-
-      if (u !== undefined && v !== undefined) {
-        const x = Math.min(width - 1, Math.max(0, Math.floor(u * (width - 1))));
-        const y = Math.min(height - 1, Math.max(0, Math.floor(v * (height - 1))));
-        console.log('Elevation (m):', raw[y * width + x]);
-      }
+    const coord = extractTerrainCoordinate(info);
+    if (coord) {
+      console.log(`Lat: ${coord.latitude.toFixed(6)}, Lon: ${coord.longitude.toFixed(6)}, Elev: ${coord.elevation.toFixed(2)}m`);
     }
   }
 });
 ```
 
-> **Known limitation:** Terrain picking does not work when an overlay (OSM/XYZ or `CogBitmapLayer` with `clampToTerrain`) is active. Fix planned for a future release.
+#### Advanced: Access Raw Raster Values
+
+To query elevation or additional bands from the raster:
+
+```typescript
+import { CogTerrainLayer, extractTerrainCoordinate } from '@gisatcz/deckgl-geolib';
+
+const layer = new CogTerrainLayer({
+  id: 'picking-terrain',
+  elevationData: 'https://example.com/dem.tif',
+  isTiled: true,
+  pickable: '3d',  // ← Enable 3D picking
+  operation: 'terrain+draw',
+  terrainOptions: { type: 'terrain' },
+  onClick: (info) => {
+    const coord = extractTerrainCoordinate(info);
+    if (!coord) return;
+
+    const tileResult = info.tile?.content?.[0];
+    if (!tileResult?.raw) return;
+
+    const bbox = info.tile.bbox;
+    const { west, south, east, north } = bbox;
+
+    // Map 3D coordinate to raster pixel
+    const u = (coord.longitude - west) / (east - west);
+    const v = (north - coord.latitude) / (north - south);
+    const pixelX = Math.round(Math.max(0, Math.min(1, u)) * (tileResult.width - 1));
+    const pixelY = Math.round(Math.max(0, Math.min(1, v)) * (tileResult.height - 1));
+
+    // Query elevation and other bands
+    const elevation = tileResult.raw[pixelY * tileResult.width + pixelX];
+    const channels = tileResult.raw.length / (tileResult.width * tileResult.height);
+    const pixelOffset = (pixelY * tileResult.width + pixelX) * channels;
+    const allBands = Array.from(tileResult.raw.slice(pixelOffset, pixelOffset + channels));
+    
+    console.log('Elevation:', elevation);
+    console.log('All bands:', allBands);
+  }
+});
+```
+
+**Key Difference from `pickable: true`:**
+- `pickable: true` — Returns approximate 2D coordinates with camera parallax (incorrect at non-zero pitch)
+- `pickable: '3d'` — Returns exact 3D coordinates clamped to terrain mesh (correct at any pitch)
+
+---
+
+## Time-Series Animation Example
+
+**Use Case:** Render multi-temporal elevation data (e.g., 30 daily models stacked in a COG) and smoothly animate through them with a slider.
+
+**Key Features:**
+- Lazy-load pattern: user clicks "Fetch All Bands" button
+- Global cache stores all bands after first fetch
+- Slider instantly switches between cached bands (zero network latency)
+- Works on large datasets (30+ bands)
+
+### Setup
+
+```tsx
+import React, { useMemo, useState, useEffect } from 'react';
+import DeckGL from '@deck.gl/react';
+import { MapView } from '@deck.gl/core';
+import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+
+const MULTIBAND_COG_URL = 'https://example.com/elevation-time-series-30-days.tif';
+
+function TimeSeriesAnimationExample() {
+  const [viewState, setViewState] = useState({
+    longitude: -66.33,
+    latitude: -17.09,
+    zoom: 12,
+  });
+
+  // 1. Slider state (0-based index)
+  const [currentBandIndex, setCurrentBandIndex] = useState(0);
+
+  // 2. Caching state (lazy-load pattern)
+  const [isFetched, setIsFetched] = useState(false);
+
+  // 3. Pre-initialize CogTiles to read band count
+  const [cogInstance, setCogInstance] = useState(null);
+  useEffect(() => {
+    if (!cogInstance) {
+      const cog = new CogTiles({
+        type: 'terrain',
+        noDataValue: -32768.0,
+        terrainSkirtHeight: 0,
+        useChannel: 1,
+        meshMaxError: 650,
+        color: [0, 105, 148, 180],
+        cacheAllBands: false, // Start false; enable on button click
+      });
+
+      cog.initializeCog(MULTIBAND_COG_URL).then(() => {
+        setCogInstance(cog);
+      });
+    }
+  }, []);
+
+  const totalBands = cogInstance?.getNumChannels?.() || 30;
+
+  const layers = useMemo(() => {
+    return [
+      new CogTerrainLayer({
+        id: 'time-series-terrain',
+        elevationData: MULTIBAND_COG_URL,
+        isTiled: true,
+        tileSize: 256,
+        cogTiles: cogInstance || undefined,
+        terrainOptions: {
+          type: 'terrain',
+          noDataValue: -32768.0,
+          terrainSkirtHeight: 0,
+          useChannel: currentBandIndex + 1, // 1-based
+          meshMaxError: 650,
+          useSingleColor: true,
+          color: [0, 105, 148, 180],
+          cacheAllBands: isFetched, // Dynamic: only cache after button click
+        },
+        updateTriggers: {
+          getTileData: [currentBandIndex, isFetched],
+        },
+      }),
+    ];
+  }, [currentBandIndex, cogInstance, isFetched]);
+
+  return (
+    <div style={{ width: '100%', height: '100vh', position: 'relative' }}>
+      <DeckGL
+        viewState={viewState}
+        onViewStateChange={({ viewState: v }) => setViewState(v)}
+        controller
+        layers={layers}
+        views={[new MapView({ controller: true })]}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+      />
+
+      {/* Control Panel */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          background: 'rgba(255, 255, 255, 0.95)',
+          padding: '16px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#333',
+          width: '260px',
+          zIndex: 1000,
+        }}
+      >
+        <div style={{ marginBottom: '16px', fontWeight: 'bold', fontSize: '16px' }}>
+          Time-Series Terrain
+        </div>
+
+        {/* Fetch All Bands Button */}
+        <button
+          onClick={() => setIsFetched(true)}
+          disabled={isFetched}
+          style={{
+            width: '100%',
+            padding: '8px',
+            marginBottom: '12px',
+            backgroundColor: isFetched ? '#e0e0e0' : '#4CAF50',
+            color: isFetched ? '#999' : 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontWeight: '500',
+            cursor: isFetched ? 'default' : 'pointer',
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {isFetched ? '✅ All Bands Cached' : '⬇️ Fetch All Bands (~10 MB)'}
+        </button>
+
+        {/* Slider */}
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: '500' }}>
+            Day: {currentBandIndex + 1} / {totalBands}
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={totalBands - 1}
+            value={currentBandIndex}
+            disabled={!isFetched}
+            onChange={(e) => setCurrentBandIndex(parseInt(e.target.value, 10))}
+            onMouseUp={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
+            onTouchEnd={(e) => setCurrentBandIndex(parseInt(e.currentTarget.value, 10))}
+            style={{
+              width: '100%',
+              cursor: isFetched ? 'pointer' : 'not-allowed',
+              opacity: isFetched ? 1 : 0.5,
+            }}
+          />
+        </div>
+
+        {/* Help Text */}
+        <div style={{ fontSize: '12px', color: '#666', marginTop: '10px', lineHeight: '1.4' }}>
+          {!isFetched ? (
+            <>
+              💡 Click "Fetch All Bands" to cache 30 days of elevation data. Then use the slider for smooth animation.
+            </>
+          ) : (
+            <>
+              ✅ Move the slider for instant animation! Each day is cached and instantly served from memory.
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default TimeSeriesAnimationExample;
+```
+
+### Result
+
+**Before clicking "Fetch All Bands":**
+- Map shows day 1 instantly
+- Slider is disabled
+- No network overhead
+
+**After clicking "Fetch All Bands":**
+- Takes 3–5 seconds to fetch all 30 days
+- Slider enables
+- Moving slider is instant (no network latency)
+- Each day is served from the global cache
+
+### Performance
+
+| Metric | Single-Band Mode | Multi-Band Cache |
+|---|---|---|
+| Initial load | < 1 sec (1 band) | 3–5 sec (all 30 bands) |
+| Per slider move (no cache) | 0.5–2 sec (network) | N/A |
+| Per slider move (cached) | N/A | < 50 ms (memory) |
+| Memory per tile | 256 KB | 7.7 MB |
+| Total for 4 tiles | 1 MB | ~31 MB |
+
+### See Also
+
+- [Animation Guide](animation-guide.md) — Full details on configuration and troubleshooting
+- [API Reference: cacheAllBands](api-reference.md#animation--caching-options)
+- [Example: CogAnimationExample.tsx in the example app](../../example/src/examples/CogAnimationExample.tsx)
