@@ -1,6 +1,6 @@
 {
   "name": "@gisatcz/deckgl-geolib",
-  "version": "2.5.0",
+  "version": "2.6.0-dev.6",
   "description": "Deck.gl extension for rendering Cloud-Optimized GeoTIFF (COG) data",
   "keywords": [
     "deck.gl",
@@ -30,6 +30,11 @@
       "types": "./dist/esm/types/index.d.ts",
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
+    },
+    "./react": {
+      "types": "./dist/esm/types/react/index.d.ts",
+      "import": "./dist/esm/react/index.js",
+      "require": "./dist/cjs/react/index.js"
     }
   },
   "sideEffects": false,
@@ -64,20 +69,26 @@
     "@loaders.gl/schema": ">=4.0.0",
     "@luma.gl/core": ">=9.0.0",
     "@luma.gl/engine": ">=9.0.0",
-    "@luma.gl/shadertools": ">=9.0.0"
+    "@luma.gl/shadertools": ">=9.0.0",
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@deck.gl/core": "^9.2.11",
-    "@deck.gl/extensions": "^9.2.11",
-    "@deck.gl/geo-layers": "^9.2.11",
-    "@deck.gl/layers": "^9.2.11",
-    "@deck.gl/mesh-layers": "^9.2.11",
-    "@loaders.gl/core": "^4.3.4",
-    "@loaders.gl/loader-utils": "^4.3.4",
-    "@loaders.gl/schema": "^4.3.4",
-    "@luma.gl/core": "^9.2.6",
-    "@luma.gl/engine": "^9.2.6",
-    "@luma.gl/shadertools": "^9.2.6",
+    "@deck.gl/core": "^9.3.2",
+    "@deck.gl/extensions": "^9.3.2",
+    "@deck.gl/geo-layers": "^9.3.2",
+    "@deck.gl/layers": "^9.3.2",
+    "@deck.gl/mesh-layers": "^9.3.2",
+    "@loaders.gl/core": "^4.4.1",
+    "@loaders.gl/loader-utils": "^4.4.1",
+    "@loaders.gl/schema": "^4.4.1",
+    "@luma.gl/core": "^9.3.3",
+    "@luma.gl/engine": "^9.3.3",
+    "@luma.gl/shadertools": "^9.3.3",
     "@rollup/plugin-commonjs": "^29.0.2",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",

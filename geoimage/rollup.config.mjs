@@ -4,6 +4,7 @@ import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 import json from '@rollup/plugin-json';
 import filesize from 'rollup-plugin-filesize';
+import webWorkerLoader from 'rollup-plugin-web-worker-loader';
 import path from 'path';
 
 const packageJson = {
@@ -32,6 +33,15 @@ const external = [
 // Reusable plugin stack
 const getPlugins = (isEsm) => [
   json(),
+  // ⚠️ CRITICAL: webWorkerLoader must come BEFORE resolve() and typescript()
+  // so it can intercept worker imports before resolution
+  webWorkerLoader({
+    targetPlatform: 'browser',
+    inline: true,           // ← Inline worker as base64 Blob URL
+    loadPath: '',           // ← No external .js files
+    preserveSource: false,  // ← Remove source after bundling
+    extensions: ['.ts'],    // ← Support TypeScript workers
+  }),
   resolve({
     preferBuiltins: true,
     browser: true,
@@ -49,7 +59,7 @@ const getPlugins = (isEsm) => [
 ];
 
 export default [
-  // Pass 1: Generates ESM files + Type Declarations
+  // Pass 1: Generates ESM files + Type Declarations (main entry)
   {
     external,
     input: './src/index.ts',
@@ -70,7 +80,7 @@ export default [
     ],
     plugins: getPlugins(true),
   },
-  // Pass 2: Generates CJS files
+  // Pass 2: Generates CJS files (main entry)
   {
     external,
     input: './src/index.ts',
@@ -83,6 +93,48 @@ export default [
       },
       {
         file: path.join(packageJson.main, 'index.min.js'),
+        format: 'cjs',
+        sourcemap: true,
+        plugins: [terser()],
+        inlineDynamicImports: true,
+      },
+    ],
+    plugins: getPlugins(false),
+  },
+  // Pass 3: Generates ESM files (react subpath entry)
+  {
+    external,
+    input: './src/react/index.ts',
+    output: [
+      {
+        file: path.join(packageJson.module, 'react/index.js'),
+        format: 'esm',
+        sourcemap: true,
+        inlineDynamicImports: true,
+      },
+      {
+        file: path.join(packageJson.module, 'react/index.min.js'),
+        format: 'esm',
+        sourcemap: true,
+        plugins: [terser()],
+        inlineDynamicImports: true,
+      },
+    ],
+    plugins: getPlugins(false),
+  },
+  // Pass 4: Generates CJS files (react subpath entry)
+  {
+    external,
+    input: './src/react/index.ts',
+    output: [
+      {
+        file: path.join(packageJson.main, 'react/index.js'),
+        format: 'cjs',
+        sourcemap: true,
+        inlineDynamicImports: true,
+      },
+      {
+        file: path.join(packageJson.main, 'react/index.min.js'),
         format: 'cjs',
         sourcemap: true,
         plugins: [terser()],

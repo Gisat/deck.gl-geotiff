@@ -1,19 +1,31 @@
-import { fromUrl, GeoTIFF, GeoTIFFImage, type BlockedSourceOptions } from 'geotiff';
+import { fromUrl, GeoTIFF, type BlockedSourceOptions } from 'geotiff';
 
 // Bitmap styling
 import GeoImage from './GeoImage';
 import { GeoImageOptions, TileResult, TypedArray } from './types';
 import { ReliefCompositor } from './lib/ReliefCompositor';
+import { getGlobalTerrainWorkerPool } from '../workers/TerrainWorkerPool';
 
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 
-const EARTH_CIRCUMFERENCE = 2 * Math.PI * 6378137;
-const EARTH_HALF_CIRCUMFERENCE = EARTH_CIRCUMFERENCE / 2;
-const webMercatorOrigin = [-20037508.342789244, 20037508.342789244];
-const webMercatorRes0 = 156543.03125;
+import { EARTH_CIRCUMFERENCE, webMercatorOrigin, calculateZoomRange, calculateBoundsAsLatLon } from '../utils/geo';
+import { getDataTypeFromTags, getNoDataValue } from '../utils/tiffUtils';
+import { buildCogZoomResolutionLookup, calculateDynamicMeshMaxError as lodCalculateDynamicMeshMaxError, getImageIndexForZoomLevel as lodGetImageIndexForZoomLevel } from '../utils/lod';
+import TileCacheManager from './lib/TileCacheManager';
+import TileReader from './lib/TileReader';
+import { isF32NoData } from './lib/numberUtils';
+
+// ── Global Multi-Band Cache ──
+// Survives across CogTiles instance recreations (e.g., during React re-renders).
+// Keyed by ${url}_${z}_${x}_${y}_${meshMaxError}_${skipTextureFlag}_band_${channel}
+// to account for dataset changes, tessellation options, and rendering modes.
+// Maps to pre-computed terrain meshes (same structure as single-band cache).
+const GLOBAL_MULTI_BAND_CACHE = new Map<string, TileResult>();
 
 const CogTilesGeoImageOptionsDefaults = {
   blurredTexture: true,
+  // When true, log per-tile per-band min/max values for debugging (disabled by default)
+  debugTileStats: false,
 };
 
 class CogTiles {
@@ -31,6 +43,8 @@ class CogTiles {
 
   bounds: [number, number, number, number] = [0, 0, 0, 0];
 
+  bandDescriptions: string[] = [];
+
   geo: GeoImage = new GeoImage();
   options: GeoImageOptions;
 
@@ -41,44 +55,9 @@ class CogTiles {
   // and individual tile cancellations (e.g. from panning) do not poison other callers.
   // Once the promise settles (resolved or rejected), controller/callerCount are irrelevant;
   // future cache hits just await the already-resolved promise directly.
-  private tileResultCache: Map<string, {
-    promise: Promise<TileResult | null>;
-    controller: AbortController;
-    callerCount: number;
-    settled: boolean;
-  }> = new Map();
-  private readonly tileResultCacheMaxSize = 32;
-
-  private getTileResultCacheKey(x: number, y: number, z: number, meshMaxError: number, skipTexture: boolean): string {
-    return `${z}/${x}/${y}/${meshMaxError}/${skipTexture ? '1' : '0'}`;
-  }
-
-  /** Clears the TileResult cache. Call when the COG URL or meshMaxError changes. */
-  clearTileResultCache(): void {
-    // Abort any in-flight pipelines so their network requests are cancelled
-    for (const entry of this.tileResultCache.values()) {
-      if (!entry.settled) entry.controller.abort();
-    }
-    this.tileResultCache.clear();
-  }
-
-  // Raw raster cache for ordinary bitmap layers — saves network fetch + decompression on revisit.
-  // BitmapGenerator is cheap to re-run from cached raster; no need to hold ImageBitmaps in memory.
-  private rasterCache: Map<string, Promise<TypedArray[]>> = new Map();
-  private readonly rasterCacheMaxSize = 64;
-
-  // Relief mask cache for bitmap + glaze layers — saves network fetch + kernel convolution on revisit.
-  // Stores the Float32Array output of composeSwissRelief; BitmapGenerator re-runs from it cheaply.
-  private reliefMaskCache: Map<string, Promise<Uint8ClampedArray>> = new Map();
-  private readonly reliefMaskCacheMaxSize = 64;
-
-  private getTileCacheKey(x: number, y: number, z: number): string {
-    return `${z}/${x}/${y}`;
-  }
-
-  // Cache GeoTIFFImage Promises by index to prevent redundant HTTP requests from geotiff 3.0.4+ eager loading
-  // Stores Promises (not resolved values) so concurrent requests share the same getImage() call
-  private imageCache: Map<number, Promise<GeoTIFFImage>> = new Map();
+  private cache = new TileCacheManager();
+  private tileReader?: TileReader;
+  private workerPool?: any; // TerrainWorkerPool (for terrain tiles)
 
   // Store initialization promise to prevent concurrent duplicate initializations
   private initializePromise?: Promise<void>;
@@ -88,6 +67,13 @@ class CogTiles {
 
   constructor(options: GeoImageOptions) {
     this.options = { ...CogTilesGeoImageOptionsDefaults, ...options };
+
+    // Get reference to global worker pool for terrain tiles
+    // Do NOT create a new pool per instance — reuse the singleton
+    // Skip if disableWorkerPool is true (e.g., for smooth animation during rapid band changes)
+    if (options.type === 'terrain' && typeof Worker !== 'undefined' && !options.disableWorkerPool) {
+      this.workerPool = getGlobalTerrainWorkerPool();
+    }
   }
 
   async initializeCog(url: string) {
@@ -100,10 +86,16 @@ class CogTiles {
     // Fully reset COG-derived state when the URL changes so the instance can be
     // safely reinitialized against a different source.
     if (this.lastInitializedUrl !== undefined && this.lastInitializedUrl !== url) {
-      this.clearTileResultCache();
-      this.rasterCache.clear();
-      this.reliefMaskCache.clear();
-      this.imageCache.clear();
+      this.cache.clearAll();
+      // Clear multi-band cache entries for the old URL to prevent stale data
+      const keysToDelete: string[] = [];
+      GLOBAL_MULTI_BAND_CACHE.forEach((_, key) => {
+        if (key.startsWith(this.lastInitializedUrl!)) {
+          keysToDelete.push(key);
+        }
+      });
+      keysToDelete.forEach(key => GLOBAL_MULTI_BAND_CACHE.delete(key));
+      
       this.cog = undefined;
       this.cogOrigin = [0, 0];
       this.cogZoomLookup = [];
@@ -112,6 +104,7 @@ class CogTiles {
       this.tileSize = 256;
       this.zoomRange = [0, 0];
       this.bounds = [0, 0, 0, 0];
+      this.bandDescriptions = [];
       this.initializePromise = undefined;
       this.lastInitializedUrl = undefined;
     }
@@ -131,19 +124,46 @@ class CogTiles {
         const blockSize = this.options.blockSize ?? 65536;
         this.cog = await (fromUrl as any)(url, { blockSize } as BlockedSourceOptions);
         const imagePromise = this.cog!.getImage();
-        this.imageCache.set(0, imagePromise);  // Cache base image (index 0) to avoid re-fetching during getTileFromImage
+        this.cache.setImage(0, imagePromise);  // Cache base image (index 0) to avoid re-fetching during getTileFromImage
         const image = await imagePromise;
         const fileDirectory = image.fileDirectory;
 
         this.cogOrigin = image.getOrigin();
 
-        this.options.noDataValue ??= await this.getNoDataValue(image);
-        this.options.format ??= await this.getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
+        this.options.noDataValue ??= getNoDataValue(image);
+        this.options.format ??= await getDataTypeFromTags(fileDirectory) as GeoImageOptions['format'];
 
         this.options.numOfChannels = fileDirectory.getValue('SamplesPerPixel');
         this.options.planarConfig = fileDirectory.getValue('PlanarConfiguration');
 
-        [this.cogZoomLookup, this.cogResolutionLookup] = await this.buildCogZoomResolutionLookup(this.cog!);
+        // Load per-band descriptions from GDAL_METADATA tag
+        const numBands = this.options.numOfChannels ?? 1;
+        const descriptions: string[] = Array(numBands).fill('');
+        
+        if (image.fileDirectory.hasTag('GDAL_METADATA')) {
+          const gdalMetadataStr = await image.fileDirectory.loadValue('GDAL_METADATA');
+          // Parse XML GDAL metadata to extract per-band descriptions.
+          // Regex is flexible with attribute order; GDAL generates items with name="DESCRIPTION"
+          // before sample="N", but [^>]* allows other attributes to appear in any order.
+          // Format: <Item name="DESCRIPTION" sample="0" role="description">20170101</Item>
+          const bandDescRegex = /<Item[^>]*name="DESCRIPTION"[^>]*sample="(\d+)"[^>]*>([^<]*)<\/Item>/g;
+          let match;
+          while ((match = bandDescRegex.exec(gdalMetadataStr as string)) !== null) {
+            const bandIdx = parseInt(match[1], 10);
+            const desc = match[2];
+            if (bandIdx < numBands) {
+              descriptions[bandIdx] = desc;
+            }
+          }
+          // Debug: Log if no descriptions were found in metadata
+          if (descriptions.every(d => d === '')) {
+            // eslint-disable-next-line no-console
+            console.debug('[CogTiles] GDAL_METADATA present but no DESCRIPTION items found');
+          }
+        }
+        this.bandDescriptions = descriptions;
+
+        [this.cogZoomLookup, this.cogResolutionLookup] = await buildCogZoomResolutionLookup(this.cog!);
 
     // Only compute quantized meshMaxError lookup for terrain COGs
     if (this.options.type === 'terrain') {
@@ -160,11 +180,17 @@ class CogTiles {
           );
         }
 
-        this.zoomRange = this.calculateZoomRange(
+        this.zoomRange = calculateZoomRange(
           this.tileSize, image.getResolution()[0], await this.cog!.getImageCount()
         );
 
-        this.bounds = this.calculateBoundsAsLatLon(image.getBoundingBox());
+            this.bounds = calculateBoundsAsLatLon(image.getBoundingBox());
+
+        // Initialize TileReader with buffer utilities
+        this.tileReader = new TileReader({
+          options: this.options,
+          tileSize: this.tileSize,
+        });
 
         // Mark initialization complete for this URL (used to detect URL changes)
         this.lastInitializedUrl = url;
@@ -184,127 +210,35 @@ class CogTiles {
     return this.zoomRange;
   }
 
-  calculateZoomRange(tileSize: number, resolution: number, imgCount: number) {
-    const maxZoom = this.getZoomLevelFromResolution(tileSize, resolution);
-    const minZoom = maxZoom - (imgCount - 1);
-
-    return [minZoom, maxZoom];
-  }
-
-  calculateBoundsAsLatLon(bbox: number[]){
-    const minX = Math.min(bbox[0], bbox[2]);
-    const maxX = Math.max(bbox[0], bbox[2]);
-    const minY = Math.min(bbox[1], bbox[3]);
-    const maxY = Math.max(bbox[1], bbox[3]);
-
-    const minXYDeg = this.getLatLon([minX, minY]);
-    const maxXYDeg = this.getLatLon([maxX, maxY]);
-
-    return [minXYDeg[0], minXYDeg[1], maxXYDeg[0], maxXYDeg[1]] as [number, number, number, number];
-  }
-
-  getZoomLevelFromResolution(tileSize: number, resolution: number) {
-    return Math.round(Math.log2(EARTH_CIRCUMFERENCE / (resolution * tileSize)));
-  }
-
   getBoundsAsLatLon() {
     return this.bounds;
   }
 
-  getLatLon(input: number[]) {
-    const x = input[0];
-    const y = input[1];
-
-    const lon = (x / EARTH_HALF_CIRCUMFERENCE) * 180;
-    let lat = (y / EARTH_HALF_CIRCUMFERENCE) * 180;
-
-    lat = (180 / Math.PI) * (2 * Math.atan(Math.exp((lat * Math.PI) / 180)) - Math.PI / 2);
-
-    return [lon, lat] as [number, number];
+  /**
+   * Gets the number of channels/bands in the COG.
+   * Returns the value from COG metadata, or 1 if not initialized.
+   */
+  getNumChannels(): number {
+    return this.options.numOfChannels || 1;
   }
 
   /**
-   * Calculates the error multiplier based on zoom level and COG zoom range.
-   * - z >= maxZ: multiplier = 0.5 (fine meshes at high zoom, maximum precision)
-   * - z <= minZ: multiplier = 3.0 (coarse meshes at low zoom, maximum performance)
-   * - Otherwise: linear interpolation between 3.0 and 0.5
+   * Returns per-band descriptions loaded from GDAL_METADATA during initialization.
+   * Index is 0-based. Returns an empty string for bands without a description.
    */
-  private getErrorMultiplierForZoom(z: number, minZ: number, maxZ: number): number {
-    if (z >= maxZ) return 0.5;
-    if (z <= minZ) return 3.0;
-    // Linear interpolation: 3.0 - ((z - minZ) / (maxZ - minZ)) * 2.5
-    return 3.0 - ((z - minZ) / (maxZ - minZ)) * 2.5;
+  getBandDescriptions(): string[] {
+    return this.bandDescriptions;
   }
 
   /**
-   * Calculates dynamic meshMaxError for a given zoom level and resolution.
-   * Formula: resolution * errorMultiplier, where multiplier scales from 3.0 (low zoom) to 0.5 (high zoom).
-   * Results are clamped to 0.5–100 meters to prevent pathological tessellation:
-   * - Min 0.5m ensures simplification always happens (no rounding to 0 with sub-meter pixels)
-   * - Max 100m prevents excessive simplification at low zoom with low-resolution COGs
-   */
-  private calculateDynamicMeshMaxError(z: number, resolution: number, minZ: number, maxZ: number): number {
-    const multiplier = this.getErrorMultiplierForZoom(z, minZ, maxZ);
-    const errorValue = resolution * multiplier;
-    return Math.max(0.5, Math.min(100, errorValue));
-  }
-
-  /**
-   * Gets the auto meshMaxError for a given overview index.
-   * Returns undefined if auto lookup has not been computed.
-   */
+    * Gets the auto meshMaxError for a given overview index.
+    * Returns undefined if auto lookup has not been computed.
+    */
   getMeshMaxErrorForImageIndex(imageIndex: number): number | undefined {
     return this.cogMeshMaxErrorLookup[imageIndex];
   }
 
-  /**
-   * Builds lookup tables for zoom levels and estimated resolutions from a Cloud Optimized GeoTIFF (COG) object.
-   *
-   * It is assumed that inn web mapping, COG data is visualized in the Web Mercator coordinate system.
-   * At zoom level 0, the Web Mercator resolution is defined by the constant `webMercatorRes0`
-   * (e.g., 156543.03125 m/pixel). At each subsequent zoom level, this resolution is halved.
-   *
-   * This function calculates, for each image (overview) in the COG, its estimated resolution and
-   * corresponding zoom level based on the base image's resolution and width.
-   *
-   * @param {object} cog - A Cloud Optimized GeoTIFF object loaded via geotiff.js.
-   * @returns {Promise<[number[], number[]]>} A promise resolving to a tuple of two arrays:
-   *   - The first array (`zoomLookup`) maps each image index to its computed zoom level.
-   *   - The second array (`resolutionLookup`) maps each image index to its estimated resolution (m/pixel).
-   */
-  async buildCogZoomResolutionLookup(cog: GeoTIFF) {
-    // Retrieve the total number of images (overviews) in the COG.
-    const imageCount = await cog.getImageCount();
-
-    // Use the first image as the base reference.
-    const baseImage = await cog.getImage(0);
-    const baseResolution = baseImage.getResolution()[0]; // Resolution (m/pixel) of the base image.
-    const baseWidth = baseImage.getWidth();
-
-    // Initialize arrays to store the zoom level and resolution for each image.
-    const zoomLookup = [];
-    const resolutionLookup = [];
-
-    // Iterate over each image (overview) in the COG.
-    for (let idx = 0; idx < imageCount; idx++) {
-      const image = await cog.getImage(idx);
-      const width = image.getWidth();
-
-      // Calculate the scale factor relative to the base image.
-      const scaleFactor = baseWidth / width;
-      const estimatedResolution = baseResolution * scaleFactor;
-
-      // Calculate the zoom level using the Web Mercator resolution standard:
-      // webMercatorRes0 is the resolution at zoom level 0; each zoom level halves the resolution.
-      const zoomLevel = Math.round(Math.log2(webMercatorRes0 / estimatedResolution));
-
-      zoomLookup[idx] = zoomLevel;
-      resolutionLookup[idx] = estimatedResolution;
-    }
-
-    return [zoomLookup, resolutionLookup];
-  }
-
+  
   /**
    * Computes dynamic meshMaxError values for each overview based on COG resolution and zoom level.
    * Called only for terrain COGs after buildCogZoomResolutionLookup() completes.
@@ -317,7 +251,7 @@ class CogTiles {
 
     this.cogMeshMaxErrorLookup = this.cogResolutionLookup.map((resolution, idx) => {
       const zoom = this.cogZoomLookup[idx];
-      return this.calculateDynamicMeshMaxError(zoom, resolution, minZ, maxZ);
+      return lodCalculateDynamicMeshMaxError(zoom, resolution, minZ, maxZ);
     });
   }
 
@@ -333,29 +267,7 @@ class CogTiles {
    * @returns {number} The index of the image in the COG that best matches the specified zoom level.
    */
   getImageIndexForZoomLevel(zoom: number): number {
-    // Retrieve the minimum and maximum zoom levels from the lookup table.
-    const minZoom = this.cogZoomLookup[this.cogZoomLookup.length - 1];
-    const maxZoom = this.cogZoomLookup[0];
-    if (zoom > maxZoom) return 0;
-    if (zoom < minZoom) return this.cogZoomLookup.length - 1;
-
-    // For zoom levels within the available range, find the exact or closest matching index.
-    const exactMatchIndex = this.cogZoomLookup.indexOf(zoom);
-    if (exactMatchIndex !== -1) {
-      return exactMatchIndex;
-    }
-
-    // No exact match: find the closest zoom level
-    let closestIndex = 0;
-    let minDistance = Math.abs(this.cogZoomLookup[0] - zoom);
-    for (let i = 1; i < this.cogZoomLookup.length; i += 1) {
-      const distance = Math.abs(this.cogZoomLookup[i] - zoom);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = i;
-      }
-    }
-    return closestIndex;
+    return lodGetImageIndexForZoomLevel(zoom, this.cogZoomLookup);
   }
 
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
@@ -375,10 +287,10 @@ class CogTiles {
       const imageIndex = this.getImageIndexForZoomLevel(zoom);
       
       // Cache Promises to share in-flight requests across concurrent tiles at the same overview
-      let imagePromise = this.imageCache.get(imageIndex);
+      let imagePromise = this.cache.getImage(imageIndex);
       if (!imagePromise) {
         imagePromise = this.cog!.getImage(imageIndex);
-        this.imageCache.set(imageIndex, imagePromise);
+        this.cache.setImage(imageIndex, imagePromise);
       }
       const targetImage = await imagePromise;
 
@@ -433,7 +345,7 @@ class CogTiles {
 
     // CHECK: If no overlap, return empty
     if (readWidth <= 0 || readHeight <= 0) {
-      return [this.createEmptyTile(FETCH_SIZE)];
+      return [this.tileReader!.createEmptyTile(FETCH_SIZE)];
     }
 
     // 8. Calculate Offsets (Padding)
@@ -453,7 +365,7 @@ class CogTiles {
       const numChannels = this.options.numOfChannels || 1;
 
       // Initialize with a TypedArray of the full target size and correct data type
-      const validImageData = this.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE, numChannels);
+      const validImageData = this.tileReader!.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE, numChannels);
       if (this.options.noDataValue !== undefined) {
         validImageData.fill(this.options.noDataValue);
       }
@@ -464,7 +376,7 @@ class CogTiles {
       // Place the valid pixel data into the tile buffer.
       for (let band = 0; band < validRasterData.length; band += 1) {
         // We must reset the buffer for each band, otherwise data from previous band persists in padding areas
-        const tileBuffer = this.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE);
+        const tileBuffer = this.tileReader!.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE);
         if (this.options.noDataValue !== undefined) {
           tileBuffer.fill(this.options.noDataValue);
         }
@@ -537,24 +449,6 @@ class CogTiles {
   }
 }
 
-  /**
-   * Creates a blank tile buffer filled with the "No Data" value.
-   * @param size The width/height of the square tile (e.g., 256 or 257)
-   */
-  createEmptyTile(size?: number) {
-    const s = size || this.tileSize; // Defaults to 256
-    const channels = this.options.numOfChannels || 1;
-    const totalSize = s * s * channels;
-
-    const tileData = new Float32Array(totalSize);
-
-    if (this.options.noDataValue !== undefined) {
-      tileData.fill(this.options.noDataValue);
-    }
-
-    return tileData;
-  }
-
   async getTile(x: number, y: number, z: number, bounds?: Bounds, meshMaxError?: number, signal?: AbortSignal, skipTexture?: boolean): Promise<TileResult | null> {
     // cellSizeMeters is derived purely from tile coordinates — compute once for all paths
     const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
@@ -574,260 +468,281 @@ class CogTiles {
       resolvedMeshMaxError = meshMaxError ?? 4.0;
     }
 
-    // ── PATH A: Terrain ──────────────────────────────────────────────────────────
-    // Full TileResult (mesh + raw + texture) cached with ref-counted abort so that
-    // panning cancels in-flight fetches only when ALL callers have cancelled.
     if (isTerrain) {
-      const skipTextureFlag = skipTexture ?? this.options.skipTexture ?? false;
-      const cacheKey = this.getTileResultCacheKey(x, y, z, resolvedMeshMaxError, skipTextureFlag);
-      const existing = this.tileResultCache.get(cacheKey);
-      if (existing) {
-        // LRU touch — move the key to the end of the Map to mark as recently used
-        this.tileResultCache.delete(cacheKey);
-        this.tileResultCache.set(cacheKey, existing);
+      return this.getTerrainTile(x, y, z, bounds, resolvedMeshMaxError, cellSizeMeters, signal, skipTexture);
+    }
+
+    if (isGlaze) {
+      return this.getGlazeTile(x, y, z, bounds, cellSizeMeters, meshMaxError, signal);
+    }
+
+    return this.getBitmapTile(x, y, z, bounds, cellSizeMeters, meshMaxError, signal);
+  }
+
+  private async getTerrainTile(x: number, y: number, z: number, bounds: Bounds | undefined, resolvedMeshMaxError: number, cellSizeMeters: number, signal?: AbortSignal, skipTexture?: boolean): Promise<TileResult | null> {
+    const skipTextureFlag = skipTexture ?? this.options.skipTexture ?? false;
+
+    // ── Multi-Band Cache Check ──
+    // If cacheAllBands is enabled, check if this tile+band combination is in the cache.
+    // If so, return it instantly. If not, fetch all bands and populate the cache.
+    if (this.options.cacheAllBands) {
+      if (signal?.aborted) {
+        return null; // Early exit if already aborted
       }
 
-      if (existing) {
-        if (existing.settled) {
-          if (signal?.aborted) return null;
-          return existing.promise;
+      const currentChannel = this.options.useChannel || 1; // 1-based
+      // Cache key includes URL, meshMaxError, and skipTexture to account for dataset/option changes
+      const multiBandCacheKey = `${this.lastInitializedUrl}_${z}_${x}_${y}_${resolvedMeshMaxError}_${skipTextureFlag}_band_${currentChannel}`;
+
+      // Check if this specific band is already cached
+      if (GLOBAL_MULTI_BAND_CACHE.has(multiBandCacheKey)) {
+        const cached = GLOBAL_MULTI_BAND_CACHE.get(multiBandCacheKey);
+        if (cached) {
+          return cached;
         }
-        existing.callerCount += 1;
-        if (signal && !signal.aborted) {
-          signal.addEventListener('abort', () => {
-            existing.callerCount -= 1;
-            if (existing.callerCount <= 0 && !existing.settled) {
-              existing.controller.abort();
-            }
-          }, { once: true });
+      }
+
+      // Not in cache — fetch all bands for this tile and populate the cache
+      try {
+        // Pass NO signal to getTileAllBands to avoid early abortion
+        // The tile lifecycle is managed by TileLayer, we want this fetch to complete
+        const allBands = await this.getTileAllBands(x, y, z, resolvedMeshMaxError, undefined, bounds);
+        
+        // Only cache and return if we got valid data
+        if (allBands && allBands.length > 0) {
+          if (signal?.aborted) {
+            return null; // Check abort after fetch completes
+          }
+
+          // Cache all bands (indexed by 1-based channel: band 1, band 2, ..., band N)
+          allBands.forEach((bandResult, idx) => {
+            const bandChannel = idx + 1; // Convert 0-based index to 1-based channel
+            const cacheKey = `${this.lastInitializedUrl}_${z}_${x}_${y}_${resolvedMeshMaxError}_${skipTextureFlag}_band_${bandChannel}`;
+            GLOBAL_MULTI_BAND_CACHE.set(cacheKey, bandResult);
+          });
+
+          // Return the requested band
+          const requestedBandIndex = (currentChannel || 1) - 1; // Convert 1-based to 0-based
+          if (requestedBandIndex < 0 || requestedBandIndex >= allBands.length) {
+             
+            console.error(`[CogTiles] Requested band index ${requestedBandIndex} out of range (0-${allBands.length - 1})`);
+            return null;
+          }
+          return allBands[requestedBandIndex];
         }
-        const result = await existing.promise;
+        // If getTileAllBands returned empty, fall through to normal fetch
+      } catch (error) {
+        // If multi-band fetch fails, fall through to normal tile fetch
+         
+        console.warn('[CogTiles] Multi-band fetch failed, falling back to single-band:', error);
+      }
+    }
+
+    const cacheKey = this.cache.getTileResultCacheKey(x, y, z, resolvedMeshMaxError, skipTextureFlag);
+    const existing = this.cache.getTileResult(cacheKey);
+
+    if (existing) {
+      if (existing.settled) {
         if (signal?.aborted) return null;
-        return result;
+        return existing.promise;
       }
+      existing.callerCount += 1;
+      if (signal && !signal.aborted) {
+        signal.addEventListener('abort', () => {
+          existing.callerCount -= 1;
+          if (existing.callerCount <= 0 && !existing.settled) {
+            existing.controller.abort();
+          }
+        }, { once: true });
+      }
+      const result = await existing.promise;
+      if (signal?.aborted) return null;
+      return result;
+    }
 
-      const controller = new AbortController();
+    const controller = new AbortController();
 
-      const pipeline: Promise<TileResult | null> = (async () => {
-        const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
-        const requiredSize = this.tileSize + (isKernel ? 2 : 1);
-        const tileData = await this.getTileFromImage(x, y, z, requiredSize, controller.signal);
+    const pipeline: Promise<TileResult | null> = (async () => {
+      const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
+      const requiredSize = this.tileSize + (isKernel ? 2 : 1);
+      const tileData = await this.getTileFromImage(x, y, z, requiredSize, controller.signal);
 
-        // === Step F: detect all-noData tiles before tessellation ===
-        const raster = tileData[0];
-        const noData = this.options.noDataValue;
-        if (noData !== undefined && raster) {
-          const numChannels = this.options.numOfChannels || 1;
-          let useChannelIndex = this.options.useChannelIndex ?? (this.options.useChannel ? (this.options.useChannel - 1) : 0);
-          if (useChannelIndex == null) useChannelIndex = 0;
+      // === Step F: detect all-noData tiles before tessellation ===
+      const raster = tileData[0];
+      const noData = this.options.noDataValue;
+      if (noData !== undefined && raster) {
+        const numChannels = this.options.numOfChannels || 1;
+        let useChannelIndex = this.options.useChannelIndex ?? (this.options.useChannel ? (this.options.useChannel - 1) : 0);
+        if (useChannelIndex == null) useChannelIndex = 0;
 
-          const checkStrategy = this.options.noDataCheck ?? 'full';
+        const checkStrategy = this.options.noDataCheck ?? 'full';
 
-          const width = requiredSize;
-          const height = requiredSize;
+        const width = requiredSize;
+        const height = requiredSize;
 
-          const isNoValue = (v: number) => (Number.isNaN(noData) ? Number.isNaN(v) : v === noData);
+        const isNoValue = (v: number) => isF32NoData(v, noData);
 
-          let allNoData = true;
+        let allNoData = true;
 
-          if (checkStrategy === 'full') {
-            // Full linear scan (safe)
-            if (numChannels > 1) {
-              for (let i = useChannelIndex; i < (raster as any).length; i += numChannels) {
-                const v = (raster as any)[i];
-                if (!isNoValue(v)) { allNoData = false; break; }
-              }
-            } else {
-              for (let i = 0; i < (raster as any).length; i++) {
-                const v = (raster as any)[i];
-                if (!isNoValue(v)) { allNoData = false; break; }
-              }
-            }
-          } else if (checkStrategy === 'border+center') {
-            // Border scan: iterate over top/bottom rows and left/right cols
-            const stepX = numChannels;
-            // Top row
-            for (let x = 0; x < width; x++) {
-              const idx = x * stepX + useChannelIndex;
-              const v = (raster as any)[idx];
+        if (checkStrategy === 'full') {
+          // Full linear scan (safe)
+          if (numChannels > 1) {
+            for (let i = useChannelIndex; i < (raster as any).length; i += numChannels) {
+              const v = (raster as any)[i];
               if (!isNoValue(v)) { allNoData = false; break; }
             }
-            // Bottom row
-            if (allNoData) {
-              for (let x = 0; x < width; x++) {
-                const idx = ((height - 1) * width + x) * stepX + useChannelIndex;
-                const v = (raster as any)[idx];
-                if (!isNoValue(v)) { allNoData = false; break; }
-              }
-            }
-            // Left/Right cols
-            if (allNoData) {
-              for (let y = 1; y < height - 1; y++) {
-                const leftIdx = (y * width) * stepX + useChannelIndex;
-                const rightIdx = (y * width + (width - 1)) * stepX + useChannelIndex;
-                const vl = (raster as any)[leftIdx];
-                const vr = (raster as any)[rightIdx];
-                if (!isNoValue(vl) || !isNoValue(vr)) { allNoData = false; break; }
-              }
-            }
-
-            // Center probe + 4 quadrant probes
-            if (allNoData) {
-              const probes: [number, number][] = [
-                [Math.floor(width / 2), Math.floor(height / 2)],
-                [Math.floor(width / 4), Math.floor(height / 4)],
-                [Math.floor((3 * width) / 4), Math.floor(height / 4)],
-                [Math.floor(width / 4), Math.floor((3 * height) / 4)],
-                [Math.floor((3 * width) / 4), Math.floor((3 * height) / 4)],
-              ];
-              for (const [px, py] of probes) {
-                const idx = (py * width + px) * stepX + useChannelIndex;
-                const v = (raster as any)[idx];
-                if (!isNoValue(v)) { allNoData = false; break; }
-              }
-            }
           } else {
-            // Unknown strategy — fallback to full
             for (let i = 0; i < (raster as any).length; i++) {
               const v = (raster as any)[i];
               if (!isNoValue(v)) { allNoData = false; break; }
             }
           }
-
+        } else if (checkStrategy === 'border+center') {
+          // Border scan: iterate over top/bottom rows and left/right cols
+          const stepX = numChannels;
+          // Top row
+          for (let x = 0; x < width; x++) {
+            const idx = x * stepX + useChannelIndex;
+            const v = (raster as any)[idx];
+            if (!isNoValue(v)) { allNoData = false; break; }
+          }
+          // Bottom row
           if (allNoData) {
-            // Do not cache all-noData result; remove cache entry so future requests re-evaluate if COG/metadata changes.
-            this.tileResultCache.delete(cacheKey);
-            return null;
+            for (let x = 0; x < width; x++) {
+              const idx = ((height - 1) * width + x) * stepX + useChannelIndex;
+              const v = (raster as any)[idx];
+              if (!isNoValue(v)) { allNoData = false; break; }
+            }
+          }
+          // Left/Right cols
+          if (allNoData) {
+            for (let y = 1; y < height - 1; y++) {
+              const leftIdx = (y * width) * stepX + useChannelIndex;
+              const rightIdx = (y * width + (width - 1)) * stepX + useChannelIndex;
+              const vl = (raster as any)[leftIdx];
+              const vr = (raster as any)[rightIdx];
+              if (!isNoValue(vl) || !isNoValue(vr)) { allNoData = false; break; }
+            }
+          }
+
+          // Center probe + 4 quadrant probes
+          if (allNoData) {
+            const probes: [number, number][] = [
+              [Math.floor(width / 2), Math.floor(height / 2)],
+              [Math.floor(width / 4), Math.floor(height / 4)],
+              [Math.floor((3 * width) / 4), Math.floor(height / 4)],
+              [Math.floor(width / 4), Math.floor((3 * height) / 4)],
+              [Math.floor((3 * width) / 4), Math.floor((3 * height) / 4)],
+            ];
+            for (const [px, py] of probes) {
+              const idx = (py * width + px) * stepX + useChannelIndex;
+              const v = (raster as any)[idx];
+              if (!isNoValue(v)) { allNoData = false; break; }
+            }
+          }
+        } else {
+          // Unknown strategy — fallback to full
+          for (let i = 0; i < (raster as any).length; i++) {
+            const v = (raster as any)[i];
+            if (!isNoValue(v)) { allNoData = false; break; }
           }
         }
 
-        // Create generator options with skipTextureFlag applied (don't mutate shared this.options)
-        const generatorOptions: GeoImageOptions = {
-          ...this.options,
-          skipTexture: skipTextureFlag,
-        };
+        if (allNoData) {
+          // Do not cache all-noData result; remove cache entry so future requests re-evaluate if COG/metadata changes.
+          this.cache.deleteTileResult(cacheKey);
+          return null;
+        }
+      }
 
-        return this.geo.getMap({
-          rasters: [tileData[0]],
-          width: requiredSize,
-          height: requiredSize,
-          bounds: bounds ?? [0, 0, 0, 0],
-          cellSizeMeters,
-        }, generatorOptions, resolvedMeshMaxError);
-      })();
-
-      const entry = {
-        promise: pipeline,
-        controller,
-        callerCount: 1,
-        settled: false,
+      // Create generator options with skipTextureFlag applied (don't mutate shared this.options)
+      const generatorOptions: GeoImageOptions = {
+        ...this.options,
+        skipTexture: skipTextureFlag,
       };
 
-      if (signal && !signal.aborted) {
-        signal.addEventListener('abort', () => {
-          entry.callerCount -= 1;
-          if (entry.callerCount <= 0 && !entry.settled) {
-            entry.controller.abort();
-          }
-        }, { once: true });
-      }
-
-      entry.promise = pipeline;
-      this.tileResultCache.set(cacheKey, entry);
-
-      if (this.tileResultCache.size > this.tileResultCacheMaxSize) {
-        const oldestKey = this.tileResultCache.keys().next().value;
-        if (typeof oldestKey === 'string') {
-          const evicted = this.tileResultCache.get(oldestKey);
-          if (evicted && !evicted.settled) evicted.controller.abort();
-          this.tileResultCache.delete(oldestKey);
-        }
-      }
-
-      try {
-        const result = await pipeline;
-        entry.settled = true;
-        if (signal?.aborted) return null;
-        return result;
-      } catch (error) {
-        entry.settled = true;
-        this.tileResultCache.delete(cacheKey);
-        throw error;
-      }
-    }
-
-    // ── PATH B: Bitmap + glaze ────────────────────────────────────────────────────
-    // Relief mask (output of composeSwissRelief) cached — saves fetch + kernel on revisit.
-    // BitmapGenerator re-runs cheaply from the cached Float32Array.
-    // Signal is passed so cancelled tiles abort cleanly; cache entry is deleted on abort/error
-    // so the next request retries fresh.
-    if (isGlaze) {
-      const maskKey = this.getTileCacheKey(x, y, z);
-      let maskPromise = this.reliefMaskCache.get(maskKey);
-      if (maskPromise) {
-        // LRU touch — move the key to the end of the Map to mark as recently used
-        this.reliefMaskCache.delete(maskKey);
-        this.reliefMaskCache.set(maskKey, maskPromise);
-      }
-
-      if (!maskPromise) {
-        maskPromise = (async (): Promise<Uint8ClampedArray> => {
-          const tileData = await this.getTileFromImage(x, y, z, this.tileSize + 2, signal);
-          return ReliefCompositor.composeSwissRelief(
-            tileData[0] as Float32Array,
-            this.options,
-            cellSizeMeters,
-            this.tileSize,
-            this.tileSize,
-          );
-        })();
-        this.reliefMaskCache.set(maskKey, maskPromise);
-        maskPromise.catch(() => this.reliefMaskCache.delete(maskKey));
-
-        if (this.reliefMaskCache.size > this.reliefMaskCacheMaxSize) {
-          const oldestKey = this.reliefMaskCache.keys().next().value;
-          if (typeof oldestKey === 'string') this.reliefMaskCache.delete(oldestKey);
-        }
-      } else {
-        // cache hit — mask reused, kernel computation skipped
-      }
-
-      if (signal?.aborted) return null;
-      const reliefMask = await maskPromise;
-      if (signal?.aborted) return null;
-
       return this.geo.getMap({
-        rasters: [reliefMask as any],
-        width: this.tileSize,
-        height: this.tileSize,
+        rasters: [tileData[0]],
+        width: requiredSize,
+        height: requiredSize,
         bounds: bounds ?? [0, 0, 0, 0],
         cellSizeMeters,
-      }, this.options, meshMaxError ?? 4.0);
+      }, generatorOptions, resolvedMeshMaxError, this.workerPool, controller.signal);
+    })();
+
+    const entry = {
+      promise: pipeline,
+      controller,
+      callerCount: 1,
+      settled: false,
+    };
+
+    if (signal && !signal.aborted) {
+      signal.addEventListener('abort', () => {
+        entry.callerCount -= 1;
+        if (entry.callerCount <= 0 && !entry.settled) {
+          entry.controller.abort();
+        }
+      }, { once: true });
     }
 
-    // ── PATH C: Ordinary bitmap ───────────────────────────────────────────────────
-    // Raw raster cached — saves fetch + decompression on revisit.
-    // BitmapGenerator re-runs cheaply from the cached TypedArray.
-    // Signal is passed so cancelled tiles abort cleanly; cache entry deleted on abort/error.
-    const rasterKey = this.getTileCacheKey(x, y, z);
-    let rasterPromise = this.rasterCache.get(rasterKey);
-    if (rasterPromise) {
-      // LRU touch — move the key to the end of the Map to mark as recently used
-      this.rasterCache.delete(rasterKey);
-      this.rasterCache.set(rasterKey, rasterPromise);
+    entry.promise = pipeline;
+    this.cache.setTileResult(cacheKey, entry);
+
+    try {
+      const result = await pipeline;
+      entry.settled = true;
+      if (signal?.aborted) return null;
+      return result;
+    } catch (error) {
+      entry.settled = true;
+      this.cache.deleteTileResult(cacheKey);
+      throw error;
     }
+  }
+
+  private async getGlazeTile(x: number, y: number, z: number, bounds: Bounds | undefined, cellSizeMeters: number, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
+    const maskKey = this.cache.getTileCacheKey(x, y, z);
+    let maskPromise = this.cache.getReliefMask(maskKey);
+
+    if (!maskPromise) {
+      const controller = new AbortController();
+      maskPromise = (async (): Promise<Uint8ClampedArray> => {
+        const tileData = await this.getTileFromImage(x, y, z, this.tileSize + 2, controller.signal);
+        return ReliefCompositor.composeSwissRelief(
+          tileData[0] as Float32Array,
+          this.options,
+          cellSizeMeters,
+          this.tileSize,
+          this.tileSize,
+        );
+      })();
+      this.cache.setReliefMask(maskKey, maskPromise);
+      maskPromise.catch(() => this.cache.deleteReliefMask(maskKey));
+    }
+
+    if (signal?.aborted) return null;
+    const reliefMask = await maskPromise;
+    if (signal?.aborted) return null;
+
+    return this.geo.getMap({
+      rasters: [reliefMask as any],
+      width: this.tileSize,
+      height: this.tileSize,
+      bounds: bounds ?? [0, 0, 0, 0],
+      cellSizeMeters,
+    }, this.options, meshMaxError ?? 4.0, this.workerPool, signal);
+  }
+
+  private async getBitmapTile(x: number, y: number, z: number, bounds: Bounds | undefined, cellSizeMeters: number, meshMaxError?: number, signal?: AbortSignal): Promise<TileResult | null> {
+    const rasterKey = this.cache.getTileCacheKey(x, y, z);
+    let rasterPromise = this.cache.getRaster(rasterKey);
 
     if (!rasterPromise) {
-      rasterPromise = this.getTileFromImage(x, y, z, this.tileSize, signal) as Promise<TypedArray[]>;
-      this.rasterCache.set(rasterKey, rasterPromise);
-      rasterPromise.catch(() => this.rasterCache.delete(rasterKey));
-
-      if (this.rasterCache.size > this.rasterCacheMaxSize) {
-        const oldestKey = this.rasterCache.keys().next().value;
-        if (typeof oldestKey === 'string') this.rasterCache.delete(oldestKey);
-      }
-    } else {
-      // cache hit — raster reused, network fetch skipped
+      const controller = new AbortController();
+      rasterPromise = this.getTileFromImage(x, y, z, this.tileSize, controller.signal) as Promise<TypedArray[]>;
+      this.cache.setRaster(rasterKey, rasterPromise);
+      rasterPromise.catch(() => this.cache.deleteRaster(rasterKey));
     }
 
     if (signal?.aborted) return null;
@@ -840,127 +755,144 @@ class CogTiles {
       height: this.tileSize,
       bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
-    }, this.options, meshMaxError ?? 4.0);
+    }, this.options, meshMaxError ?? 4.0, this.workerPool);
   }
 
-
-  /**
-   * Determines the data type (e.g., "Int32", "Float64") of a GeoTIFF image
-   * by reading its TIFF tags.
-   *
-   * @param {GeoTIFFImage} image - A GeoTIFF.js image.
-   * @returns {Promise<string>} - A string representing the data type.
-   */
- async getDataTypeFromTags(fileDirectory: any) {
-    const hasSampleFormat = fileDirectory.hasTag('SampleFormat');
-    const hasBitsPerSample = fileDirectory.hasTag('BitsPerSample');
-
-    if (!hasSampleFormat || !hasBitsPerSample) {
-      console.warn("Missing SampleFormat or BitsPerSample tags, defaulting to UInt8");
-      return 'UInt8';
+  async getTileAllBands(x: number, y: number, z: number, meshMaxError?: number, signal?: AbortSignal, bounds?: Bounds): Promise<TileResult[]> {
+    if (!this.cog) {
+      return [];
     }
 
-    // In GeoTIFF, BitsPerSample (tag 258) and SampleFormat (tag 339) provide the type info.
-    // They can be either a single number or an array if there are multiple samples.
-    const sampleFormat = fileDirectory.getValue('SampleFormat');// Tag 339
-    const bitsPerSample = fileDirectory.getValue('BitsPerSample');// Tag 258
+    // Compute cell size for this tile
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / Math.pow(2, z))));
+    const tileWidthMeters = (EARTH_CIRCUMFERENCE / Math.pow(2, z)) * Math.cos(latRad);
+    const cellSizeMeters = tileWidthMeters / this.tileSize;
 
-    // If multiple bands exist, we assume all bands share the same type.
-    const format = (sampleFormat && typeof sampleFormat.length === 'number' && sampleFormat.length > 0)
-      ? sampleFormat[0]
-      : sampleFormat;
-
-    const bits = (bitsPerSample && typeof bitsPerSample.length === 'number' && bitsPerSample.length > 0)
-      ? bitsPerSample[0]
-      : bitsPerSample;
-
-    let typePrefix;
-    // 1 = Unsigned Integer, 2 = Signed Integer, 3 = Floating Point
-    if (format === 1) {
-      typePrefix = 'UInt';
-    } else if (format === 2) {
-      typePrefix = 'Int';
-    } else if (format === 3) {
-      typePrefix = 'Float';
+    // Resolve meshMaxError
+    let resolvedMeshMaxError: number;
+    if (!meshMaxError || meshMaxError === 0) {
+      const imageIndex = this.getImageIndexForZoomLevel(z);
+      const autoMeshMaxError = this.getMeshMaxErrorForImageIndex(imageIndex);
+      resolvedMeshMaxError = autoMeshMaxError ?? 4.0;
     } else {
-      typePrefix = 'Unknown';
+      resolvedMeshMaxError = meshMaxError;
     }
 
-    return `${typePrefix}${bits}`;
+    // Create a fresh local AbortController for this fetch
+    const controller = new AbortController();
+    if (signal && !signal.aborted) {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    const localSignal = controller.signal;
+
+    try {
+      const imageIndex = this.getImageIndexForZoomLevel(z);
+      let imagePromise = this.cache.getImage(imageIndex);
+      if (!imagePromise) {
+        imagePromise = this.cog.getImage(imageIndex);
+        this.cache.setImage(imageIndex, imagePromise);
+      }
+      const targetImage = await imagePromise;
+
+      const imageResolution = this.cogResolutionLookup[imageIndex];
+      const imageHeight = targetImage.getHeight();
+      const imageWidth = targetImage.getWidth();
+      const [imgOriginX, imgOriginY] = this.cogOrigin;
+
+      const TILE_SIZE = this.tileSize;
+      const ORIGIN_X = webMercatorOrigin[0];
+      const ORIGIN_Y = webMercatorOrigin[1];
+
+      // ── Martini Grid Size Fix ──
+      // Martini requires 2^n + 1 grid (e.g., 257x257), but we fetch at TILE_SIZE (256).
+      // Add padding for relief kernels (2) or just 1 for basic terrain.
+      const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
+      const FETCH_SIZE = this.tileSize + (isKernel ? 2 : 1);
+
+      const tileGridResolution = (EARTH_CIRCUMFERENCE / TILE_SIZE) / (2 ** z);
+      const tileMinXMeters = ORIGIN_X + (x * TILE_SIZE * tileGridResolution);
+      const tileMaxYMeters = ORIGIN_Y - (y * TILE_SIZE * tileGridResolution);
+
+      const windowMinX = (tileMinXMeters - imgOriginX) / imageResolution;
+      const windowMinY = (imgOriginY - tileMaxYMeters) / imageResolution;
+
+      const startX = Math.round(windowMinX);
+      const startY = Math.round(windowMinY);
+      const endX = startX + FETCH_SIZE;
+      const endY = startY + FETCH_SIZE;
+
+      const validReadX = Math.max(0, startX);
+      const validReadY = Math.max(0, startY);
+      const validReadMaxX = Math.min(imageWidth, endX);
+      const validReadMaxY = Math.min(imageHeight, endY);
+
+      const readWidth = validReadMaxX - validReadX;
+      const readHeight = validReadMaxY - validReadY;
+
+      // If no overlap, return empty array
+      if (readWidth <= 0 || readHeight <= 0) {
+        return [];
+      }
+
+      const missingLeft = validReadX - startX;
+      const missingTop = validReadY - startY;
+      const window = [validReadX, validReadY, validReadMaxX, validReadMaxY];
+
+      const validRasterData = await targetImage.readRasters({ window, signal: localSignal }) as TypedArray[];
+      if (signal?.aborted) return [];
+
+      const results: TileResult[] = [];
+      const numBands = validRasterData.length;
+
+      for (let bandIndex = 0; bandIndex < numBands; bandIndex += 1) {
+        const sourceBandArray = validRasterData[bandIndex];
+        const processedBandRaster: TypedArray = this.tileReader!.createTileBuffer(this.options.format || 'Float32', FETCH_SIZE);
+        if (this.options.noDataValue !== undefined) {
+          processedBandRaster.fill(this.options.noDataValue);
+        }
+
+        for (let row = 0; row < readHeight; row += 1) {
+          const destRow = missingTop + row;
+          const destRowOffset = destRow * FETCH_SIZE;
+          const srcRowOffset = row * readWidth;
+
+          for (let col = 0; col < readWidth; col += 1) {
+            const destCol = missingLeft + col;
+            if (destRow < FETCH_SIZE && destCol < FETCH_SIZE) {
+              processedBandRaster[destRowOffset + destCol] = sourceBandArray[srcRowOffset + col] as any;
+            }
+          }
+        }
+
+        const generatorOptions = { ...this.options, useChannel: 1, useChannelIndex: 0, numOfChannels: 1 };
+        const tileResult = await this.geo.getMap({
+          rasters: [processedBandRaster],
+          width: FETCH_SIZE,
+          height: FETCH_SIZE,
+          bounds: bounds ?? [0, 0, 0, 0],
+          cellSizeMeters,
+        }, generatorOptions, resolvedMeshMaxError, this.workerPool, signal);
+
+        if (tileResult) results.push(tileResult);
+      }
+
+      return results;
+
+    } catch (error) {
+      if (signal?.aborted) return [];
+      console.error('[CogTiles.getTileAllBands] Error fetching all bands:', error);
+      return [];
+    }
   }
 
-  /**
-   * Extracts the noData value from a GeoTIFF.js image.
-   * Returns the noData value as a number (including NaN) if available, otherwise undefined.
-   *
-   * @param {GeoTIFFImage} image - The GeoTIFF.js image.
-   * @returns {number|undefined} The noData value, possibly NaN, or undefined if not set or invalid.
-   */
-  getNoDataValue(image: GeoTIFFImage) {
-    const noDataRaw = image.getGDALNoData();
-    if (noDataRaw === undefined || noDataRaw === null) {
-      /* eslint-disable no-console */
-      console.warn('No noData value defined — raster might be rendered incorrectly.');
-      return undefined;
-    }
-
-    const cleaned = String(noDataRaw).replace(/\0/g, '').trim();
-
-    if (cleaned === '') {
-      /* eslint-disable no-console */
-      console.warn('noData value is an empty string after cleanup.');
-      return undefined;
-    }
-
-    const parsed = Number(cleaned);
-
-    // Allow NaN if explicitly declared
-    if (cleaned.toLowerCase() === 'nan') {
-      return NaN;
-    }
-
-    // If not declared as "nan" and still parsed to NaN, it's an error
-    if (Number.isNaN(parsed)) {
-      /* eslint-disable no-console */
-      console.warn(`Failed to parse numeric noData value: '${cleaned}'`);
-      return undefined;
-    }
-
-    return parsed;
+  // Expose legacy API for clearing tile result cache (used by external layers)
+  clearTileResultCache(): void {
+    this.cache.clearTileResultCache();
   }
 
-  /**
-   * Creates a tile buffer of the specified size using a typed array corresponding to the provided data type.
-   *
-   * @param {string} dataType - A string specifying the data type (e.g., "Int32", "Float64", "UInt16", etc.).
-   * @param {number} tileSize - The width/height of the square tile.
-   * @param {number} multiplier - Optional multiplier for interleaved buffers (e.g., numChannels).
-   * @returns {TypedArray} A typed array buffer of length (tileSize * tileSize * multiplier).
-   */
-  createTileBuffer(dataType: string, tileSize: number, multiplier = 1) {
-    const length = tileSize * tileSize * multiplier;
-    switch (dataType) {
-      case 'UInt8':
-        return new Uint8Array(length);
-      case 'Int8':
-        return new Int8Array(length);
-      case 'UInt16':
-        return new Uint16Array(length);
-      case 'Int16':
-        return new Int16Array(length);
-      case 'UInt32':
-        return new Uint32Array(length);
-      case 'Int32':
-        return new Int32Array(length);
-      case 'Float32':
-        return new Float32Array(length);
-      case 'Float64':
-        return new Float64Array(length);
-      default:
-        console.warn(`Unsupported data type: ${dataType}, defaulting to Float32`);
-        return new Float32Array(length);
-    }
-  }
+  // getDataTypeFromTags moved to ../utils/tiffUtils
+
+  // getNoDataValue moved to ../utils/tiffUtils
 }
 
 export default CogTiles;

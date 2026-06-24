@@ -5,7 +5,7 @@ import App from './App';
 import UploadImage from './components/UploadImage';
 import {
     CogBitmapLayerExample, CogMultibandExample,
-    CogTerrainLayerExample, CogTerrainGlazeExample, CogTerrainKernelExample,
+    CogTerrainLayerExample, CogTerrainGlazeExample, CogTerrainKernelExample, CogAnimationExample
 } from './examples';
 
 interface RoutesProps {}
@@ -25,7 +25,8 @@ const Routing: React.FC<RoutesProps> = () => (
       <Route path={'/cog-terrain-layer-example'} element={<CogTerrainLayerExample />} />
       <Route path={'/cog-terrain-glaze-example'} element={<CogTerrainGlazeExample />} />
       <Route path={'/cog-multiband-example'} element={<CogMultibandExample />} />
-      <Route path={'/cog-terrain-kernel-example'} element={<CogTerrainKernelExample />} />
+      <Route path={'/cog-terrain-kernel-example'} element={<CogTerrainKernelExample />}/>
+      <Route path={'/cog-animation-example'} element={<CogAnimationExample />} />
     </Routes>
   </BrowserRouter>
 );

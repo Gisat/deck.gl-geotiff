@@ -173,6 +173,10 @@ export const COG_TERRAIN_EXAMPLES: Record<string, CogDataSource> = {
     name: 'Nepal Copernicus 30m DEM',
     url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/deck.gl-geotiff/examples/dataSources/cog_terrain/DEM_COP30_float32_wgs84_deflate_cog_float32.tif',
   },
+    MISICUNI: {
+    name: 'Misicuni DEM',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/rasters/glo_30_geoid_Point_UTM19N_geodetic_points_CL_MS_MR_GST_merge_update_cog_bilinear.tif',
+  },
 
   // --- LUZON DEM - different data types ---
   LUZON_UINT8: {
@@ -209,5 +213,14 @@ export const COG_TERRAIN_EXAMPLES: Record<string, CogDataSource> = {
     defaultOptions: {
       clipLow: 0
     }
+  },
+  // --- MULTIBAND animation terrain ---
+  MULTIBAND_DAM_30: {
+    name: 'Multiband Dam Animation (30 bands)',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/test/Misicuni_30_10x10_intermediate_cog.tif',
+  },
+  MULTIBAND_DAM_300: {
+    name: 'Multiband Dam Animation (300 bands)',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/test/Misicuni_300_10x10_intermediate_cog.tif',
   },
 };
