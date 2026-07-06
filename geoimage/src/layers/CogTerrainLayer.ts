@@ -13,6 +13,7 @@ import {
 } from '@deck.gl/core';
 import { SimpleMeshLayer } from '@deck.gl/mesh-layers';
 import type { MeshAttributes } from '@loaders.gl/schema';
+import { Matrix4 } from '@math.gl/core';
 import type { TerrainMesh } from '../core/types';
 import {
   TileLayer, TileLayerProps, GeoBoundingBox, _TileLoadProps as TileLoadProps,
@@ -100,6 +101,8 @@ const defaultProps: DefaultProps<_CogTerrainLayerProps> = {
   enableProgressiveLoading: true,
 
   // loaders: [TerrainLoader],
+
+  elevationScale: 1,
 };
 
 // Turns array of templates into a single string to work around shallow change
@@ -189,6 +192,12 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
    */
   // eslint-disable-next-line no-unused-vars
   onZRangeUpdate?: (zRange: ZRange | null) => void;
+
+  /**
+   * Dynamic scale factor applied to the Z-axis of the terrain mesh.
+   * Animate from 0 to 1 to smoothly extrude terrain, or 1 to 0 to flatten.
+   */
+  elevationScale?: number;
 
 	/**
 	 * @deprecated Use `loadOptions.terrain.workerUrl` instead
@@ -430,7 +439,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   ) {
 	  const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
 
-	  const { color, wireframe, terrainOptions } = this.props;
+	  const { color, wireframe, terrainOptions, elevationScale } = this.props;
 	  const { data } = props;
 
 	  if (!data) {
@@ -454,13 +463,16 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     } : {
       material: this.props.material 
     };
-      
+
+    const modelMatrix = new Matrix4().scale([1, 1, elevationScale ?? 1]);
+
 	  return new SubLayerClass({ ...props, tileSize: props.tileSize }, {
       ...lightingProps,
       data: DUMMY_DATA,
       mesh: meshResult?.map,
       texture: tileTexture,
       _instanced: false,
+      modelMatrix,
       pickable: props.pickable,
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       // Dynamic polygon offset: pull higher zoom levels closer to camera to depth-test in front.
