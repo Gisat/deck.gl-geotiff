@@ -195,6 +195,9 @@ function CogTransitionExample() {
 
     const layersArray: any[] = [];
 
+    const minZoom = initializedCog?.getZoomRange()[0] ?? 9;
+    const isPure2D = mode === '2d';
+
     // CogTerrainLayer — always mounted; elevationScale=0 keeps it flat in 2D
     layersArray.push(
       new CogTerrainLayer({
@@ -206,7 +209,9 @@ function CogTransitionExample() {
         meshMaxError: 'auto',
         operation: 'terrain',
         terrainOptions,
-        elevationScale, // 0 = flat, 1 = full extrusion
+        elevationScale,
+        zoomOverride: isPure2D ? minZoom : undefined,
+        opacity: isPure2D ? 0 : 1,
         onZRangeUpdate,
       }),
     );
@@ -220,30 +225,37 @@ function CogTransitionExample() {
         maxZoom: 19,
         tileSize: 256,
         zRange,
+        updateTriggers: {
+          renderSubLayers: [isPure2D],
+        },
         renderSubLayers: (props) => {
           const { bbox } = props.tile as any;
           const { west, south, east, north } = bbox;
           return new BitmapLayer(props, {
+            id: `${props.id}-${isPure2D ? 'flat' : 'draped'}`,
             data: undefined,
             image: props.data,
             bounds: [west, south, east, north],
-            extensions: [new TerrainExtension()],
+            extensions: isPure2D ? [] : [new TerrainExtension()],
           });
         },
       }),
     );
 
-    // Demo points — always clamped to the (sometimes flat) terrain
+    // Demo points — native in 2D, clamped to terrain in 3D
     layersArray.push(
       new ScatterplotLayer({
-        id: 'demo-points',
+        id: `demo-points-${isPure2D ? 'flat' : 'draped'}`,
         data: demoPoints,
         getPosition: (d: any) => d.position,
-        getColor: [255, 100, 50, 200],
+        getFillColor: [255, 100, 50, 200],
         getRadius: 80,
         radiusMinPixels: 4,
         radiusMaxPixels: 20,
-        extensions: [new TerrainExtension()],
+        updateTriggers: {
+          getElevation: [isPure2D],
+        },
+        extensions: isPure2D ? [] : [new TerrainExtension()],
       }),
     );
 
@@ -252,6 +264,7 @@ function CogTransitionExample() {
     viewState,
     elevationScale,
     initializedCog,
+    mode,
     zRange,
     onZRangeUpdate,
     demoPoints,
