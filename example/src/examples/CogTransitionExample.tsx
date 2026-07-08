@@ -3,7 +3,7 @@ import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { CogTerrainLayer, CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
@@ -31,7 +31,7 @@ function CogTransitionExample() {
   const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   const { mode, elevationScale, switchTo3D, switchTo2D } =
-    useDeckTransition(setViewState, { duration: 1500, targetPitch: 40, zoomOffset: 0.3 });
+    useDeckTransition(setViewState, { duration: 2500, targetPitch: 40, zoomOffset: 0.3 });
 
   const terrainOptions: GeoImageOptions = {
     ...(mainCog.defaultOptions as GeoImageOptions),
@@ -147,6 +147,28 @@ function CogTransitionExample() {
         radiusMinPixels: 4,
         radiusMaxPixels: 20,
         extensions: isPure2D ? [] : [new TerrainExtension()],
+      }),
+    );
+
+    // Swiss relief glaze overlay — transparent, fades in with elevationScale
+    layersArray.push(
+      new CogBitmapLayer({
+        id: 'relief-glaze',
+        rasterData: mainCog.url,
+        isTiled: true,
+        tileSize: 256,
+        clampToTerrain: true,
+        extensions: [new TerrainExtension()],
+        opacity: elevationScale * elevationScale,
+        cogBitmapOptions: {
+          type: 'image',
+          useReliefGlaze: true,
+          noDataValue: 0,
+          swissSlopeWeight: 0.3,
+          zFactor: 5,
+          maxGlazeAlpha: 60,
+          useChannel: 1,
+        },
       }),
     );
 
