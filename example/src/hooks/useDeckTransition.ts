@@ -3,6 +3,7 @@ import { LinearInterpolator } from '@deck.gl/core';
 
 export type Mode = '2d' | 'transitioning_to_3d' | '3d' | 'transitioning_to_2d';
 
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 export interface TransitionOptions {
   duration?: number;
   targetPitch?: number;
@@ -20,7 +21,7 @@ export function calculateTerrainZOffset(
   zRange: [number, number] | null | undefined,
   elevationScale: number,
 ): number {
-  return zRange ? ((zRange[0] + zRange[1]) / 2) * elevationScale : 0;
+  return zRange ? zRange[1] * elevationScale : 0;
 }
 
 export function useDeckTransition(
@@ -73,7 +74,7 @@ export function useDeckTransition(
     const animate = (now: number) => {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const eased = easeOutCubic(t);
       setElevationScale(eased);
 
       if (t < 1) {
@@ -108,7 +109,7 @@ export function useDeckTransition(
     const animate = (now: number) => {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const eased = easeOutCubic(t);
       const currentScale = startScale - startScale * eased;
       setElevationScale(currentScale);
 

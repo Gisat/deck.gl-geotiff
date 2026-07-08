@@ -3,10 +3,9 @@ import DeckGL from '@deck.gl/react';
 import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
-import { CogTerrainLayer, CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { GeoImageOptions, CogTerrainLayer, CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
 import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
-import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { useDeckTransition, calculateTerrainZOffset } from '../hooks/useDeckTransition';
 
@@ -15,14 +14,16 @@ function generateDemoPoints(count: number, centerLon: number, centerLat: number)
   for (let i = 0; i < count; i++) {
     points.push({
       position: [
-        centerLon + (Math.random() - 0.3) * 0.3,
-        centerLat + (Math.random() - 0.3) * 0.2,
+        centerLon + (Math.random() - 0.5) * 0.3,
+        centerLat + (Math.random() - 0.5) * 0.2,
         0, // Z=0 — TerrainExtension clamps to terrain surface
       ],
     });
   }
   return points;
 }
+
+const getDemoPointPosition = (d: any) => d.position;
 
 function CogTransitionExample() {
   const mainCog = COG_TERRAIN_EXAMPLES.MISICUNI;
@@ -67,8 +68,8 @@ function CogTransitionExample() {
       );
 
       setViewState({
-        longitude: -66.33,
-        latitude: -17.09,
+        longitude,
+        latitude,
         zoom: Math.min(19, zoom + 3),
         pitch: 0,
         bearing: 0,
@@ -76,7 +77,7 @@ function CogTransitionExample() {
     };
 
     init();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleMode = () => {
     if (mode === '2d' || mode === 'transitioning_to_2d') {
@@ -94,23 +95,25 @@ function CogTransitionExample() {
     const minZoom = initializedCog?.getZoomRange()[0] ?? 9;
     const isPure2D = mode === '2d';
 
-    // CogTerrainLayer — always mounted; elevationScale=0 keeps it flat in 2D
-    layersArray.push(
-      new CogTerrainLayer({
-        id: 'cog-transition-terrain',
-        elevationData: mainCog.url,
-        cogTiles: initializedCog || undefined,
-        isTiled: true,
-        tileSize: 256,
-        meshMaxError: 'auto',
-        operation: 'terrain',
-        terrainOptions,
-        elevationScale,
-        zoomOverride: isPure2D ? minZoom : undefined,
-        opacity: isPure2D ? 0 : 1,
-        onZRangeUpdate,
-      }),
-    );
+    // CogTerrainLayer — deferred until CogTiles is pre-initialized to avoid double init
+    if (initializedCog) {
+      layersArray.push(
+        new CogTerrainLayer({
+          id: 'cog-transition-terrain',
+          elevationData: mainCog.url,
+          cogTiles: initializedCog,
+          isTiled: true,
+          tileSize: 256,
+          meshMaxError: 'auto',
+          operation: 'terrain',
+          terrainOptions,
+          elevationScale,
+          zoomOverride: isPure2D ? minZoom : undefined,
+          opacity: isPure2D ? 0 : 1,
+          onZRangeUpdate,
+        }),
+      );
+    }
 
     // Unified OSM basemap — single id preserves tile cache across mode switches
     layersArray.push(
@@ -143,7 +146,7 @@ function CogTransitionExample() {
       new ScatterplotLayer({
         id: `demo-points-${isPure2D ? 'flat' : 'draped'}`,
         data: demoPoints,
-        getPosition: (d: any) => d.position,
+        getPosition: getDemoPointPosition,
         getFillColor: [255, 100, 50, 200],
         getRadius: 80,
         radiusMinPixels: 4,
@@ -266,7 +269,6 @@ function CogTransitionExample() {
         onViewStateChange={({ viewState: newViewState }) =>
           setViewState(newViewState as any)
         }
-        controller
         layers={layers}
         views={[
           new MapView({

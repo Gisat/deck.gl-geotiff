@@ -13,7 +13,6 @@ import {
 } from '@deck.gl/core';
 import { SimpleMeshLayer } from '@deck.gl/mesh-layers';
 import type { MeshAttributes } from '@loaders.gl/schema';
-import { Matrix4 } from '@math.gl/core';
 import type { TerrainMesh } from '../core/types';
 import {
   TileLayer, TileLayerProps, GeoBoundingBox, _TileLoadProps as TileLoadProps,
@@ -464,7 +463,13 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       material: this.props.material 
     };
 
-    const modelMatrix = new Matrix4().scale([1, 1, elevationScale ?? 1]);
+    const elevationScaleVal = elevationScale ?? 1;
+    const modelMatrix: number[] = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, elevationScaleVal, 0,
+      0, 0, 0, 1,
+    ];
 
 	  return new SubLayerClass({ ...props, tileSize: props.tileSize }, {
       ...lightingProps,

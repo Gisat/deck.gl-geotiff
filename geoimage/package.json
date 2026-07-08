@@ -55,7 +55,6 @@
   },
   "dependencies": {
     "@mapbox/martini": "^0.2.0",
-    "@math.gl/core": "^4.1.0",
     "chroma-js": "^3.2.0",
     "geotiff": "^3.0.5"
   },
