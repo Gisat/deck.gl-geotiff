@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
-import { MapView, WebMercatorViewport, FlyToInterpolator } from '@deck.gl/core';
+import { MapView, WebMercatorViewport } from '@deck.gl/core';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import { CogTerrainLayer, CogTiles } from '@gisatcz/deckgl-geolib';
@@ -8,121 +8,15 @@ import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
 import { COG_TERRAIN_EXAMPLES } from './dataSources';
 import { GeoImageOptions } from '@gisatcz/deckgl-geolib';
 import { BitmapLayer, ScatterplotLayer } from '@deck.gl/layers';
-
-type Mode = '2d' | 'transitioning_to_3d' | '3d' | 'transitioning_to_2d';
-
-interface TransitionState {
-  mode: Mode;
-  elevationScale: number;
-  switchTo3D: () => void;
-  switchTo2D: () => void;
-}
-
-function useMapTransition(
-  setViewState: React.Dispatch<React.SetStateAction<any>>,
-): TransitionState {
-  const [mode, setMode] = useState<Mode>('2d');
-  const [elevationScale, setElevationScale] = useState(0);
-  const animFrameRef = useRef<number | null>(null);
-
-  // ref holds latest elevationScale so switchTo2D reads current value
-  // without requiring it as a useCallback dependency
-  const elevationScaleRef = useRef(elevationScale);
-  useEffect(() => {
-    elevationScaleRef.current = elevationScale;
-  }, [elevationScale]);
-
-  const cleanup = useCallback(() => {
-    if (animFrameRef.current !== null) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => cleanup, [cleanup]);
-
-  const switchTo3D = useCallback(() => {
-    cleanup();
-
-    setMode('transitioning_to_3d');
-    setElevationScale(0);
-
-    setViewState((prev: any) => ({
-      ...prev,
-      pitch: 40,
-      transitionDuration: 1500,
-      transitionInterpolator: new FlyToInterpolator(),
-    }));
-
-    // Animate elevationScale from 0 to 1 over 1500ms
-    const start = performance.now();
-    const duration = 1500;
-
-    const animate = (now: number) => {
-      const elapsed = now - start;
-      const t = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
-      setElevationScale(eased);
-
-      if (t < 1) {
-        animFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        setElevationScale(1);
-        setMode('3d');
-        animFrameRef.current = null;
-      }
-    };
-
-    animFrameRef.current = requestAnimationFrame(animate);
-  }, [cleanup, setViewState]);
-
-  const switchTo2D = useCallback(() => {
-    cleanup();
-
-    const startScale = elevationScaleRef.current;
-    setMode('transitioning_to_2d');
-
-    setViewState((prev: any) => ({
-      ...prev,
-      pitch: 0,
-      bearing: 0,
-      transitionDuration: 1500,
-      transitionInterpolator: new FlyToInterpolator(),
-    }));
-
-    const start = performance.now();
-    const duration = 1500;
-
-    const animate = (now: number) => {
-      const elapsed = now - start;
-      const t = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
-      const currentScale = startScale - startScale * eased;
-      setElevationScale(currentScale);
-
-      if (t < 1) {
-        animFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        setElevationScale(0);
-        setMode('2d');
-        animFrameRef.current = null;
-      }
-    };
-
-    animFrameRef.current = requestAnimationFrame(animate);
-  }, [cleanup, setViewState]);
-
-  return { mode, elevationScale, switchTo3D, switchTo2D };
-}
+import { useDeckTransition, calculateTerrainZOffset } from '../hooks/useDeckTransition';
 
 function generateDemoPoints(count: number, centerLon: number, centerLat: number) {
   const points: { position: [number, number, number] }[] = [];
   for (let i = 0; i < count; i++) {
     points.push({
       position: [
-        centerLon + (Math.random() - 0.5) * 0.3,
-        centerLat + (Math.random() - 0.5) * 0.2,
+        centerLon + (Math.random() - 0.3) * 0.3,
+        centerLat + (Math.random() - 0.3) * 0.2,
         0, // Z=0 — TerrainExtension clamps to terrain surface
       ],
     });
@@ -137,7 +31,7 @@ function CogTransitionExample() {
   const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   const { mode, elevationScale, switchTo3D, switchTo2D } =
-    useMapTransition(setViewState);
+    useDeckTransition(setViewState, { duration: 1500, targetPitch: 40, zoomOffset: 0.3 });
 
   const terrainOptions: GeoImageOptions = {
     ...(mainCog.defaultOptions as GeoImageOptions),
@@ -252,16 +146,12 @@ function CogTransitionExample() {
         getRadius: 80,
         radiusMinPixels: 4,
         radiusMaxPixels: 20,
-        updateTriggers: {
-          getElevation: [isPure2D],
-        },
         extensions: isPure2D ? [] : [new TerrainExtension()],
       }),
     );
 
     return layersArray;
   }, [
-    viewState,
     elevationScale,
     initializedCog,
     mode,
@@ -336,7 +226,7 @@ function CogTransitionExample() {
       </div>
       <DeckGL
         getCursor={() => 'crosshair'}
-        viewState={viewState}
+        viewState={{ ...viewState, position: [0, 0, calculateTerrainZOffset(zRange, elevationScale)] }}
         onViewStateChange={({ viewState: newViewState }) =>
           setViewState(newViewState as any)
         }
