@@ -30,6 +30,8 @@ function CogTransitionExample() {
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
   const { zRange, onZRangeUpdate } = useTerrainZRange();
 
+  const [showGlaze, setShowGlaze] = useState(true);
+
   const { mode, elevationScale, switchTo3D, switchTo2D } =
     useDeckTransition(setViewState, { duration: 2500, targetPitch: 40, zoomOffset: 0.3 });
 
@@ -151,26 +153,29 @@ function CogTransitionExample() {
     );
 
     // Swiss relief glaze overlay — transparent, fades in with elevationScale
-    layersArray.push(
-      new CogBitmapLayer({
-        id: 'relief-glaze',
-        rasterData: mainCog.url,
-        isTiled: true,
-        tileSize: 256,
-        clampToTerrain: true,
-        extensions: [new TerrainExtension()],
-        opacity: elevationScale * elevationScale,
-        cogBitmapOptions: {
-          type: 'image',
-          useReliefGlaze: true,
-          noDataValue: 0,
-          swissSlopeWeight: 0.3,
-          zFactor: 5,
-          maxGlazeAlpha: 60,
-          useChannel: 1,
-        },
-      }),
-    );
+    if (showGlaze) {
+      layersArray.push(
+        new CogBitmapLayer({
+          id: 'relief-glaze',
+          rasterData: mainCog.url,
+          isTiled: true,
+          tileSize: 256,
+          clampToTerrain: true,
+          extensions: [new TerrainExtension()],
+          opacity: Math.pow(elevationScale, 6),
+          zRange,
+          cogBitmapOptions: {
+            type: 'image',
+            useReliefGlaze: true,
+            noDataValue: 0,
+            swissSlopeWeight: 0.3,
+            zFactor: 5,
+            maxGlazeAlpha: 60,
+            useChannel: 1,
+          },
+        }),
+      );
+    }
 
     return layersArray;
   }, [
@@ -180,6 +185,7 @@ function CogTransitionExample() {
     zRange,
     onZRangeUpdate,
     demoPoints,
+    showGlaze,
   ]);
 
   const isTransitioning =
@@ -245,6 +251,14 @@ function CogTransitionExample() {
             ? `Elevation: ${(elevationScale * 100).toFixed(0)}%`
             : `Current: ${mode === '2d' ? '2D (Flat)' : '3D (Terrain)'}`}
         </div>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={showGlaze}
+            onChange={(e) => setShowGlaze(e.target.checked)}
+          />
+          Relief Glaze
+        </label>
       </div>
       <DeckGL
         getCursor={() => 'crosshair'}
