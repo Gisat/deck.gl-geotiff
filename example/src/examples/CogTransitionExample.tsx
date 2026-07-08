@@ -34,7 +34,7 @@ function CogTransitionExample() {
   const [showGlaze, setShowGlaze] = useState(true);
 
   const { mode, elevationScale, switchTo3D, switchTo2D } =
-    useDeckTransition(setViewState, { duration: 2500, targetPitch: 40, zoomOffset: 0.3 });
+    useDeckTransition(setViewState, { duration: 2500, targetPitch: 40, zoomOffset: 0 });
 
   const terrainOptions: GeoImageOptions = {
     ...(mainCog.defaultOptions as GeoImageOptions),
@@ -265,7 +265,7 @@ function CogTransitionExample() {
       </div>
       <DeckGL
         getCursor={() => 'crosshair'}
-        viewState={{ ...viewState, position: [0, 0, calculateTerrainZOffset(zRange, elevationScale)] }}
+        viewState={{ ...viewState, position: [0, 0, calculateTerrainZOffset(zRange, elevationScale) * 0.5] }}
         onViewStateChange={({ viewState: newViewState }) =>
           setViewState(newViewState as any)
         }
