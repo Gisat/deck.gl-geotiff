@@ -292,6 +292,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       maxCacheByteSize,
       refinementStrategy,
       cogBitmapOptions,
+      zRange,
     } = this.props;
     if (this.state.isTiled && this.state.initialized) {
       const { tileSize } = this.state.bitmapCogTiles;
@@ -303,6 +304,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
         renderSubLayers: this.renderSubLayers.bind(this),
         pickable: this.props.pickable,
         onClick: this.props.onClick,
+        zRange,
         updateTriggers: {
           getTileData: [
             // rasterData: urlTemplateToUpdateTrigger(rasterData),
