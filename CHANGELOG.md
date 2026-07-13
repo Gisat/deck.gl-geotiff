@@ -1,3 +1,47 @@
+## [2.6.0](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0...v2.6.0) (2026-06-24)
+
+### Features
+
+* add RAF throttling for smooth slider animation + comprehensive docs ([573d67e](https://github.com/Gisat/deck.gl-geotiff/commit/573d67e185f23e76925a59ca10768083fac57426))
+* Add terrain coordinate extraction utility for CogTerrainLayer ([6cdf131](https://github.com/Gisat/deck.gl-geotiff/commit/6cdf131def24eaa7514af1873250bdc6f457df41))
+* add useTerrainZRange hook for 3D overlay tile culling ([5f6fe1e](https://github.com/Gisat/deck.gl-geotiff/commit/5f6fe1ebe670f1bcf665653b6c5854e69fdef663))
+* add zoomOverride prop and LOD placeholder layer ([03b23c3](https://github.com/Gisat/deck.gl-geotiff/commit/03b23c30d39f7f0cf78a71f44032520f7fc72f64))
+* add zRange callback to CogTerrainLayer for 3D overlay tile culling ([b2e3f90](https://github.com/Gisat/deck.gl-geotiff/commit/b2e3f90b5f8dd46a1561068b4f0e5190315988b0))
+* automatic progressive loading with adaptive LOD and viewport-based re-gating ([5a2cdf3](https://github.com/Gisat/deck.gl-geotiff/commit/5a2cdf3ffa8c09632f536b7a9c27cb9ba14e510e))
+* **core:** multi-band terrain caching with lazy-load option ([cb6d541](https://github.com/Gisat/deck.gl-geotiff/commit/cb6d5412343cca31d416033fb38693f440160d48))
+* **example:** set initial view to Philippines AOI and increase zoom ([f23b3ce](https://github.com/Gisat/deck.gl-geotiff/commit/f23b3ced279f467f76ced20f8dfb99d13afbe263))
+* **example:** terrain animation with band slider ([63f4aa4](https://github.com/Gisat/deck.gl-geotiff/commit/63f4aa41922007b623a351bbe44a7e0547e6a1f9))
+* implement single-layer ancestor fallback LOD placeholder with dynamic zoom gate ([fb7e883](https://github.com/Gisat/deck.gl-geotiff/commit/fb7e8833fab260982489403bb0491b4c0c397ba8))
+* implement stencil masking and placeholder gate for LOD placeholder (WIP: not fully working) ([5dcc9eb](https://github.com/Gisat/deck.gl-geotiff/commit/5dcc9eb9fa9fdf1658996b3bc01866cbb9ed303b))
+* load band descriptions from GDAL metadata for animation UI ([6c67d47](https://github.com/Gisat/deck.gl-geotiff/commit/6c67d47eb1aa8933bb789162401ec249e4947639))
+* move terrain tessellation to Web Worker pool ([ca16954](https://github.com/Gisat/deck.gl-geotiff/commit/ca16954fbc53f255a895f2b791bc055260da2e52))
+* thread AbortSignal through terrain tessellation pipeline ([97dbba7](https://github.com/Gisat/deck.gl-geotiff/commit/97dbba700653b713dc1c5247de3a081213ceea91))
+
+### Bug Fixes
+
+* add disableWorkerPool option to fix animation slider stall in v2.6.0-dev.5+ ([fa72c10](https://github.com/Gisat/deck.gl-geotiff/commit/fa72c10b7863147dfd11e5492b7535a595a72188))
+* add kernel option change triggers for hillshade/slope/relief dynamic switching ([09b07ed](https://github.com/Gisat/deck.gl-geotiff/commit/09b07ed8a34cb5ab1bd3cfa4f2c5e6d5f5146d08))
+* Address PR [#146](https://github.com/Gisat/deck.gl-geotiff/issues/146) code review comments ([9b12a55](https://github.com/Gisat/deck.gl-geotiff/commit/9b12a558a807cd513b4234b1b1a9e41ab14a45a7))
+* Address PR [#148](https://github.com/Gisat/deck.gl-geotiff/issues/148) code review comments ([a7e1f4e](https://github.com/Gisat/deck.gl-geotiff/commit/a7e1f4ec0f759ba834433274e53c32624bfad07c))
+* Address PR [#149](https://github.com/Gisat/deck.gl-geotiff/issues/149) code review comments ([69d2b4f](https://github.com/Gisat/deck.gl-geotiff/commit/69d2b4f3470f2766a65417e7fc09333b4245fd1d))
+* Address PR [#151](https://github.com/Gisat/deck.gl-geotiff/issues/151) code review comments ([d035176](https://github.com/Gisat/deck.gl-geotiff/commit/d0351760567eba5280315388701a1125ffc987ff))
+* Address PR [#151](https://github.com/Gisat/deck.gl-geotiff/issues/151) second code review comments ([d03d923](https://github.com/Gisat/deck.gl-geotiff/commit/d03d92325a4149bf108ad9bd28b113c878d7b3af))
+* change meshTerrain from const to let ([0802c4f](https://github.com/Gisat/deck.gl-geotiff/commit/0802c4f03fddd9a93f7e33fc16d1da02de3808ad))
+* **CogTerrainLayer:** move progressive loading gate release to onTileLoad for immediate detail tile loading ([f6312a4](https://github.com/Gisat/deck.gl-geotiff/commit/f6312a41551534cf23b724779204eecb91494394))
+* **CogTerrainLayer:** resolve four progressive loading implementation bugs ([abde85c](https://github.com/Gisat/deck.gl-geotiff/commit/abde85ced004653f152c2a3cd1d370a203743273))
+* debounce onZRangeUpdate and exclude undefined kernel options for smooth animation ([7c1bd35](https://github.com/Gisat/deck.gl-geotiff/commit/7c1bd352274c62842db385e5eccb18b910c19824)), closes [#2](https://github.com/Gisat/deck.gl-geotiff/issues/2) [#1](https://github.com/Gisat/deck.gl-geotiff/issues/1)
+* exclude undefined kernel options from updateTriggers to prevent animation stalls ([c90cf24](https://github.com/Gisat/deck.gl-geotiff/commit/c90cf248b63446d27685f6525fcd139249ac830f))
+* exclude undefined kernel options from updateTriggers to prevent animation stalls ([b4af1ea](https://github.com/Gisat/deck.gl-geotiff/commit/b4af1ea936c463e9e5b2067e0cb18c392dc18b04))
+* implement proper worker error handling in TerrainWorkerPool ([763f96b](https://github.com/Gisat/deck.gl-geotiff/commit/763f96b67835aa5bf47a6303a8446d945be83b42))
+* move useTerrainZRange to subpath export and add build configuration ([193d4a9](https://github.com/Gisat/deck.gl-geotiff/commit/193d4a989c5284c8c317c5ddb128be52c3a8db21))
+* reassign meshTerrain after worker transfer ([b32ce89](https://github.com/Gisat/deck.gl-geotiff/commit/b32ce89fed0bda7ab6e7f5920eeeac564c052876))
+* reject pending tasks in terminate() method ([3919920](https://github.com/Gisat/deck.gl-geotiff/commit/39199206a463cab31cbaddc3ffe7c01b5d865a40))
+* restore missing useMemo dependencies for zRange feature ([72d29fb](https://github.com/Gisat/deck.gl-geotiff/commit/72d29fbeff6c59e1bc693263b80b69ba71573f76))
+* restore slider visual feedback during drag ([4bfe597](https://github.com/Gisat/deck.gl-geotiff/commit/4bfe597b5660e6f5bde6c39dec69b1293e8372b3))
+* skip progressive loading state reset when disabled and document animation use case ([c8958f8](https://github.com/Gisat/deck.gl-geotiff/commit/c8958f808a80e3a2f2100a49aed6db7f78383ff0))
+* update vite config with array-based alias for subpath resolution ([71b4359](https://github.com/Gisat/deck.gl-geotiff/commit/71b4359e4450e3b23e18dad759f1a8fbe2f01fc7))
+* use AbortError for cancellation and guard against late aborts ([8736b49](https://github.com/Gisat/deck.gl-geotiff/commit/8736b49c850695e0e543259b48447f04604167c2))
+
 ## [2.6.0-dev.6](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0-dev.5...v2.6.0-dev.6) (2026-06-17)
 
 ### Features
