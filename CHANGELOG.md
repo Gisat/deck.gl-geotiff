@@ -1,3 +1,9 @@
+## [2.6.1-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0...v2.6.1-dev.1) (2026-07-13)
+
+### Bug Fixes
+
+* resolve Dependabot security alerts ([4308964](https://github.com/Gisat/deck.gl-geotiff/commit/43089643cd62194ac83b4cba65c1384082757f4a))
+
 ## [2.6.0](https://github.com/Gisat/deck.gl-geotiff/compare/v2.5.0...v2.6.0) (2026-06-24)
 
 ### Features
