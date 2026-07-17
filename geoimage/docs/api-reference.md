@@ -181,6 +181,7 @@ These properties are set directly on the `CogTerrainLayer` instance, not within 
 | **`meshMaxError`** | `number \| 'auto'` | `'auto'` | Martini/Delatin error tolerance in meters, or `'auto'` for zoom-adaptive scaling. **Modes:** (1) Explicit numeric value (e.g. `10`): Fixed meshMaxError for all zoom levels; user has full control. (2) `'auto'`: Dynamically scales meshMaxError based on zoom level and the COG's tile resolution. The scaling uses a linear interpolation multiplier that ranges from **3.0× at the COG's minimum zoom** (coarse meshes for performance when viewing entire regions) to **0.5× at the COG's maximum zoom** (fine meshes for detail when viewing local features). Formula: `meshMaxError = tileResolution × errorMultiplier`. This provides significant performance improvements at low zooms (fewer triangles, faster tessellation) while maintaining pixel-perfect detail at high zooms (no slivers). **Recommendation:** `'auto'` is the default and recommended for most cases. Explicit numbers are useful for fine-tuning if you want consistent tessellation across all zoom levels. |
 | **`opacity`** | `number` | `1.0` | Standard deck.gl layer opacity (0.0 to 1.0). |
 | **`disableTexture`** | `boolean` | `false` | When `true`, suppresses any generated texture and renders the mesh in plain `color`. Useful for showing neutral grey terrain during mode transitions. |
+| **`elevationScale`** | `number` | `1` | Dynamic scale factor applied to the Z-axis of the terrain mesh via a model matrix. Animate from `0` to `1` to smoothly extrude terrain (2D → 3D), or `1` to `0` to flatten it back. Works with the `useDeckTransition` hook. |
 | **`onZRangeUpdate`** | `(zRange: [number, number] \| null) => void` | `undefined` | **Optional callback for 3D overlay tile culling.** Fired when the terrain's elevation bounds (`zRange`) are computed or updated. Use this to sync the elevation range to overlay `TileLayer` instances (e.g., OSM, satellite) for proper 3D frustum culling. Without `zRange`, overlay tiles may be incorrectly culled when the viewport is tilted in 3D. **Recommended:** Use with the `useTerrainZRange()` hook for easy integration. See [Overlay Tiles with Proper 3D Frustum Culling](showcase-layers.md#36-overlay-tiles-with-proper-3d-frustum-culling) for full examples. |
 
 ## Animation & Caching Options
@@ -390,6 +391,104 @@ new TileLayer({
 ```
 
 For full implementation examples, see [Overlay Tiles with Proper 3D Frustum Culling](showcase-layers.md#36-overlay-tiles-with-proper-3d-frustum-culling).
+
+### `useDeckTransition()`
+
+A React hook that manages smooth animated transitions between 2D (flat) and 3D (terrain) views. It drives `elevationScale` and camera state (pitch, zoom) in sync using `requestAnimationFrame` with an ease-out-cubic easing function.
+
+**Signature:**
+```typescript
+function useDeckTransition(
+  setViewState: React.Dispatch<React.SetStateAction<any>>,
+  options?: TransitionOptions
+): TransitionState;
+```
+
+**Parameters:**
+- **`setViewState`** — The state setter from `useState` that controls the deck.gl `viewState`. The hook calls it directly to animate pitch and zoom.
+- **`options`** — Optional configuration object.
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `duration` | `number` | `1500` | Transition duration in milliseconds. |
+| `targetPitch` | `number` | `40` | Camera pitch (degrees) when in 3D mode. |
+| `zoomOffset` | `number` | `0.3` | Zoom level delta applied during transition. Zoom decreases when entering 3D (pulling back) and increases when returning to 2D. |
+
+**Returns:**
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `mode` | `'2d'` \| `'transitioning_to_3d'` \| `'3d'` \| `'transitioning_to_2d'` | Current view state. Use to disable UI controls during transitions. |
+| `elevationScale` | `number` | Animated value from `0` (flat) to `1` (full terrain). Pass to `CogTerrainLayer.elevationScale`. |
+| `switchTo3D` | `() => void` | Triggers the 2D → 3D transition. |
+| `switchTo2D` | `() => void` | Triggers the 3D → 2D transition. |
+
+**How it works:**
+
+1. `switchTo3D()` sets pitch to `targetPitch`, decreases zoom by `zoomOffset`, and animates `elevationScale` from `0` → `1` over `duration` ms using `requestAnimationFrame` with ease-out-cubic easing.
+2. `switchTo2D()` resets pitch to `0`, increases zoom by `zoomOffset`, and animates `elevationScale` from its current value back to `0`.
+3. Camera transitions (pitch/zoom) are handled by deck.gl's built-in `LinearInterpolator`; terrain extrusion is driven by the hook's RAF loop.
+4. Any in-flight animation is automatically cancelled when a new transition starts.
+
+**Example:**
+```tsx
+import { useState } from 'react';
+import DeckGL from '@deck.gl/react';
+import { MapView } from '@deck.gl/core';
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
+import { useDeckTransition } from './hooks/useDeckTransition';
+
+function TransitionExample() {
+  const [viewState, setViewState] = useState({
+    longitude: -66.33, latitude: -17.09, zoom: 12, pitch: 0, bearing: 0,
+  });
+
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
+  const { mode, elevationScale, switchTo3D, switchTo2D } =
+    useDeckTransition(setViewState, { duration: 2500, targetPitch: 40 });
+
+  const isTransitioning = mode.startsWith('transitioning');
+
+  const layers = [
+    new CogTerrainLayer({
+      id: 'terrain',
+      elevationData: 'https://example.com/dem.tif',
+      isTiled: true,
+      tileSize: 256,
+      operation: 'terrain',
+      terrainOptions: { type: 'terrain', disableLighting: true, noDataValue: 0 },
+      elevationScale,
+      onZRangeUpdate,
+    }),
+    // OSM basemap — no TerrainExtension in 2D, draped in 3D
+    // (see showcase-layers.md for full example with overlay layers)
+  ];
+
+  return (
+    <>
+      <DeckGL viewState={viewState} onViewStateChange={({ viewState: v }) => setViewState(v)} layers={layers} />
+      <button onClick={mode === '2d' ? switchTo3D : switchTo2D} disabled={isTransitioning}>
+        {isTransitioning ? 'Transitioning...' : `Switch to ${mode === '2d' ? '3D' : '2D'}`}
+      </button>
+    </>
+  );
+}
+```
+
+**`calculateTerrainZOffset()` utility:**
+
+When transitioning, the camera needs a vertical offset to stay aligned with the terrain surface. This helper computes it from `zRange` and the current `elevationScale`:
+
+```typescript
+import { calculateTerrainZOffset } from './hooks/useDeckTransition';
+
+// Pass as deck.gl viewState position[2]:
+const zOffset = calculateTerrainZOffset(zRange, elevationScale);
+<DeckGL viewState={{ ...viewState, position: [0, 0, zOffset * 0.5] }} />
+```
+
+For a complete working example with OSM basemap, overlay toggling, and relief glaze, see [2D/3D Smooth Transition](showcase-layers.md#37-2d3d-smooth-transition).
 
 ---
 
