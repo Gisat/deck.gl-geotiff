@@ -623,6 +623,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
           renderSubLayers: {
             disableTexture: this.props.disableTexture,
             terrainOptions: this.props.terrainOptions,
+            elevationScale: this.props.elevationScale,
           },
         },
         onViewportLoad: this.onViewportLoad.bind(this),

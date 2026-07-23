@@ -129,6 +129,12 @@ type _CogBitmapLayerProps = {
   /** Pre-initialized CogTiles object */
   cogTiles?: CogTiles;
 
+  /**
+   * Elevation bounds [minZ, maxZ] from the terrain layer.
+   * Required for proper 3D frustum culling when the bitmap is draped on terrain.
+   * Sync via `CogTerrainLayer.onZRangeUpdate` or the `useTerrainZRange()` hook.
+   */
+  zRange?: ZRange | null;
 
   /**
    * @deprecated Use `loadOptions.terrain.workerUrl` instead

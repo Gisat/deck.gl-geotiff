@@ -36,14 +36,14 @@ function CogTransitionExample() {
   const { mode, elevationScale, switchTo3D, switchTo2D } =
     useDeckTransition(setViewState, { duration: 2500, targetPitch: 40, zoomOffset: 0 });
 
-  const terrainOptions: GeoImageOptions = {
+  const terrainOptions: GeoImageOptions = useMemo(() => ({
     ...(mainCog.defaultOptions as GeoImageOptions),
-    type: 'terrain',
+    type: 'terrain' as const,
     disableLighting: true,
     noDataValue: 0,
     multiplier: 1,
     terrainSkirtHeight: 1,
-  };
+  }), [mainCog.defaultOptions]);
 
   const demoPoints = useMemo(
     () => generateDemoPoints(50, -66.33, -17.09),
@@ -51,9 +51,11 @@ function CogTransitionExample() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     const init = async () => {
       const cog = new CogTiles(terrainOptions);
       await cog.initializeCog(mainCog.url);
+      if (cancelled) return;
       setInitializedCog(cog);
       const bounds = cog.getBoundsAsLatLon();
 
@@ -77,6 +79,7 @@ function CogTransitionExample() {
     };
 
     init();
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleMode = () => {
