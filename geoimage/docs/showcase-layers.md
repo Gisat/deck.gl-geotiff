@@ -662,6 +662,255 @@ By passing the terrain's elevation bounds via `zRange`, the tile layer's boundin
 
 ---
 
+## 3.7 2D/3D Smooth Transition
+
+**Use Case:** Smoothly animating between a flat 2D map and a 3D terrain view. The terrain mesh extrudes from zero to full height while the camera simultaneously tilts and pulls back, creating a seamless fly-in effect.
+
+### Architecture
+
+The transition is driven by two coordinated systems:
+
+1. **Camera animation** — deck.gl's `LinearInterpolator` handles pitch and zoom changes via `viewState.transitionDuration`.
+2. **Terrain extrusion** — The `useDeckTransition` hook animates `elevationScale` (0 → 1) using `requestAnimationFrame` with ease-out-cubic easing. This value is passed to `CogTerrainLayer.elevationScale`, which applies a scale matrix to the terrain mesh.
+
+The result: terrain rises smoothly from flat to full height in perfect sync with the camera tilt.
+
+### Key Components
+
+| Component | Role |
+|---|---|
+| `useDeckTransition` hook | Manages mode state, drives `elevationScale` animation, triggers camera transitions |
+| `CogTerrainLayer.elevationScale` | Applies a Z-axis scale model matrix to the terrain mesh (default `1`) |
+| `calculateTerrainZOffset()` | Utility to compute the camera's vertical offset during transition |
+
+### Setup
+
+The hook is located in the example app at `example/src/hooks/useDeckTransition.ts`. Copy it into your project:
+
+```typescript
+import { useDeckTransition, calculateTerrainZOffset } from '../hooks/useDeckTransition';
+```
+
+### Basic Example
+
+```tsx
+import React, { useState, useMemo } from 'react';
+import DeckGL from '@deck.gl/react';
+import { MapView } from '@deck.gl/core';
+import { CogTerrainLayer } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
+import { useDeckTransition, calculateTerrainZOffset } from '../hooks/useDeckTransition';
+
+function TransitionMap() {
+  const [viewState, setViewState] = useState({
+    longitude: -66.33, latitude: -17.09, zoom: 12, pitch: 0, bearing: 0,
+  });
+
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
+  const { mode, elevationScale, switchTo3D, switchTo2D } =
+    useDeckTransition(setViewState, { duration: 2500, targetPitch: 40 });
+
+  const isTransitioning = mode.startsWith('transitioning');
+
+  const layers = useMemo(() => [
+    new CogTerrainLayer({
+      id: 'terrain',
+      elevationData: 'https://example.com/dem.tif',
+      isTiled: true,
+      tileSize: 256,
+      operation: 'terrain',
+      terrainOptions: { type: 'terrain', disableLighting: true, noDataValue: 0 },
+      elevationScale,
+      onZRangeUpdate,
+    }),
+  ], [elevationScale, onZRangeUpdate]);
+
+  return (
+    <div style={{ width: '100%', height: '100vh', position: 'relative' }}>
+      <DeckGL
+        viewState={{
+          ...viewState,
+          position: [0, 0, calculateTerrainZOffset(zRange, elevationScale) * 0.5],
+        }}
+        onViewStateChange={({ viewState: v }) => setViewState(v)}
+        layers={layers}
+        views={[new MapView({ controller: true })]}
+      />
+      <button
+        onClick={mode === '2d' ? switchTo3D : switchTo2D}
+        disabled={isTransitioning}
+        style={{ position: 'absolute', top: 16, right: 16, zIndex: 200 }}
+      >
+        {isTransitioning ? 'Transitioning...' : `Switch to ${mode === '2d' ? '3D' : '2D'}`}
+      </button>
+    </div>
+  );
+}
+```
+
+### Full Example with Overlay Layers and Relief Glaze
+
+This example demonstrates the complete pattern: terrain extrusion, OSM basemap that switches between flat and draped modes, demo points clamped to terrain in 3D, and a Swiss relief glaze overlay that fades in during the transition.
+
+```tsx
+import React, { useMemo, useState, useEffect } from 'react';
+import DeckGL from '@deck.gl/react';
+import { MapView, WebMercatorViewport } from '@deck.gl/core';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
+import { BitmapLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { CogTerrainLayer, CogBitmapLayer, CogTiles } from '@gisatcz/deckgl-geolib';
+import { useTerrainZRange } from '@gisatcz/deckgl-geolib/react';
+import { useDeckTransition, calculateTerrainZOffset } from '../hooks/useDeckTransition';
+
+function FullTransitionExample() {
+  const cogUrl = 'https://example.com/dem.tif';
+  const [viewState, setViewState] = useState(null);
+  const [initializedCog, setInitializedCog] = useState(null);
+  const { zRange, onZRangeUpdate } = useTerrainZRange();
+
+  const { mode, elevationScale, switchTo3D, switchTo2D } =
+    useDeckTransition(setViewState, { duration: 2500, targetPitch: 40, zoomOffset: 0 });
+
+  useEffect(() => {
+    const init = async () => {
+      const cog = new CogTiles({ type: 'terrain', noDataValue: 0, multiplier: 1 });
+      await cog.initializeCog(cogUrl);
+      setInitializedCog(cog);
+      // ...fitBounds logic...
+    };
+    init();
+  }, []);
+
+  const isPure2D = mode === '2d';
+
+  const layers = useMemo(() => {
+    if (!viewState) return [];
+
+    const arr = [];
+
+    // Terrain mesh — elevationScale drives extrusion
+    if (initializedCog) {
+      arr.push(new CogTerrainLayer({
+        id: 'terrain',
+        elevationData: cogUrl,
+        cogTiles: initializedCog,
+        isTiled: true,
+        tileSize: 256,
+        operation: 'terrain',
+        terrainOptions: { type: 'terrain', disableLighting: true, noDataValue: 0, multiplier: 1 },
+        elevationScale,
+        opacity: isPure2D ? 0 : 1,
+        onZRangeUpdate,
+      }));
+    }
+
+    // OSM basemap — flat in 2D, draped on terrain in 3D
+    arr.push(new TileLayer({
+      id: 'osm-basemap',
+      data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      zRange,
+      renderSubLayers: (props) => {
+        const { bbox } = props.tile;
+        return new BitmapLayer(props, {
+          data: undefined,
+          image: props.data,
+          bounds: [bbox.west, bbox.south, bbox.east, bbox.north],
+          extensions: isPure2D ? [] : [new TerrainExtension()],
+        });
+      },
+    }));
+
+    // Relief glaze — fades in proportionally to elevationScale
+    arr.push(new CogBitmapLayer({
+      id: 'relief-glaze',
+      rasterData: cogUrl,
+      isTiled: true,
+      tileSize: 256,
+      clampToTerrain: true,
+      extensions: [new TerrainExtension()],
+      opacity: Math.pow(elevationScale, 6), // fast fade-in near end of transition
+      zRange,
+      cogBitmapOptions: {
+        type: 'image',
+        useReliefGlaze: true,
+        noDataValue: 0,
+        swissSlopeWeight: 0.3,
+        zFactor: 5,
+        maxGlazeAlpha: 60,
+        useChannel: 1,
+      },
+    }));
+
+    return arr;
+  }, [elevationScale, initializedCog, mode, zRange, onZRangeUpdate]);
+
+  return (
+    <div style={{ width: '100%', height: '100vh' }}>
+      <DeckGL
+        viewState={{
+          ...viewState,
+          position: [0, 0, calculateTerrainZOffset(zRange, elevationScale) * 0.5],
+        }}
+        onViewStateChange={({ viewState: v }) => setViewState(v)}
+        layers={layers}
+        views={[new MapView({ controller: true })]}
+      />
+      <button onClick={mode === '2d' ? switchTo3D : switchTo2D}>
+        Switch to {mode === '2d' ? '3D' : '2D'}
+      </button>
+    </div>
+  );
+}
+```
+
+### Mode-Aware Layer Configuration
+
+During transitions, some layers need to behave differently depending on whether the view is 2D or 3D:
+
+| Layer | 2D Mode | 3D Mode |
+|---|---|---|
+| `CogTerrainLayer` | `opacity: 0`, locked to `minZoom` via `zoomOverride` | Full opacity, normal zoom |
+| OSM `TileLayer` | No `TerrainExtension` (flat tiles) | `TerrainExtension` (draped on mesh) |
+| `ScatterplotLayer` | No extension (flat) | `TerrainExtension` (clamped to surface) |
+| Relief glaze `CogBitmapLayer` | `opacity: 0` (hidden) | `opacity: Math.pow(elevationScale, 6)` (fades in) |
+
+Use `mode === '2d'` (or `mode === '3d'`) to conditionally set these props. The `'transitioning_*'` states can be used to disable UI controls during animation.
+
+### `CogTerrainLayer.elevationScale` Prop
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `elevationScale` | `number` | `1` | Z-axis scale factor applied via model matrix. `0` = flat, `1` = full terrain height. Animate smoothly for 2D/3D transitions. |
+
+> **How it works internally:** The prop is converted into a 4×4 model matrix `[1,0,0,0, 0,1,0,0, 0,0,elevationScale,0, 0,0,0,1]` and applied to the `SimpleMeshLayer` that renders the terrain mesh. This is more performant than re-tessellating the mesh at different heights.
+
+### `calculateTerrainZOffset()` Utility
+
+```typescript
+function calculateTerrainZOffset(
+  zRange: [number, number] | null | undefined,
+  elevationScale: number,
+): number;
+```
+
+Computes the camera's vertical position offset to stay aligned with the terrain surface during transition. Pass the result as `viewState.position[2]`:
+
+```typescript
+position: [0, 0, calculateTerrainZOffset(zRange, elevationScale) * 0.5]
+```
+
+The `* 0.5` factor provides a comfortable midpoint between flat and elevated views.
+
+### See Also
+
+- [API Reference: `elevationScale`](api-reference.md#layer-props-cogterrainlayer)
+- [API Reference: `useDeckTransition`](api-reference.md#usedecktransition)
+- [API Reference: `useTerrainZRange`](api-reference.md#useterrainzrange)
+- [Example source: CogTransitionExample.tsx](../../example/src/examples/CogTransitionExample.tsx)
+
+---
+
 ## 4. Raw Value Picking
 
 **Use Case:** retrieving the original GeoTIFF raster values (elevation, band values, indices) at a clicked location, without extra network requests.
