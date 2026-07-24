@@ -56,8 +56,8 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     try {
       if (tesselator === 'delatin') {
         // Delatin tessellation
-        const widthPlus = width === 257 ? 257 : width + 1;
-        const heightPlus = height === 257 ? 257 : height + 1;
+        const widthPlus = (width - 1) & (width - 2) ? width + 1 : width;
+        const heightPlus = (height - 1) & (height - 2) ? height + 1 : height;
         const tin = new Delatin(terrain, widthPlus, heightPlus);
         tin.run(meshMaxError);
         // @ts-expect-error: Delatin instance properties 'coords' and 'triangles' are not explicitly typed in the library port
@@ -71,7 +71,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
         };
       } else {
         // Martini tessellation (default)
-        const gridSize = width === 257 ? 257 : width + 1; // Only add 1 if width is not already 2^n+1
+        const gridSize = (width - 1) & (width - 2) ? width + 1 : width;
         const martini = new Martini(gridSize);
         const tile = martini.createTile(terrain);
         mesh = tile.getMesh(meshMaxError);

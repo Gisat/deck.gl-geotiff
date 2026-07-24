@@ -26,27 +26,27 @@ function generateDemoPoints(count: number, centerLon: number, centerLat: number)
 const getDemoPointPosition = (d: any) => d.position;
 
 function CogTransitionExample() {
-  const mainCog = COG_TERRAIN_EXAMPLES.MISICUNI;
+  const cogUrl = 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/rasters/glo_30_geoid_Point_tabqa_kudairan_cropped_bilinear_cog.tif';
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
   const { zRange, onZRangeUpdate } = useTerrainZRange();
 
   const [showGlaze, setShowGlaze] = useState(true);
+  const [maxZoom, setMaxZoom] = useState<number | undefined>(undefined);
 
   const { mode, elevationScale, switchTo3D, switchTo2D } =
     useDeckTransition(setViewState, { duration: 2500, targetPitch: 40, zoomOffset: 0 });
 
   const terrainOptions: GeoImageOptions = useMemo(() => ({
-    ...(mainCog.defaultOptions as GeoImageOptions),
     type: 'terrain' as const,
     disableLighting: true,
     noDataValue: 0,
     multiplier: 1,
-    terrainSkirtHeight: 1,
-  }), [mainCog.defaultOptions]);
+    terrainSkirtHeight: 10,
+  }), []);
 
   const demoPoints = useMemo(
-    () => generateDemoPoints(50, -66.33, -17.09),
+    () => generateDemoPoints(50, 38.6, 35.9),
     [],
   );
 
@@ -54,9 +54,12 @@ function CogTransitionExample() {
     let cancelled = false;
     const init = async () => {
       const cog = new CogTiles(terrainOptions);
-      await cog.initializeCog(mainCog.url);
+      await cog.initializeCog(cogUrl);
       if (cancelled) return;
       setInitializedCog(cog);
+      const demRange = cog.getZoomRange();
+      const maxDemZoom = demRange?.[1] ?? 12;
+      setMaxZoom(Math.min(18, maxDemZoom + 3));
       const bounds = cog.getBoundsAsLatLon();
 
       const viewport = new WebMercatorViewport({
@@ -103,7 +106,7 @@ function CogTransitionExample() {
       layersArray.push(
         new CogTerrainLayer({
           id: 'cog-transition-terrain',
-          elevationData: mainCog.url,
+          elevationData: cogUrl,
           cogTiles: initializedCog,
           isTiled: true,
           tileSize: 256,
@@ -111,6 +114,7 @@ function CogTransitionExample() {
           operation: 'terrain',
           terrainOptions,
           elevationScale,
+          maxZoom,
           zoomOverride: isPure2D ? minZoom : undefined,
           opacity: isPure2D ? 0 : 1,
           onZRangeUpdate,
@@ -163,7 +167,7 @@ function CogTransitionExample() {
       layersArray.push(
         new CogBitmapLayer({
           id: 'relief-glaze',
-          rasterData: mainCog.url,
+          rasterData: cogUrl,
           isTiled: true,
           tileSize: 256,
           clampToTerrain: true,
@@ -192,6 +196,7 @@ function CogTransitionExample() {
     onZRangeUpdate,
     demoPoints,
     showGlaze,
+    maxZoom,
   ]);
 
   const isTransitioning =

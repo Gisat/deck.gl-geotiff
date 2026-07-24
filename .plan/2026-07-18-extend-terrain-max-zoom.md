@@ -1,8 +1,8 @@
 # Extend Terrain Tiles Beyond DEM Max Zoom (Sharp Overlay Draping)
 
 **Date:** 2026-07-18  
-**Status:** Planned  
-**Branch:** `feature/2d-3d-transition` (or new branch)
+**Status:** Implemented  
+**Branch:** `feature/extend-terrain-max-zoom`
 
 ---
 
@@ -53,48 +53,37 @@ Result                → Sharp OSM draped on finer terrain mesh
 
 ## Changes Required
 
-### Change 1: Scale `FETCH_SIZE` by zoom difference
+### Change 1: Scale `requiredSize` by zoom difference in tile callers
 
 **File:** `geoimage/src/core/CogTiles.ts`  
-**Line:** 329  
 **Type:** Bug fix
 
-The `FETCH_SIZE` determines how many pixels to read from the COG image. Currently it's always 256, regardless of zoom mismatch. At zoom 13 with a zoom-12 image, this reads a full zoom-12 tile (256px) instead of the correct 128×128 pixel window.
+The tile generation methods (`getTerrainTile`, `getGlazeTile`, `getBitmapTile`) compute `requiredSize` from `this.tileSize` (always 256). At extended zoom levels, this reads too many pixels from the COG image and produces oversized data buffers.
 
-**Current code (line 329):**
-```typescript
-const FETCH_SIZE = fetchSize || TILE_SIZE;
-```
+**Implementation (applied to all three callers):**
 
-**New code:**
 ```typescript
+const imageIndex = this.getImageIndexForZoomLevel(z);
 const imageZoom = this.cogZoomLookup[imageIndex];
-const zoomDiff = Math.max(0, zoom - imageZoom);
-const FETCH_SIZE = fetchSize || (TILE_SIZE >> zoomDiff);
+const zoomDiff = Math.max(0, z - imageZoom);
+const clampedDiff = Math.min(zoomDiff, 4);
+const scaledTileSize = this.tileSize >> clampedDiff;
 ```
+
+Then use `scaledTileSize` instead of `this.tileSize` for:
+- `getTileFromImage` fetch size
+- `geo.getMap` width/height
+- `ReliefCompositor.composeSwissRelief` width/height (glaze only)
 
 **Effect:**
-| Requested zoom | Image zoom | `zoomDiff` | `FETCH_SIZE` | Pixels read |
+| Requested zoom | Image zoom | `zoomDiff` | `scaledTileSize` | Pixels read |
 |---|---|---|---|---|
 | 12 | 12 | 0 | 256 | 256×256 (full tile) |
-| 13 | 12 | 1 | 128 | 128×128 (1/4 tile) |
-| 14 | 12 | 2 | 64 | 64×64 (1/16 tile) |
-| 15 | 12 | 3 | 32 | 32×32 (1/64 tile) |
+| 13 | 12 | 1 | 128 | 128×128 |
+| 14 | 12 | 2 | 64 | 64×64 |
+| 15 | 12 | 3 | 32 | 32×32 |
 
-**Why this is safe:**
-- `getImageIndexForZoomLevel(zoom)` always returns a valid image index (clamped to the COG's range)
-- `TILE_SIZE >> zoomDiff` produces clean power-of-2 values (128, 64, 32, ...) which are valid for Martini/Delatin tessellation
-- The pixel window calculation (`startX`, `endX`, etc.) already handles arbitrary window sizes — no other changes needed
-- The `readRasters({ window })` call reads the correct sub-tile region from the COG image
-- Case A (partial overlap / padding) and Case B (perfect match) both work with smaller `FETCH_SIZE`
-
-**Cap consideration:** At very high zoom differences (e.g. zoom 20 with zoom-12 image → `zoomDiff=8`, `FETCH_SIZE=1`), the elevation data becomes a single pixel. This is useless for tessellation. Consider capping at a reasonable max:
-
-```typescript
-const FETCH_SIZE = fetchSize || (TILE_SIZE >> Math.min(zoomDiff, 4)); // min 16px
-```
-
-This caps at `FETCH_SIZE=16` (zoom 16 with zoom-12 image), which is still tessellatable.
+**Cap:** `Math.min(zoomDiff, 4)` caps at `scaledTileSize=16` (zoom 16 with zoom-12 image). Recommended application cap of `maxDemZoom + 3` keeps `zoomDiff ≤ 3` in practice, keeping the safety margin for any overshoot.
 
 ---
 
@@ -216,13 +205,13 @@ If `maxZoom` changes on every zoom step (e.g. zoom 13 → 14 → 15), the TileLa
 ```typescript
 const maxDemZoom = demZoomRange?.[1] ?? 12;
 const currentZoom = Math.round(viewState.zoom);
-// Only extend when zoom exceeds maxDemZoom, and cap at maxDemZoom + 3
+// Only extend when zoom exceeds maxDemZoom, and cap at maxDemZoom + 7
 const maxZoom = currentZoom > maxDemZoom
-  ? Math.min(maxDemZoom + 3, currentZoom)
+  ? Math.min(maxDemZoom + 7, currentZoom)
   : maxDemZoom;
 ```
 
-This limits the extension to 3 zoom levels beyond the DEM's max, reducing tile count while still providing sharp draping at reasonable zoom levels.
+This limits the extension to 7 zoom levels beyond the DEM's max (capped at zoom 19), reducing tile count while still providing sharp draping at reasonable zoom levels.
 
 ---
 
@@ -233,7 +222,13 @@ This limits the extension to 3 zoom levels beyond the DEM's max, reducing tile c
 | 8–12 | Native zoom tiles | DEM resolution | Sharp (normal) |
 | 13 | Zoom-13 tiles from zoom-12 data | 128×128 elevation grid | Sharp |
 | 14 | Zoom-14 tiles from zoom-12 data | 64×64 elevation grid | Sharp |
-| 15+ | Capped at maxDemZoom+3 | Same as 14 | Sharp |
+| 15 | Zoom-15 tiles from zoom-12 data | 32×32 elevation grid | Sharp |
+| 16 | Zoom-16 tiles from zoom-12 data | 16×16 elevation grid | Sharp |
+| 17 | Zoom-17 tiles from zoom-12 data | 8×8 elevation grid | Sharp |
+| 18 | Zoom-18 tiles from zoom-12 data | 4×4 elevation grid | Sharp |
+| 19 | Zoom-19 tiles from zoom-12 data | 2×2 (3×3 mesh) | Sharp |
+
+At zoom 19, the elevation grid is 3×3 (2¹+1), providing a valid Martini mesh with just enough geometry for draping the OSM overlay. The small geographic extent of zoom-19 tiles (~0.6 km²) makes even a 3×3 mesh usable.
 
 ---
 
@@ -241,8 +236,48 @@ This limits the extension to 3 zoom levels beyond the DEM's max, reducing tile c
 
 | File | Change |
 |---|---|
-| `geoimage/src/core/CogTiles.ts:329` | Scale `FETCH_SIZE` by zoom difference (`TILE_SIZE >> zoomDiff`) |
-| `geoimage/src/layers/CogTerrainLayer.ts` | Add `maxZoom?: number` prop; use in `renderLayers()` line 632 |
+| `geoimage/src/core/CogTiles.ts` | Scale `requiredSize` in `getTerrainTile`, `getGlazeTile`, `getBitmapTile` |
+| `geoimage/src/layers/CogTerrainLayer.ts` | Add `maxZoom?: number` prop; apply in `renderLayers()` + `updateTriggers` |
+| `geoimage/src/core/lib/TerrainGenerator.ts` | Replace 6 hardcoded `256`/`257`/`258` checks with dynamic power-of-2 detection |
+| `geoimage/src/core/lib/KernelGenerator.ts` | Derive `IN`/`OUT` from `Math.sqrt(src.length)` instead of hardcoded values |
+| `geoimage/src/workers/terrain.worker.ts` | Fix `gridSize` detection for Martini/Delatin to handle any `2^n+1` size |
+
+### Change 4: Replace hardcoded dimension constants in downstream processors
+
+The original plan assumed only `CogTiles.ts` and `CogTerrainLayer.ts` needed changes. In practice, the scaled tile sizes ripple through the entire mesh pipeline, and every stage had hardcoded `256`/`257`/`258` constants that produced corrupt geometry at scaled sizes.
+
+**`TerrainGenerator.ts` — 6 locations fixed:**
+
+| Location | Old | New |
+|---|---|---|
+| `generate()` isKernel | `width === 258` | `!!(options.useSlope \|\| options.useHillshade \|\| options.useSwissRelief)` |
+| `generate()` meshWidth | `isKernel ? 257 : width` | `isKernel ? width - 1 : width` |
+| `generate()` gridWidth | `meshWidth === 257 ? 257 : meshWidth + 1` | `meshWidth` |
+| `computeTerrainData()` isStitched | `width === 257` | `(width-1) & (width-2) === 0` |
+| `getMeshAttributes()` gridSize | `width === 257 ? 257 : width + 1` | same power-of-2 check |
+| `getMeshAttributes()` effectiveWidth | `width === 257 ? width - 1 : width` | same power-of-2 check |
+| `getMartiniTileMesh()` | `width === 257 ? 257 : width + 1` | same power-of-2 check |
+| `getDelatinTileMesh()` | `width === 257 ? 257 : width + 1` | same power-of-2 check |
+
+**`KernelGenerator.ts` — 3 methods fixed:**
+
+All three methods (`calculateSlope`, `calculateHillshade`, `calculateMultiHillshade`) had `OUT=256; IN=258;`. Changed to:
+```typescript
+const IN = Math.round(Math.sqrt(src.length));
+const OUT = IN - 2;
+```
+
+**`terrain.worker.ts` — 2 locations fixed:**
+
+Martini and Delatin paths had `width === 257 ? 257 : width + 1`. Changed to the same power-of-2 detection.
+
+### Known Limitation: Kernel mode at extended zooms
+
+`computeTerrainData` (line 321) still uses `width === 258` for kernel detection. If kernel mode (slope/hillshade/relief) is used with `maxZoom` extended beyond the DEM's native range, the kernel-padded data (e.g. 130×130 at zoom 13) will not be recognized as kernel data and will be processed incorrectly.
+
+**Impact:** Only affects terrain layers that enable `useSlope`, `useHillshade`, or `useSwissRelief` AND extend `maxZoom` beyond native range. The 2D/3D transition example uses `type: 'terrain'` without kernel flags, so it is unaffected.
+
+**Fix:** Replace `width === 258` with the options-based kernel detection used in `generate()`, or pass `isKernel` as a parameter through the call chain.
 
 ---
 
@@ -255,6 +290,7 @@ This limits the extension to 3 zoom levels beyond the DEM's max, reducing tile c
 5. **Progressive loading:** Verify `enableProgressiveLoading` still works correctly when `maxZoom` is extended.
 6. **`meshMaxError: 'auto'`:** Verify auto meshMaxError produces reasonable tessellation at extended zooms.
 7. **Animation/transition:** Verify the 2D/3D transition example works with extended maxZoom.
+8. **Backward compatibility:** At native zoom levels (≤ DEM max), all dimension checks produce identical values to the pre-change behavior (256→256, 257→257, 258→258).
 
 ---
 

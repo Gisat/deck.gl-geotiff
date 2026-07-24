@@ -47,8 +47,8 @@ export class KernelGenerator {
     zFactor: number = 1,
     noDataValue?: number,
   ): Float32Array {
-    const OUT = 256;
-    const IN = 258;
+    const IN = Math.round(Math.sqrt(src.length));
+    const OUT = IN - 2;
     const out = new Float32Array(OUT * OUT);
     
     // Hoist division out of loop: multiplication is ~2-3x faster than division
@@ -106,8 +106,8 @@ export class KernelGenerator {
     zFactor: number = 1,
     noDataValue?: number,
   ): Float32Array {
-    const OUT = 256;
-    const IN = 258;
+    const IN = Math.round(Math.sqrt(src.length));
+    const OUT = IN - 2;
     const out = new Float32Array(OUT * OUT);
 
     const zenithRad = (90 - altitude) * (Math.PI / 180);
@@ -165,8 +165,8 @@ export class KernelGenerator {
     zFactor: number = 1,
     noDataValue?: number,
   ): Float32Array {
-    const OUT = 256;
-    const IN = 258;
+    const IN = Math.round(Math.sqrt(src.length));
+    const OUT = IN - 2;
     const out = new Float32Array(OUT * OUT);
     
     // Hoist division out of loop: multiplication is ~2-3x faster than division

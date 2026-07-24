@@ -172,6 +172,16 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
   zoomOverride?: number;
 
   /**
+   * Override the maximum zoom level for terrain tile requests.
+   * When set higher than the DEM's native max zoom, the layer generates
+   * terrain tiles at the requested zoom using resampled elevation data
+   * from the highest available overview. This produces finer mesh geometry
+   * for sharper overlay draping (TerrainExtension) at high zoom levels.
+   * Default: undefined (uses the DEM's native max zoom)
+   */
+  maxZoom?: number;
+
+  /**
    * When true (default), automatically loads low-resolution overview tiles first
    * before fetching high-resolution detail tiles. Prevents blank-map delays on slow connections.
    * Set to false to disable automatic LOD gate and request all visible tiles immediately.
@@ -619,6 +629,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
             ...(this.props.terrainOptions?.zFactor !== undefined && {
               zFactor: this.props.terrainOptions.zFactor,
             }),
+            maxZoom: this.props.maxZoom,
           },
           renderSubLayers: {
             disableTexture: this.props.disableTexture,
@@ -630,7 +641,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         zRange: this.state.zRange || null,
         tileSize,
         minZoom: effectiveMinZoom,
-        maxZoom: effectiveMaxZoom,
+        maxZoom: this.props.maxZoom ?? effectiveMaxZoom,
         extent,
         maxRequests,
         onTileLoad: (tile) => {
