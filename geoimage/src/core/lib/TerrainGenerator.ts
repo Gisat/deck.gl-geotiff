@@ -318,11 +318,11 @@ export class TerrainGenerator {
       ? (rasters[optionsLocal.useChannelIndex ?? 0] ?? rasters[0])
       : rasters[0];
 
-    const isKernel = width === 258;
+    const isKernel = !!(options.useSlope || options.useHillshade || options.useSwissRelief);
     const isStitched = (width > 1) && ((width - 1) & (width - 2)) === 0;
-    // Kernel: 258×258 flat array. Stitched: 2^n+1×2^n+1. Default: (width+1)×(height+1) with backfill.
-    const outWidth = isKernel ? 258 : (isStitched ? width : width + 1);
-    const outHeight = isKernel ? 258 : (isStitched ? height : height + 1);
+    // Kernel: flat array with kernel padding. Stitched: 2^n+1×2^n+1. Default: (width+1)×(height+1) with backfill.
+    const outWidth = isKernel ? width : (isStitched ? width : width + 1);
+    const outHeight = isKernel ? height : (isStitched ? height : height + 1);
     const terrain = new Float32Array(outWidth * outHeight);
 
     const samplesPerPixel = isPlanar ? 1 : (channel.length / (width * height));
