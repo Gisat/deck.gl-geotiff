@@ -629,7 +629,6 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
             ...(this.props.terrainOptions?.zFactor !== undefined && {
               zFactor: this.props.terrainOptions.zFactor,
             }),
-            maxZoom: this.props.maxZoom,
           },
           renderSubLayers: {
             disableTexture: this.props.disableTexture,

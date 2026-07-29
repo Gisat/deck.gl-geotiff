@@ -6,9 +6,13 @@ import { GeoImageOptions, Bounds, TypedArray, TileResult } from '../types';
 import { BitmapGenerator } from './BitmapGenerator';
 import { KernelGenerator } from './KernelGenerator';
 import { ReliefCompositor } from './ReliefCompositor';
-import { isF32NoData } from './numberUtils';
+import { isF32NoData, isStitchedGrid } from './numberUtils';
 
 export class TerrainGenerator {
+  private static isKernelMode(options: GeoImageOptions): boolean {
+    return !!(options.useSlope || options.useHillshade || options.useSwissRelief);
+  }
+
   static async generate(
     input: { width: number; height: number; rasters: TypedArray[] ; bounds: Bounds; cellSizeMeters?: number },
     options: GeoImageOptions,
@@ -17,7 +21,7 @@ export class TerrainGenerator {
     signal?: AbortSignal,
   ): Promise<TileResult> {
     const { width, height } = input;
-    const isKernel = !!(options.useSlope || options.useHillshade || options.useSwissRelief);
+    const isKernel = TerrainGenerator.isKernelMode(options);
     const baseSize = isKernel ? width - 2 : width - 1;
 
     // 1. Compute Terrain Data (Extract Elevation)
@@ -318,8 +322,8 @@ export class TerrainGenerator {
       ? (rasters[optionsLocal.useChannelIndex ?? 0] ?? rasters[0])
       : rasters[0];
 
-    const isKernel = !!(options.useSlope || options.useHillshade || options.useSwissRelief);
-    const isStitched = (width > 1) && ((width - 1) & (width - 2)) === 0;
+    const isKernel = TerrainGenerator.isKernelMode(options);
+    const isStitched = isStitchedGrid(width);
     // Kernel: flat array with kernel padding. Stitched: 2^n+1×2^n+1. Default: (width+1)×(height+1) with backfill.
     const outWidth = isKernel ? width : (isStitched ? width : width + 1);
     const outHeight = isKernel ? height : (isStitched ? height : height + 1);
@@ -368,7 +372,7 @@ export class TerrainGenerator {
   }
 
   static getMartiniTileMesh(meshMaxError: number, width: number, terrain: Float32Array) {
-    const gridSize = (width - 1) & (width - 2) ? width + 1 : width;
+    const gridSize = isStitchedGrid(width) ? width : width + 1;
     const martini = new Martini(gridSize);
     const tile = martini.createTile(terrain);
     const { vertices, triangles } = tile.getMesh(meshMaxError);
@@ -377,8 +381,8 @@ export class TerrainGenerator {
   }
 
   static getDelatinTileMesh(meshMaxError: number, width: number, height: number, terrain: Float32Array) {
-    const widthPlus = (width - 1) & (width - 2) ? width + 1 : width;
-    const heightPlus = (height - 1) & (height - 2) ? height + 1 : height;
+    const widthPlus = isStitchedGrid(width) ? width : width + 1;
+    const heightPlus = isStitchedGrid(height) ? height : height + 1;
     const tin = new Delatin(terrain, widthPlus, heightPlus);
     tin.run(meshMaxError);
     // @ts-expect-error: Delatin instance properties 'coords' and 'triangles' are not explicitly typed in the library port
@@ -395,8 +399,8 @@ export class TerrainGenerator {
     bounds: Bounds | number[],
     verticalExaggeration: number = 1.0,
   ) {
-    const isStitchedGrid = (width > 1) && ((width - 1) & (width - 2)) === 0;
-    const gridSize = isStitchedGrid ? width : width + 1;
+    const isStitchedGridFlag = isStitchedGrid(width);
+    const gridSize = isStitchedGridFlag ? width : width + 1;
     const numOfVerticies = vertices.length / 2;
     // vec3. x, y in pixels, z in meters (scaled by verticalExaggeration)
     const positions = new Float32Array(numOfVerticies * 3);
@@ -406,8 +410,8 @@ export class TerrainGenerator {
     const [minX, minY, maxX, maxY] = bounds || [0, 0, width, height];
     // If stitched (2^n+1), the spatial extent covers 0..(width-1) pixels, so we divide by (width-1).
     // If standard (2^n), the spatial extent covers 0..width pixels (with backfill), so we divide by width.
-    const effectiveWidth = isStitchedGrid ? width - 1 : width;
-    const effectiveHeight = isStitchedGrid ? height - 1 : height;
+    const effectiveWidth = isStitchedGridFlag ? width - 1 : width;
+    const effectiveHeight = isStitchedGridFlag ? height - 1 : height;
 
     const xScale = (maxX - minX) / effectiveWidth;
     const yScale = (maxY - minY) / effectiveHeight;

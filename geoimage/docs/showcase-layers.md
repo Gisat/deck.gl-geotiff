@@ -929,8 +929,13 @@ Set `maxZoom` on `CogTerrainLayer` to extend the terrain tile grid beyond the DE
 | 8–12 | 12 | 257×257 | Native COG tile |
 | 13 | 12 | 129×129 | 128×128 pixel window from zoom-12 image |
 | 14 | 12 | 65×65 | 64×64 pixel window from zoom-12 image |
+| 15 | 12 | 33×33 | 32×32 pixel window from zoom-12 image |
+| 16 | 12 | 17×17 | 16×16 pixel window (internal cap) |
+| 17+ | 12 | 17×17 | Same as zoom-16 — no additional gain |
 
-No additional network requests — the data is read from the same zoom-12 image with a smaller pixel window.
+No additional network requests — the data is read from the same zoom-12 image with a smaller pixel window. Beyond `maxDemZoom + 4`, the internal `Math.min(zoomDiff, 4)` cap bottoms out at a 16×16 pixel window, so higher `maxZoom` values create more tile objects with identical mesh resolution.
+
+
 
 ### Example
 
@@ -946,7 +951,7 @@ new CogTerrainLayer({
   meshMaxError: 'auto',
   operation: 'terrain',
   terrainOptions: { type: 'terrain', ... },
-  maxZoom: Math.min(16, maxDemZoom + 3),
+  maxZoom: Math.min(maxDemZoom + 4, currentZoom),
   onZRangeUpdate,
 })
 ```
@@ -958,11 +963,11 @@ If `maxZoom` changes on every zoom step (e.g. zoom 13 → 14 → 15), the TileLa
 ```typescript
 const currentZoom = Math.round(viewState.zoom);
 const maxZoom = currentZoom > maxDemZoom
-  ? Math.min(maxDemZoom + 3, currentZoom)
+  ? Math.min(maxDemZoom + 4, currentZoom)
   : maxDemZoom;
 ```
 
-This limits the extension to 3 zoom levels beyond the DEM's max, reducing tile count while still providing sharp draping at reasonable zoom levels.
+This limits the extension to 4 zoom levels beyond the DEM's max — the useful range before the internal 16×16 pixel window cap is hit. Beyond that, the elevation grid doesn't get any finer, so additional tile objects provide no visual benefit.
 
 ### How it works internally
 

@@ -82,8 +82,9 @@ Then use `scaledTileSize` instead of `this.tileSize` for:
 | 13 | 12 | 1 | 128 | 128×128 |
 | 14 | 12 | 2 | 64 | 64×64 |
 | 15 | 12 | 3 | 32 | 32×32 |
+| 16 | 12 | 4 | 16 | 16×16 |
 
-**Cap:** `Math.min(zoomDiff, 4)` caps at `scaledTileSize=16` (zoom 16 with zoom-12 image). Recommended application cap of `maxDemZoom + 3` keeps `zoomDiff ≤ 3` in practice, keeping the safety margin for any overshoot.
+**Cap:** `Math.min(zoomDiff, 4)` caps at `scaledTileSize=16` (zoom 16 with zoom-12 image). Beyond `maxDemZoom + 4`, the elevation grid stays at 16×16 — higher `maxZoom` values only generate more tile objects with no additional mesh resolution. The practical application cap is therefore `maxDemZoom + 4`.
 
 ---
 
@@ -161,10 +162,10 @@ new CogTerrainLayer({
 })
 ```
 
-Or with a reasonable cap to avoid degenerate tessellation at extreme zooms:
+Or with a cap at the useful maximum (`maxDemZoom + 4`, where the 16×16 grid limit is reached):
 
 ```typescript
-maxZoom: Math.min(16, Math.max(maxDemZoom, Math.round(viewState.zoom))),
+maxZoom: Math.min(maxDemZoom + 4, Math.round(viewState.zoom)),
 ```
 
 The OSM overlay keeps `TerrainExtension` at all zooms — no conditional removal needed:
@@ -205,13 +206,14 @@ If `maxZoom` changes on every zoom step (e.g. zoom 13 → 14 → 15), the TileLa
 ```typescript
 const maxDemZoom = demZoomRange?.[1] ?? 12;
 const currentZoom = Math.round(viewState.zoom);
-// Only extend when zoom exceeds maxDemZoom, and cap at maxDemZoom + 7
+// Only extend when zoom exceeds maxDemZoom. Cap at +4 — beyond that,
+// the internal clamp already limits the pixel window to 16×16.
 const maxZoom = currentZoom > maxDemZoom
-  ? Math.min(maxDemZoom + 7, currentZoom)
+  ? Math.min(maxDemZoom + 4, currentZoom)
   : maxDemZoom;
 ```
 
-This limits the extension to 7 zoom levels beyond the DEM's max (capped at zoom 19), reducing tile count while still providing sharp draping at reasonable zoom levels.
+This limits the extension to 4 zoom levels beyond the DEM's max. Beyond that, the internal `Math.min(zoomDiff, 4)` cap in `CogTiles.getScaledTileSize()` bottoms out at 16×16 data windows — additional zoom levels generate more tile objects with identical mesh resolution, wasting GPU memory and tile requests for no visual gain.
 
 ---
 
@@ -224,11 +226,9 @@ This limits the extension to 7 zoom levels beyond the DEM's max (capped at zoom 
 | 14 | Zoom-14 tiles from zoom-12 data | 64×64 elevation grid | Sharp |
 | 15 | Zoom-15 tiles from zoom-12 data | 32×32 elevation grid | Sharp |
 | 16 | Zoom-16 tiles from zoom-12 data | 16×16 elevation grid | Sharp |
-| 17 | Zoom-17 tiles from zoom-12 data | 8×8 elevation grid | Sharp |
-| 18 | Zoom-18 tiles from zoom-12 data | 4×4 elevation grid | Sharp |
-| 19 | Zoom-19 tiles from zoom-12 data | 2×2 (3×3 mesh) | Sharp |
+| 17+ | Same as zoom-16 (cap) | 16×16 (clamped) | No additional gain |
 
-At zoom 19, the elevation grid is 3×3 (2¹+1), providing a valid Martini mesh with just enough geometry for draping the OSM overlay. The small geographic extent of zoom-19 tiles (~0.6 km²) makes even a 3×3 mesh usable.
+At zoom 16, the 16×16 elevation grid produces a 17×17 Martini mesh — the finest mesh the algorithm can generate from the scaled data window. Beyond zoom 16 (`zoomDiff > 4`), `getScaledTileSize` returns 16 regardless, so higher `maxZoom` values create no finer geometry.
 
 ---
 

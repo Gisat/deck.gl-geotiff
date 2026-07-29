@@ -26,7 +26,8 @@ function generateDemoPoints(count: number, centerLon: number, centerLat: number)
 const getDemoPointPosition = (d: any) => d.position;
 
 function CogTransitionExample() {
-  const cogUrl = 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/rasters/glo_30_geoid_Point_tabqa_kudairan_cropped_bilinear_cog.tif';
+  const mainCog = COG_TERRAIN_EXAMPLES.TABQA_DEM;
+  const cogUrl = mainCog.url;
   const [viewState, setViewState] = useState<any>(null);
   const [initializedCog, setInitializedCog] = useState<CogTiles | null>(null);
   const { zRange, onZRangeUpdate } = useTerrainZRange();
@@ -59,7 +60,7 @@ function CogTransitionExample() {
       setInitializedCog(cog);
       const demRange = cog.getZoomRange();
       const maxDemZoom = demRange?.[1] ?? 12;
-      setMaxZoom(Math.min(18, maxDemZoom + 3));
+      setMaxZoom(Math.min(maxDemZoom + 4, 18));
       const bounds = cog.getBoundsAsLatLon();
 
       const viewport = new WebMercatorViewport({

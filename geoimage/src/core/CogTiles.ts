@@ -270,6 +270,14 @@ class CogTiles {
     return lodGetImageIndexForZoomLevel(zoom, this.cogZoomLookup);
   }
 
+  private getScaledTileSize(z: number): number {
+    const imageIndex = this.getImageIndexForZoomLevel(z);
+    const imageZoom = this.cogZoomLookup[imageIndex];
+    const zoomDiff = Math.max(0, z - imageZoom);
+    const clampedDiff = Math.min(zoomDiff, 4);
+    return this.tileSize >> clampedDiff;
+  }
+
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
     // Create a fresh local AbortController for this specific fetch.
     // We do NOT pass `signal` directly to readRasters because deck.gl may reuse tile
@@ -564,11 +572,7 @@ class CogTiles {
 
     const pipeline: Promise<TileResult | null> = (async () => {
       const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
-      const imageIndex = this.getImageIndexForZoomLevel(z);
-      const imageZoom = this.cogZoomLookup[imageIndex];
-      const zoomDiff = Math.max(0, z - imageZoom);
-      const clampedDiff = Math.min(zoomDiff, 4);
-      const scaledTileSize = this.tileSize >> clampedDiff;
+      const scaledTileSize = this.getScaledTileSize(z);
       const requiredSize = scaledTileSize + (isKernel ? 2 : 1);
       const tileData = await this.getTileFromImage(x, y, z, requiredSize, controller.signal);
 
@@ -710,11 +714,7 @@ class CogTiles {
     const maskKey = this.cache.getTileCacheKey(x, y, z);
     let maskPromise = this.cache.getReliefMask(maskKey);
 
-    const imageIndex = this.getImageIndexForZoomLevel(z);
-    const imageZoom = this.cogZoomLookup[imageIndex];
-    const zoomDiff = Math.max(0, z - imageZoom);
-    const clampedDiff = Math.min(zoomDiff, 4);
-    const scaledTileSize = this.tileSize >> clampedDiff;
+    const scaledTileSize = this.getScaledTileSize(z);
 
     if (!maskPromise) {
       const controller = new AbortController();
@@ -749,11 +749,7 @@ class CogTiles {
     const rasterKey = this.cache.getTileCacheKey(x, y, z);
     let rasterPromise = this.cache.getRaster(rasterKey);
 
-    const imageIndex = this.getImageIndexForZoomLevel(z);
-    const imageZoom = this.cogZoomLookup[imageIndex];
-    const zoomDiff = Math.max(0, z - imageZoom);
-    const clampedDiff = Math.min(zoomDiff, 4);
-    const scaledTileSize = this.tileSize >> clampedDiff;
+    const scaledTileSize = this.getScaledTileSize(z);
 
     if (!rasterPromise) {
       const controller = new AbortController();
