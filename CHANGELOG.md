@@ -1,3 +1,13 @@
+## [2.7.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.7.0-dev.1...v2.7.0-dev.2) (2026-08-10)
+
+### Features
+
+* extend terrain tiles beyond DEM max zoom for sharp overlay draping ([20cc879](https://github.com/Gisat/deck.gl-geotiff/commit/20cc879873adcc43ed30bc74d73d4787f556c2cf))
+
+### Bug Fixes
+
+* use options-based kernel detection instead of hardcoded width===258 ([c6a1821](https://github.com/Gisat/deck.gl-geotiff/commit/c6a1821a597310f229a9a58c8d145abff5c6dae4))
+
 ## [2.7.0-dev.1](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.1-dev.1...v2.7.0-dev.1) (2026-07-24)
 
 ### Features
