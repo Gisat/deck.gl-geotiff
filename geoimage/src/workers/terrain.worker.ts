@@ -5,6 +5,7 @@
 
 import Martini from '@mapbox/martini';
 import Delatin from '../core/delatin';
+import { isStitchedGrid } from '../core/lib/numberUtils';
 
 // Message types
 interface ComputeMeshRequest {
@@ -56,8 +57,8 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     try {
       if (tesselator === 'delatin') {
         // Delatin tessellation
-        const widthPlus = width === 257 ? 257 : width + 1;
-        const heightPlus = height === 257 ? 257 : height + 1;
+        const widthPlus = isStitchedGrid(width) ? width : width + 1;
+        const heightPlus = isStitchedGrid(height) ? height : height + 1;
         const tin = new Delatin(terrain, widthPlus, heightPlus);
         tin.run(meshMaxError);
         // @ts-expect-error: Delatin instance properties 'coords' and 'triangles' are not explicitly typed in the library port
@@ -71,7 +72,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
         };
       } else {
         // Martini tessellation (default)
-        const gridSize = width === 257 ? 257 : width + 1; // Only add 1 if width is not already 2^n+1
+        const gridSize = isStitchedGrid(width) ? width : width + 1;
         const martini = new Martini(gridSize);
         const tile = martini.createTile(terrain);
         mesh = tile.getMesh(meshMaxError);

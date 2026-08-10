@@ -907,6 +907,77 @@ The `* 0.5` factor provides a comfortable midpoint between flat and elevated vie
 - [API Reference: `elevationScale`](api-reference.md#layer-props-cogterrainlayer)
 - [API Reference: `useDeckTransition`](api-reference.md#usedecktransition)
 - [API Reference: `useTerrainZRange`](api-reference.md#useterrainzrange)
+- [Extending Terrain Beyond Native Zoom](showcase-layers.md#38-extending-terrain-beyond-native-zoom)
+- [Example source: CogTransitionExample.tsx](../../example/src/examples/CogTransitionExample.tsx)
+
+---
+
+## 3.8 Extending Terrain Beyond Native Zoom
+
+**Use Case:** DEM COGs have a limited zoom range (e.g. 8–12). When viewing at zoom 13+, the terrain mesh stops generating new tiles, causing OSM overlays draped with `TerrainExtension` to appear blurry — the coarse zoom-12 mesh stretches the high-resolution overlay texture.
+
+### Problem
+
+At zoom 13+ with a zoom-12 DEM, the terrain `TileLayer` produces no new tiles. The `TerrainCover` in deck.gl renders the OSM overlay into a framebuffer at zoom-12 resolution, which is then mapped onto the coarse zoom-12 terrain mesh. The result: visible blur on the draped imagery.
+
+### Solution
+
+Set `maxZoom` on `CogTerrainLayer` to extend the terrain tile grid beyond the DEM's native range. The layer reads elevation data from the same COG image (the highest available overview) but generates finer mesh geometry at each zoom level:
+
+| Viewport Zoom | DEM Max | Mesh Grid | Data Source |
+|---|---|---|---|
+| 8–12 | 12 | 257×257 | Native COG tile |
+| 13 | 12 | 129×129 | 128×128 pixel window from zoom-12 image |
+| 14 | 12 | 65×65 | 64×64 pixel window from zoom-12 image |
+| 15 | 12 | 33×33 | 32×32 pixel window from zoom-12 image |
+| 16 | 12 | 17×17 | 16×16 pixel window (internal cap) |
+| 17+ | 12 | 17×17 | Same as zoom-16 — no additional gain |
+
+No additional network requests — the data is read from the same zoom-12 image with a smaller pixel window. Beyond `maxDemZoom + 4`, the internal `Math.min(zoomDiff, 4)` cap bottoms out at a 16×16 pixel window, so higher `maxZoom` values create more tile objects with identical mesh resolution.
+
+
+
+### Example
+
+```typescript
+const demZoomRange = initializedCog?.getZoomRange(); // e.g. [8, 12]
+const maxDemZoom = demZoomRange?.[1] ?? 12;
+
+new CogTerrainLayer({
+  id: 'terrain',
+  elevationData: cogUrl,
+  isTiled: true,
+  tileSize: 256,
+  meshMaxError: 'auto',
+  operation: 'terrain',
+  terrainOptions: { type: 'terrain', ... },
+  maxZoom: Math.min(maxDemZoom + 4, currentZoom),
+  onZRangeUpdate,
+})
+```
+
+### Debouncing `maxZoom` updates
+
+If `maxZoom` changes on every zoom step (e.g. zoom 13 → 14 → 15), the TileLayer may clear its cache and refetch. To avoid this, compute a stable `maxZoom`:
+
+```typescript
+const currentZoom = Math.round(viewState.zoom);
+const maxZoom = currentZoom > maxDemZoom
+  ? Math.min(maxDemZoom + 4, currentZoom)
+  : maxDemZoom;
+```
+
+This limits the extension to 4 zoom levels beyond the DEM's max — the useful range before the internal 16×16 pixel window cap is hit. Beyond that, the elevation grid doesn't get any finer, so additional tile objects provide no visual benefit.
+
+### How it works internally
+
+1. `CogTiles` detects the zoom mismatch via `getImageIndexForZoomLevel(z)` and scales the pixel window size: `scaledTileSize = tileSize >> zoomDiff` (capped at `zoomDiff ≤ 4`).
+2. The elevation data is read from the COG image at the native resolution, but with a smaller pixel window matching the higher-zoom tile's geographic extent.
+3. The mesh tessellator (Martini/Delatin) receives the smaller grid and produces a mesh with proportionally more triangles per unit area, enabling sharper overlay draping.
+
+### See Also
+
+- [API Reference: `maxZoom`](api-reference.md#layer-props-cogterrainlayer)
 - [Example source: CogTransitionExample.tsx](../../example/src/examples/CogTransitionExample.tsx)
 
 ---

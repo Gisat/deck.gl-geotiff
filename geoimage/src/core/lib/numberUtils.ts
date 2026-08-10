@@ -9,3 +9,7 @@ export function isF32NoData(val: number, noData?: number | null): boolean {
   if (Number.isNaN(b)) return Number.isNaN(a);
   return a === b;
 }
+
+export function isStitchedGrid(width: number): boolean {
+  return width > 1 && ((width - 1) & (width - 2)) === 0;
+}
