@@ -515,6 +515,21 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
       return;
 	  }
 
+    // Release the progressive-loading gate once the full min-zoom overview has loaded.
+    // onViewportLoad fires only when every selected tile is loaded, so waiting here (instead
+    // of onTileLoad) guarantees the low-res terrain is actually drawn before high-res tiles
+    // stream in. Releasing on the first tile aborts the remaining overview tiles via request
+    // pruning — e.g. an out-of-bounds overview tile resolves instantly to an empty mesh and
+    // would release the gate before the meaningful overview tile finished loading.
+    if (
+      this.props.enableProgressiveLoading &&
+      !this.state.overviewLoaded &&
+      tiles.length > 0 &&
+      tiles.every((tile) => tile.index.z === this.state.minZoom)
+    ) {
+      this.setState({ overviewLoaded: true });
+    }
+
 	  const { zRange } = this.state;
 	  const ranges = tiles
       .map((tile) => tile.content)
@@ -644,16 +659,9 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
         extent,
         maxRequests,
         onTileLoad: (tile) => {
-          // Release progressive loading gate as soon as any minZoom tile finishes loading.
-          // This fires mid-cycle so the TileLayer immediately re-selects high-res tiles
-          // for the current viewport without requiring a zoom/pan interaction.
-          if (
-            this.props.enableProgressiveLoading &&
-            tile.index.z === this.state.minZoom &&
-            !this.state.overviewLoaded
-          ) {
-            this.setState({ overviewLoaded: true });
-          }
+          // The progressive-loading gate is released in onViewportLoad once the FULL
+          // min-zoom overview has loaded, NOT here on the first tile. Releasing on the
+          // first tile aborts the still-loading overview tiles before they can render.
           this.props.onTileLoad?.(tile);
         },
         onTileUnload,
