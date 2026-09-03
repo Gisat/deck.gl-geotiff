@@ -77,13 +77,21 @@ Investigating why the Nepal Copernicus 30m DEM (`DEM_COP30_float32_wgs84_deflate
 
 **Fix:** Add an LRU/bound to the cache. Not hit by the Nepal example (no `cacheAllBands`), but a latent leak.
 
+### 8. `maxZoom` prop bypasses the progressive-loading gate
+
+**File:** `geoimage/src/layers/CogTerrainLayer.ts` (`renderLayers`)
+
+**Problem:** When a user sets `maxZoom` (e.g. `maxZoom: 16` to extend terrain beyond the DEM native max 12), the inner TileLayer receives `maxZoom: this.props.maxZoom ?? effectiveMaxZoom`. Since `props.maxZoom` is defined, the gate's lock (`effectiveMaxZoom = minZoom`, set until `overviewLoaded`) is ignored from the very first render — the TileLayer runs with `minZoom: 4, maxZoom: 16` and requests full-detail viewport tiles immediately, so the overview-first progressive loading never engages. Any user who sets `maxZoom` silently loses the low-res-first stage (regresses fix #1).
+
+**Fix:** Apply the gate clamp to `props.maxZoom` as well — e.g. only honor `props.maxZoom` once `overviewLoaded` is `true`, or clamp to `effectiveMaxZoom` while the gate is active.
+
 ---
 
 ## Files to Change (summary)
 
 | File | Fix |
 |------|-----|
-| `geoimage/src/layers/CogTerrainLayer.ts` | #1 (done), #3, #4, #5 |
+| `geoimage/src/layers/CogTerrainLayer.ts` | #1 (done), #3, #4, #5, #8 |
 | `geoimage/src/core/CogTiles.ts` | #2 (alt), #6, #7 |
 | `geoimage/src/core/lib/TileReader.ts` | #2 (context: empty-tile fill) |
 
