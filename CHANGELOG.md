@@ -1,3 +1,9 @@
+## [2.7.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.7.0-dev.3...v2.7.0-dev.4) (2026-11-05)
+
+### Bug Fixes
+
+* **deps:** bump serialize-javascript to 7.1.4 ([9798b43](https://github.com/Gisat/deck.gl-geotiff/commit/9798b43c8e7ab0c38dae2545f49a99eb1b17338c))
+
 ## [2.7.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.7.0-dev.2...v2.7.0-dev.3) (2026-11-05)
 
 ### Bug Fixes
