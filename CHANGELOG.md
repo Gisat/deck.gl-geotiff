@@ -1,3 +1,9 @@
+## [2.7.0-dev.3](https://github.com/Gisat/deck.gl-geotiff/compare/v2.7.0-dev.2...v2.7.0-dev.3) (2026-11-05)
+
+### Bug Fixes
+
+* **deps:** sync Dependabot remediation to dev and remove update config ([c96f605](https://github.com/Gisat/deck.gl-geotiff/commit/c96f605dd053e5112ebcec156910ccca6d230378))
+
 ## [2.7.0-dev.2](https://github.com/Gisat/deck.gl-geotiff/compare/v2.7.0-dev.1...v2.7.0-dev.2) (2026-08-10)
 
 ### Features
