@@ -1,10 +1,16 @@
 /**
  * KernelGenerator — 3×3 neighborhood kernel calculations on elevation rasters.
  *
- * Input contract: a Float32Array of 258×258 elevation values (row-major).
- * Edge pixels (row/col 0 and 257) are used only as kernel neighbors and do
+ * Input contract: a Float32Array of (N+2)×(N+2) elevation values (row-major),
+ * where N is a power-of-2 tile size (256, 128, 64, …). The 2-pixel border is
+ * stitched padding (+1) on one side and kernel neighborhood padding (+1) on
+ * the opposite side. At native zoom (256×256 tile), this produces the classic
+ * 258×258 input (256 + 1 stitching + 1 kernel). At extended zoom (e.g. 128×128
+ * tile), it produces 130×130.
+ *
+ * Edge pixels (row/col 0 and N+1) are used only as kernel neighbors and do
  * not appear in the output.
- * Output: Float32Array of 256×256 computed values.
+ * Output: Float32Array of N×N computed values.
  */
 import { isF32NoData } from './numberUtils';
 
@@ -47,8 +53,8 @@ export class KernelGenerator {
     zFactor: number = 1,
     noDataValue?: number,
   ): Float32Array {
-    const OUT = 256;
-    const IN = 258;
+    const IN = Math.round(Math.sqrt(src.length));
+    const OUT = IN - 2;
     const out = new Float32Array(OUT * OUT);
     
     // Hoist division out of loop: multiplication is ~2-3x faster than division
@@ -106,8 +112,8 @@ export class KernelGenerator {
     zFactor: number = 1,
     noDataValue?: number,
   ): Float32Array {
-    const OUT = 256;
-    const IN = 258;
+    const IN = Math.round(Math.sqrt(src.length));
+    const OUT = IN - 2;
     const out = new Float32Array(OUT * OUT);
 
     const zenithRad = (90 - altitude) * (Math.PI / 180);
@@ -165,8 +171,8 @@ export class KernelGenerator {
     zFactor: number = 1,
     noDataValue?: number,
   ): Float32Array {
-    const OUT = 256;
-    const IN = 258;
+    const IN = Math.round(Math.sqrt(src.length));
+    const OUT = IN - 2;
     const out = new Float32Array(OUT * OUT);
     
     // Hoist division out of loop: multiplication is ~2-3x faster than division
