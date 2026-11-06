@@ -1,3 +1,24 @@
+## [2.7.0](https://github.com/Gisat/deck.gl-geotiff/compare/v2.6.0...v2.7.0) (2026-11-06)
+
+### Features
+
+* add 2D/3D smooth transition example with elevationScale animation ([c43320e](https://github.com/Gisat/deck.gl-geotiff/commit/c43320e055568b308a7b8d6820e033c6b915af7d))
+* add Swiss relief glaze overlay with smooth fade, increase transition to 2500ms ([09233c3](https://github.com/Gisat/deck.gl-geotiff/commit/09233c378139288d15a65ccdb8ad3fb52b9e18c5))
+* **CogTransitionExample:** back-load glaze fade-in and add visibility toggle ([55f6821](https://github.com/Gisat/deck.gl-geotiff/commit/55f682138fb77d99ed821bcc0317e35558c99720))
+* extend terrain tiles beyond DEM max zoom for sharp overlay draping ([20cc879](https://github.com/Gisat/deck.gl-geotiff/commit/20cc879873adcc43ed30bc74d73d4787f556c2cf))
+
+### Bug Fixes
+
+* address code review findings ([e1f9453](https://github.com/Gisat/deck.gl-geotiff/commit/e1f94533511c9769affac3598fc392217da256a2))
+* address PR review findings ([5511b57](https://github.com/Gisat/deck.gl-geotiff/commit/5511b578e34250595cc633126fbd466c3db9e06c)), closes [#1](https://github.com/Gisat/deck.gl-geotiff/issues/1) [#2](https://github.com/Gisat/deck.gl-geotiff/issues/2) [#3](https://github.com/Gisat/deck.gl-geotiff/issues/3) [#4](https://github.com/Gisat/deck.gl-geotiff/issues/4) [#7](https://github.com/Gisat/deck.gl-geotiff/issues/7) [#8](https://github.com/Gisat/deck.gl-geotiff/issues/8) [#9](https://github.com/Gisat/deck.gl-geotiff/issues/9) [#10](https://github.com/Gisat/deck.gl-geotiff/issues/10) [#11](https://github.com/Gisat/deck.gl-geotiff/issues/11) [#12](https://github.com/Gisat/deck.gl-geotiff/issues/12)
+* **CogBitmapLayer:** forward zRange prop to internal TileLayer ([f42134f](https://github.com/Gisat/deck.gl-geotiff/commit/f42134f837d90283e9bab17657e7d78c76a329b3))
+* **CogTransitionExample:** disable TerrainExtension in 2D, use dynamic IDs for clean shader rebuild ([8828385](https://github.com/Gisat/deck.gl-geotiff/commit/88283856f085fe108fa4a6d34a4e74e7ba48db09))
+* **deps:** bump serialize-javascript to 7.1.4 ([9798b43](https://github.com/Gisat/deck.gl-geotiff/commit/9798b43c8e7ab0c38dae2545f49a99eb1b17338c))
+* **deps:** sync Dependabot remediation to dev and remove update config ([c96f605](https://github.com/Gisat/deck.gl-geotiff/commit/c96f605dd053e5112ebcec156910ccca6d230378))
+* remove zoom offset and halve terrain Z-offset during transition ([1023403](https://github.com/Gisat/deck.gl-geotiff/commit/1023403656d28b4979f3f0810015b1ebac205694))
+* resolve Dependabot security alerts ([4308964](https://github.com/Gisat/deck.gl-geotiff/commit/43089643cd62194ac83b4cba65c1384082757f4a))
+* use options-based kernel detection instead of hardcoded width===258 ([c6a1821](https://github.com/Gisat/deck.gl-geotiff/commit/c6a1821a597310f229a9a58c8d145abff5c6dae4))
+
 ## [2.7.0-dev.4](https://github.com/Gisat/deck.gl-geotiff/compare/v2.7.0-dev.3...v2.7.0-dev.4) (2026-11-05)
 
 ### Bug Fixes
