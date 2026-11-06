@@ -100,6 +100,8 @@ const defaultProps: DefaultProps<_CogTerrainLayerProps> = {
   enableProgressiveLoading: true,
 
   // loaders: [TerrainLoader],
+
+  elevationScale: 1,
 };
 
 // Turns array of templates into a single string to work around shallow change
@@ -170,6 +172,16 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
   zoomOverride?: number;
 
   /**
+   * Override the maximum zoom level for terrain tile requests.
+   * When set higher than the DEM's native max zoom, the layer generates
+   * terrain tiles at the requested zoom using resampled elevation data
+   * from the highest available overview. This produces finer mesh geometry
+   * for sharper overlay draping (TerrainExtension) at high zoom levels.
+   * Default: undefined (uses the DEM's native max zoom)
+   */
+  maxZoom?: number;
+
+  /**
    * When true (default), automatically loads low-resolution overview tiles first
    * before fetching high-resolution detail tiles. Prevents blank-map delays on slow connections.
    * Set to false to disable automatic LOD gate and request all visible tiles immediately.
@@ -189,6 +201,12 @@ export type CogTerrainLayerProps = _CogTerrainLayerProps &
    */
   // eslint-disable-next-line no-unused-vars
   onZRangeUpdate?: (zRange: ZRange | null) => void;
+
+  /**
+   * Dynamic scale factor applied to the Z-axis of the terrain mesh.
+   * Animate from 0 to 1 to smoothly extrude terrain, or 1 to 0 to flatten.
+   */
+  elevationScale?: number;
 
 	/**
 	 * @deprecated Use `loadOptions.terrain.workerUrl` instead
@@ -430,7 +448,7 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
   ) {
 	  const SubLayerClass = this.getSubLayerClass('mesh', SimpleMeshLayer);
 
-	  const { color, wireframe, terrainOptions } = this.props;
+	  const { color, wireframe, terrainOptions, elevationScale } = this.props;
 	  const { data } = props;
 
 	  if (!data) {
@@ -454,13 +472,22 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
     } : {
       material: this.props.material 
     };
-      
+
+    const elevationScaleVal = elevationScale ?? 1;
+    const modelMatrix: number[] = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, elevationScaleVal, 0,
+      0, 0, 0, 1,
+    ];
+
 	  return new SubLayerClass({ ...props, tileSize: props.tileSize }, {
       ...lightingProps,
       data: DUMMY_DATA,
       mesh: meshResult?.map,
       texture: tileTexture,
       _instanced: false,
+      modelMatrix,
       pickable: props.pickable,
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       // Dynamic polygon offset: pull higher zoom levels closer to camera to depth-test in front.
@@ -606,13 +633,14 @@ export default class CogTerrainLayer<ExtraPropsT extends object = object> extend
           renderSubLayers: {
             disableTexture: this.props.disableTexture,
             terrainOptions: this.props.terrainOptions,
+            elevationScale: this.props.elevationScale,
           },
         },
         onViewportLoad: this.onViewportLoad.bind(this),
         zRange: this.state.zRange || null,
         tileSize,
         minZoom: effectiveMinZoom,
-        maxZoom: effectiveMaxZoom,
+        maxZoom: this.props.maxZoom ?? effectiveMaxZoom,
         extent,
         maxRequests,
         onTileLoad: (tile) => {

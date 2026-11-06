@@ -129,6 +129,12 @@ type _CogBitmapLayerProps = {
   /** Pre-initialized CogTiles object */
   cogTiles?: CogTiles;
 
+  /**
+   * Elevation bounds [minZ, maxZ] from the terrain layer.
+   * Required for proper 3D frustum culling when the bitmap is draped on terrain.
+   * Sync via `CogTerrainLayer.onZRangeUpdate` or the `useTerrainZRange()` hook.
+   */
+  zRange?: ZRange | null;
 
   /**
    * @deprecated Use `loadOptions.terrain.workerUrl` instead
@@ -292,6 +298,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
       maxCacheByteSize,
       refinementStrategy,
       cogBitmapOptions,
+      zRange,
     } = this.props;
     if (this.state.isTiled && this.state.initialized) {
       const { tileSize } = this.state.bitmapCogTiles;
@@ -303,6 +310,7 @@ export default class CogBitmapLayer<ExtraPropsT extends object = object> extends
         renderSubLayers: this.renderSubLayers.bind(this),
         pickable: this.props.pickable,
         onClick: this.props.onClick,
+        zRange,
         updateTriggers: {
           getTileData: [
             // rasterData: urlTemplateToUpdateTrigger(rasterData),

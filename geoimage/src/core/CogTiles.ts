@@ -270,6 +270,14 @@ class CogTiles {
     return lodGetImageIndexForZoomLevel(zoom, this.cogZoomLookup);
   }
 
+  private getScaledTileSize(z: number): number {
+    const imageIndex = this.getImageIndexForZoomLevel(z);
+    const imageZoom = this.cogZoomLookup[imageIndex];
+    const zoomDiff = Math.max(0, z - imageZoom);
+    const clampedDiff = Math.min(zoomDiff, 4);
+    return this.tileSize >> clampedDiff;
+  }
+
   async getTileFromImage(tileX: number, tileY: number, zoom: number, fetchSize?: number, signal?: AbortSignal) {
     // Create a fresh local AbortController for this specific fetch.
     // We do NOT pass `signal` directly to readRasters because deck.gl may reuse tile
@@ -564,7 +572,8 @@ class CogTiles {
 
     const pipeline: Promise<TileResult | null> = (async () => {
       const isKernel = this.options.useSlope || this.options.useHillshade || this.options.useSwissRelief;
-      const requiredSize = this.tileSize + (isKernel ? 2 : 1);
+      const scaledTileSize = this.getScaledTileSize(z);
+      const requiredSize = scaledTileSize + (isKernel ? 2 : 1);
       const tileData = await this.getTileFromImage(x, y, z, requiredSize, controller.signal);
 
       // === Step F: detect all-noData tiles before tessellation ===
@@ -705,16 +714,18 @@ class CogTiles {
     const maskKey = this.cache.getTileCacheKey(x, y, z);
     let maskPromise = this.cache.getReliefMask(maskKey);
 
+    const scaledTileSize = this.getScaledTileSize(z);
+
     if (!maskPromise) {
       const controller = new AbortController();
       maskPromise = (async (): Promise<Uint8ClampedArray> => {
-        const tileData = await this.getTileFromImage(x, y, z, this.tileSize + 2, controller.signal);
+        const tileData = await this.getTileFromImage(x, y, z, scaledTileSize + 2, controller.signal);
         return ReliefCompositor.composeSwissRelief(
           tileData[0] as Float32Array,
           this.options,
           cellSizeMeters,
-          this.tileSize,
-          this.tileSize,
+          scaledTileSize,
+          scaledTileSize,
         );
       })();
       this.cache.setReliefMask(maskKey, maskPromise);
@@ -727,8 +738,8 @@ class CogTiles {
 
     return this.geo.getMap({
       rasters: [reliefMask as any],
-      width: this.tileSize,
-      height: this.tileSize,
+      width: scaledTileSize,
+      height: scaledTileSize,
       bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
     }, this.options, meshMaxError ?? 4.0, this.workerPool, signal);
@@ -738,9 +749,11 @@ class CogTiles {
     const rasterKey = this.cache.getTileCacheKey(x, y, z);
     let rasterPromise = this.cache.getRaster(rasterKey);
 
+    const scaledTileSize = this.getScaledTileSize(z);
+
     if (!rasterPromise) {
       const controller = new AbortController();
-      rasterPromise = this.getTileFromImage(x, y, z, this.tileSize, controller.signal) as Promise<TypedArray[]>;
+      rasterPromise = this.getTileFromImage(x, y, z, scaledTileSize, controller.signal) as Promise<TypedArray[]>;
       this.cache.setRaster(rasterKey, rasterPromise);
       rasterPromise.catch(() => this.cache.deleteRaster(rasterKey));
     }
@@ -751,8 +764,8 @@ class CogTiles {
 
     return this.geo.getMap({
       rasters: [tileData[0]],
-      width: this.tileSize,
-      height: this.tileSize,
+      width: scaledTileSize,
+      height: scaledTileSize,
       bounds: bounds ?? [0, 0, 0, 0],
       cellSizeMeters,
     }, this.options, meshMaxError ?? 4.0, this.workerPool);

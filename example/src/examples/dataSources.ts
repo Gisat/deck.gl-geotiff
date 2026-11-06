@@ -223,4 +223,12 @@ export const COG_TERRAIN_EXAMPLES: Record<string, CogDataSource> = {
     name: 'Multiband Dam Animation (300 bands)',
     url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/test/Misicuni_300_10x10_intermediate_cog.tif',
   },
+  TABQA_DEM: {
+    name: 'Tabqa Dam DEM',
+    url: 'https://eu-central-1.linodeobjects.com/gisat-data/3DFlus_GST-22/app-gisat-deckglSandbox/rasters/glo_30_geoid_Point_tabqa_kudairan_cropped_bilinear_cog.tif',
+    defaultOptions: {
+      multiplier: 1,
+      noDataValue: 0,
+    },
+  },
 };
